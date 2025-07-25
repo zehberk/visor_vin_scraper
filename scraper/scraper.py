@@ -1,15 +1,3 @@
-'''
-This script is designed to scrape vehicle listings from visor.vin using Playwright.
-It accepts command-line arguments for vehicle make, model, and an optional agnostic mode.
-
-v1 - Only meant to retrieve the first car on a page.
-v2 - Retrieves all cars on the page (50) and saves them as a json file.
-v3 - Expanded arguments and sorting functionality.
-v4 - Adding advanced criteria for arguments, such as ranges and multiple selections.
-v5 - Added error handling paired with test_scraper.py.
-v6 - Added presets functionality.
-v7 - Added auto-scrolling to load more listings, improved metadata structure.
-'''
 import argparse
 import asyncio
 import json
@@ -17,6 +5,7 @@ import logging
 import os
 import re
 import sys
+from tqdm import tqdm
 from urllib.parse import urlencode
 from playwright.async_api import async_playwright
 from scraper.constants import *
@@ -131,11 +120,10 @@ async def extract_numbers_from_sidebar(page, metadata):
 			logging.info(f"Total for sale nationwide: {metadata["site_info"]['total_for_sale']}")
 
 async def extract_listings(page, metadata):
-	print("Extracting listings...")
 	listings = []
 	cards = await page.query_selector_all(HREF_ELEMENT)
 
-	for idx, card in enumerate(cards):
+	for idx, card in enumerate(tqdm(cards, desc="Extracting listings", unit="car")):
 		try:
 			title = await safe_text(card, TITLE_ELEMENT, f"title #{idx+1}", metadata)
 			price = await safe_text(card, PRICE_ELEMENT, f"price #{idx+1}", metadata)
@@ -211,14 +199,14 @@ async def auto_scroll_to_load_all(page, metadata, max_listings=300, delay_ms=250
 		current_count = len(cards)
 
 		if current_count >= int(max_listings):
-			logging.info(f"Reached max listings limit: {current_count} listings.")
+			print(f"\tReached max listings limit: {current_count} listings.")
 			break
 
 		if current_count == previous_count:
 			logging.info("No new listings loaded; reached end of results.")
 			break
 
-		logging.info(f"[Scroll {i+1}] Found {current_count} listings...")
+		print(f"\tFound {current_count} listings...")
 		previous_count = current_count
 		i += 1
 
