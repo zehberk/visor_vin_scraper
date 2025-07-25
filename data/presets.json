@@ -1,0 +1,18 @@
+{
+	"outbacks": {
+		"make": "Subaru",
+		"model": "Outback",
+        "trim": ["Wilderness"],
+		"year": ["2023", "2024", "2025"],
+		"max_listings": "200",
+		"sort": "Lowest Price"
+	},
+	"4xe": {
+		"make": "Jeep",
+		"model": "Grand Cherokee",
+		"trim": ["4xe Trailhawk"],
+		"year": ["2020-2025"],
+		"max_listings": "200",
+		"sort": "Lowest Price"
+	}
+}

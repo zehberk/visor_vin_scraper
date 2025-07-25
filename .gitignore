@@ -1,0 +1,22 @@
+# Virtual environment
+.venv/
+
+# VS Code settings
+.vscode/
+
+# Python cache files
+__pycache__/
+*.pyc
+
+# Pytest and test coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Output listing files
+*.json
+!data/presets.json
+
+# OS-generated files
+.DS_Store
+Thumbs.db

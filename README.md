@@ -1,0 +1,83 @@
+# visor.vin Web Scraper
+
+A lightweight CLI tool that scrapes car listings from [visor.vin](https://visor.vin) using common filters and saves the results as a JSON file.
+
+
+## Features
+
+- Filter listings by make, model, year, trim, price, mileage, and more
+- Save search results as a structured JSON file
+- Optional support for reusable presets
+- Minimal and fast — built with Playwright and asyncio
+
+
+## Setup
+
+1. Clone the repo:
+   ```bash
+   git clone https://github.com/your-username/visor-vin-scraper.git
+   cd visor-vin-scraper
+   ```
+
+2. Create and activate a virtual environment:
+   ```bash
+   python -m venv .venv
+   .\.venv\Scripts\activate.bat  # For Command Prompt in Windows
+   .\.venv\Scripts\Activate.ps1  # For PowerShell in Windows
+   source .\.venv/bin/activate   # For Git Bash or WSL (Linux/macOS shells)
+   ```
+
+3. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. Install browser dependencies for Playwright:
+   ```bash
+   playwright install
+   ```
+
+
+## Running the Scraper
+
+You must specify either:
+
+- `--make` and `--model` (required), or
+- `--preset` with both values defined
+
+### 🔹 Basic Usage
+
+```bash
+python -m scraper --make "Jeep" --model "Wrangler" --trim "Rubicon" --year "2023 2024" --sort "Newest"
+```
+
+### 🔹 Using a Preset
+
+```bash
+python -m scraper --preset "default"
+```
+
+Presets should be defined in `data/presets.json`.
+
+Use `--help` for a more thorough list of commands
+
+
+## Output
+
+Results are saved to a `.json` file in the root directory, with the filename based on your query (e.g., `Jeep_Wrangler_listings_{timestamp}.json`).
+
+Progress and summary info are shown in the terminal.
+
+
+## Testing
+
+To run all tests:
+
+```bash
+pytest
+```
+
+
+## License
+
+This project is licensed under the [MIT License](https://opensource.org/licenses/MIT). You are free to use, modify, and distribute it with attribution.
