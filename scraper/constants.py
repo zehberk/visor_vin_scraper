@@ -1,5 +1,6 @@
+from pathlib import Path
 
-# --- Constants ---
+PRESET_PATH = Path(__file__).parent.parent / "data" / "presets.json"
 
 # String constants for the scraper
 BASE_URL = "https://visor.vin/search/listings"

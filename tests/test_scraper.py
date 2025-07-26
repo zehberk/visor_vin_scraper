@@ -1,10 +1,12 @@
 import argparse
 import json
 import pytest
+import scraper.scraper as scraper
 from itertools import chain, repeat
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, mock_open, patch
-from scraper.constants import HREF_ELEMENT, MAX_LISTINGS, REMAPPING_RULES
+from unittest.mock import AsyncMock, MagicMock, ANY, mock_open, patch
+from scraper import constants
+from scraper.constants import HREF_ELEMENT, MAX_LISTINGS, REMAPPING_RULES, PRESET_PATH
 from scraper.scraper import (
 	auto_scroll_to_load_all,
     build_metadata, 
@@ -576,6 +578,47 @@ async def test_scrape_exits_if_fetch_page_fails(mock_playwright, mock_fetch_page
 
 	mock_fetch_page.assert_called_once()
 	mock_browser.close.assert_called_once()
+
+@patch("pathlib.Path.exists", return_value=False)
+async def test_missing_presets_file_raises(monkeypatch):
+	args = SimpleNamespace(preset="outbacks", make=None, model=None)
+	with pytest.raises(SystemExit):
+		await scraper.scrape(args)
+
+@patch("scraper.scraper.auto_scroll_to_load_all", new_callable=AsyncMock)
+@patch("scraper.scraper.extract_numbers_from_sidebar", new_callable=AsyncMock)
+@patch("scraper.scraper.fetch_page", new_callable=AsyncMock, return_value=True)
+@patch("scraper.scraper.async_playwright")
+async def test_scrape_calls_sidebar_and_scroll(mock_playwright, mock_fetch_page, mock_extract_sidebar, mock_scroll):
+	# Setup browser mocks
+	mock_browser = AsyncMock()
+	mock_page = AsyncMock()
+
+	mock_playwright.return_value.__aenter__.return_value.chromium.launch.return_value = mock_browser
+	mock_browser.new_page.return_value = mock_page
+
+	args = argparse.Namespace(
+		preset=None,
+		make="Subaru",
+		model="Outback",
+		trim=None,
+		year=None,
+		min_miles=None,
+		max_miles=None,
+		miles=None,
+		min_price=None,
+		max_price=None,
+		price=None,
+		condition=None,
+		sort="Newest",
+		max_listings=50,
+	)
+
+	await scraper.scrape(args)
+
+	# Assert both are called once with the mock page
+	mock_extract_sidebar.assert_awaited_once_with(mock_page, ANY)
+	mock_scroll.assert_awaited_once_with(mock_page, ANY, max_listings=50)
 
 #endregion
 

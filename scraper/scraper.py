@@ -229,7 +229,10 @@ async def auto_scroll_to_load_all(page, metadata, max_listings=300, delay_ms=250
 async def scrape(args):
 
 	if args.preset:
-		with open("presets.json") as f:
+		if not PRESET_PATH.exists():
+			logging.error(f"Preset file not found: {PRESET_PATH}")
+			exit(1)
+		with open(PRESET_PATH) as f:
 			presets = json.load(f)
 		if args.preset not in presets:
 			logging.error(f"Profile '{args.preset}' not found.")
