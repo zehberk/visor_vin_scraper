@@ -119,6 +119,8 @@ async def extract_numbers_from_sidebar(page, metadata):
 			metadata["site_info"]["total_for_sale"] = int(match.group(1).replace(",", ""))
 			logging.info(f"Total for sale nationwide: {metadata["site_info"]['total_for_sale']}")
 
+async def extract_full_listing_details(page, listing): pass
+
 async def extract_listings(page, metadata):
 	listings = []
 	cards = await page.query_selector_all(HREF_ELEMENT)

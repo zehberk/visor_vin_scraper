@@ -2,8 +2,9 @@ from pathlib import Path
 
 PRESET_PATH = Path(__file__).parent.parent / "presets" / "presets.json"
 
-# String constants for the scraper
+# URL strings
 BASE_URL = "https://visor.vin/search/listings"
+VIN_DETAILS_URL = "{BASE_URL}/{vin}"
 
 CONDITIONS = {"New", "Used", "Certified"} # Vehicle conditions
 SORT_OPTIONS = {
