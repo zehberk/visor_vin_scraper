@@ -72,12 +72,20 @@ async def extract_url(page, listing):
 		carfax_url = "None"
 	listing["carfax_url"] = carfax_url
 
+	# Can't get the href directly because it is not constant between listsings
 	try:		
 		link = await page.query_selector(WINDOW_STICKER_URL_ELEMENT)
 		window_sticker_url = await link.get_attribute("href") if link else None
 	except TimeoutError:
 		window_sticker_url = "None"
 	listing["window_sticker_url"] = window_sticker_url
+
+	try:		
+		link = await page.query_selector(LISTING_URL_ELEMENT)
+		listing_url = await link.get_attribute("href") if link else None
+	except TimeoutError:
+		listing_url = "None"
+	listing["listing_url"] = listing_url
 
 async def extract_full_listing_details(browser, listing):	
 	context = await browser.new_context()

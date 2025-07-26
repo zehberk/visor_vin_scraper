@@ -48,5 +48,6 @@ COVERAGE_STATUS_ELEMENT = "div.text-sm div.text-sm"
 COVERAGE_LIMIT_ELEMENTS = "div.space-y-1 div.text-sm"
 CARFAX_URL_ELEMENT = 'a[data-posthog-event="View Carfax Report"]'
 WINDOW_STICKER_URL_ELEMENT = 'a[data-posthog-event="View Window Sticker"]'
+LISTING_URL_ELEMENT = 'a[data-posthog-event="View Listing"]'
 
 MAX_LISTINGS = 500  # Maximum listings to retrieve
