@@ -13,6 +13,9 @@ __pycache__/
 .coverage
 htmlcov/
 
+# User presets
+presets/presets.json
+
 # Output listing files
 output/*.json
 !output/example_output.json
@@ -23,3 +26,4 @@ Thumbs.db
 
 # Test code
 scraper/test_script.py
+.env

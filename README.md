@@ -37,6 +37,22 @@ A lightweight CLI tool that scrapes car listings from [visor.vin](https://visor.
    playwright install
    ```
 
+5. Authentication Setup
+   
+   To run this script, create a .env file in the project root
+   ```bash
+   cp .env.example .env
+   ```
+   Then paste in your actual authentication cookies:
+   ```html
+   SB_AUTH_TOKEN_0 from visor.vin
+   SB_AUTH_TOKEN_0 from visor.vin
+   ```
+
+   This step is needed to pull information from the premium features included with a subcription
+
+   ***Warning:*** You can still run this script without authentication, but it will run for considerably longer!
+
 
 ## Running the Scraper
 

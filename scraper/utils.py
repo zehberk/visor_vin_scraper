@@ -1,6 +1,20 @@
 # utils.py
+import argparse
+import logging
+import os
 import re
+import time
+from scraper.constants import *
+from contextlib import contextmanager
+from dotenv import load_dotenv
 from datetime import datetime
+
+@contextmanager
+def stopwatch(label="Elapsed"):
+	start = time.time()
+	yield
+	end = time.time()
+	print(f"{label}: {end - start:.2f} seconds")
 
 def normalize_years(raw_years):
 	result = set()
@@ -73,3 +87,117 @@ def parse_range_arg(name: str, raw: str):
 
 def current_timestamp():
 	return datetime.now().strftime("%Y%m%d_%H%M%S")
+
+def load_auth_cookies():
+	load_dotenv()
+	cookies = []
+	token0 = os.getenv("SB_DB_AUTH_TOKEN_0")
+	token1 = os.getenv("SB_DB_AUTH_TOKEN_1")
+
+	if token0:
+		cookies.append({"name": "sb-db-auth-token.0", "value": token0, "domain": "visor.vin", "path": "/"})
+	if token1:
+		cookies.append({"name": "sb-db-auth-token.1", "value": token1, "domain": "visor.vin", "path": "/"})
+	return cookies
+
+
+async def safe_text(card, selector, label, metadata):
+	try:
+		element = await card.query_selector(selector)
+		return await element.inner_text() if element else "N/A"
+	except Exception as e:
+		msg = f"Failed to read {label}: {e}"
+		logging.warning(msg)
+		metadata["warnings"].append(msg)
+		return "N/A"
+
+def warn_if_missing_env_vars(*keys):
+	load_dotenv()
+	for key in keys:
+		if not os.getenv(key):
+			logging.info(f"Optional environment variable not set: {key}. Premium features will not be scraped from the webpage")
+
+
+def capped_max_listings(value):
+	ivalue = int(value)
+	if ivalue > MAX_LISTINGS:
+		raise argparse.ArgumentTypeError(f"Maximum allowed listings is {MAX_LISTINGS}.")
+	return ivalue
+
+def build_metadata(args):
+	if not args.make or not args.make.strip():
+		logging.error("--make is required and cannot be empty.")
+		exit(1)
+	if not args.model or not args.model.strip():
+		logging.error("--model is required and cannot be empty.")
+		exit(1)
+
+	metadata = {
+		"vehicle": {
+			"make": args.make,
+			"model": args.model,
+			"trim": args.trim,
+			"year": normalize_years(args.year) if args.year else []
+		},
+		"filters": remove_null_entries(vars(args).copy()),
+		"site_info": {},  # filled later
+		"runtime": {
+			"timestamp": current_timestamp()
+		},
+		"warnings": []
+	}
+
+	filters = vars(args).copy()
+	for k in ("make", "model", "trim", "year", "preset"):
+		filters.pop(k, None)
+	metadata["filters"] = remove_null_entries(filters)
+
+	return metadata
+
+def build_query_params(args, metadata):
+	if args.miles:
+		if args.min_miles or args.max_miles:
+			logging.warning("--miles overrides --min_miles and --max_miles.")
+		args.min_miles, args.max_miles = parse_range_arg("miles", args.miles)
+	if args.price:
+		if args.min_price or args.max_price:
+			logging.warning("--price overrides --min_price and --max_price.")
+		args.min_price, args.max_price = parse_range_arg("price", args.price)
+
+	# Default fallback for condition to suppress unnecessary warnings
+	if not args.condition:
+		args.condition = []
+	# Normalize sort key if applicable (mainly for presets)
+	if args.sort in SORT_OPTIONS:
+		args.sort = SORT_OPTIONS[args.sort]
+
+	args_dict = vars(args)
+	query_params = {}
+
+	for key, value in args_dict.items():
+		try:
+			remapper = REMAPPING_RULES.get(key)
+			param_name = PARAM_NAME_OVERRIDES.get(key, key)
+
+			if isinstance(remapper, dict):
+				query_params[param_name] = remapper.get(value, value)
+			elif callable(remapper):
+				query_params[param_name] = remapper(value)
+			elif isinstance(value, list):
+				query_params[param_name] = ",".join(map(str, value)) if value else None
+			else:
+				query_params[param_name] = str(value).lower() if isinstance(value, bool) else value
+		except Exception as e:
+			msg = f"Failed to process argument '{key}': {e}"
+			logging.warning(msg)
+			metadata["warnings"].append(msg)
+
+	# Clean and validate
+	cleaned = {}
+	for k, v in query_params.items():
+		if v in (None, "") or (isinstance(v, list) and not any(v)):
+			continue		# value was empty and optional; no need to warn
+		cleaned[k] = v
+
+	return cleaned
+

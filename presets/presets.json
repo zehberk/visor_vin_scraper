@@ -4,7 +4,7 @@
 		"model": "Outback",
         "trim": ["Wilderness"],
 		"year": ["2023", "2024", "2025"],
-		"max_listings": "200",
+		"max_listings": "5",
 		"sort": "Lowest Price"
 	},
 	"4xe": {

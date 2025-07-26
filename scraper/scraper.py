@@ -9,114 +9,16 @@ from tqdm import tqdm
 from urllib.parse import urlencode
 from playwright.async_api import async_playwright
 from scraper.constants import *
-from scraper.utils import (
-	normalize_years,
-	remove_null_entries,
-	parse_range_arg,
-	current_timestamp
-)
+from scraper.utils import *
 
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
-
-def capped_max_listings(value):
-	ivalue = int(value)
-	if ivalue > MAX_LISTINGS:
-		raise argparse.ArgumentTypeError(f"Maximum allowed listings is {MAX_LISTINGS}.")
-	return ivalue
-
-def build_metadata(args):
-	if not args.make or not args.make.strip():
-		logging.error("--make is required and cannot be empty.")
-		exit(1)
-	if not args.model or not args.model.strip():
-		logging.error("--model is required and cannot be empty.")
-		exit(1)
-
-	metadata = {
-		"vehicle": {
-			"make": args.make,
-			"model": args.model,
-			"trim": args.trim,
-			"year": normalize_years(args.year) if args.year else []
-		},
-		"filters": remove_null_entries(vars(args).copy()),
-		"site_info": {},  # filled later
-		"runtime": {
-			"timestamp": current_timestamp()
-		},
-		"warnings": []
-	}
-
-	filters = vars(args).copy()
-	for k in ("make", "model", "trim", "year", "preset"):
-		filters.pop(k, None)
-	metadata["filters"] = remove_null_entries(filters)
-
-	return metadata
-
-def build_query_params(args, metadata):
-	if args.miles:
-		if args.min_miles or args.max_miles:
-			logging.warning("--miles overrides --min_miles and --max_miles.")
-		args.min_miles, args.max_miles = parse_range_arg("miles", args.miles)
-	if args.price:
-		if args.min_price or args.max_price:
-			logging.warning("--price overrides --min_price and --max_price.")
-		args.min_price, args.max_price = parse_range_arg("price", args.price)
-
-	# Default fallback for condition to suppress unnecessary warnings
-	if not args.condition:
-		args.condition = []
-	# Normalize sort key if applicable (mainly for presets)
-	if args.sort in SORT_OPTIONS:
-		args.sort = SORT_OPTIONS[args.sort]
-
-	args_dict = vars(args)
-	query_params = {}
-
-	for key, value in args_dict.items():
-		try:
-			remapper = REMAPPING_RULES.get(key)
-			param_name = PARAM_NAME_OVERRIDES.get(key, key)
-
-			if isinstance(remapper, dict):
-				query_params[param_name] = remapper.get(value, value)
-			elif callable(remapper):
-				query_params[param_name] = remapper(value)
-			elif isinstance(value, list):
-				query_params[param_name] = ",".join(map(str, value)) if value else None
-			else:
-				query_params[param_name] = str(value).lower() if isinstance(value, bool) else value
-		except Exception as e:
-			msg = f"Failed to process argument '{key}': {e}"
-			logging.warning(msg)
-			metadata["warnings"].append(msg)
-
-	# Clean and validate
-	cleaned = {}
-	for k, v in query_params.items():
-		if v in (None, "") or (isinstance(v, list) and not any(v)):
-			continue		# value was empty and optional; no need to warn
-		cleaned[k] = v
-
-	return cleaned
 
 async def fetch_page(page, url):
 	try:
 		await page.goto(url, timeout=60000)
-		await page.wait_for_selector(HREF_ELEMENTS, timeout=20000)
+		await page.wait_for_selector(LISTING_CARD_SELCTOR, timeout=20000)
 	except Exception as e:
 		logging.error(f"Page load or selector wait failed: {e}")
-		return False
-	return True
-
-async def fetch_details_page(page, vin):
-	try:
-		url = VIN_DETAILS_URL.format(vin=vin)
-		await page.goto(url, timeout=60000)
-		await page.wait_for_selector(DETAIL_PAGE_ELEMENT, timeout=20000)  # Wait for title to ensure page loaded
-	except Exception as e:
-		logging.error(f"Failed to load details page for VIN {vin}: {e}")
 		return False
 	return True
 
@@ -159,20 +61,51 @@ async def extract_warranty_info(page, listing):
 	# page is the details page. since we don't have cards to enumerate on
 	# we can use page instead of card for calling safe_text or other functions
 	coverages = await page.query_selector_all(COVERAGE_ELEMENTS)
-	for coverage in enumerate(coverages):
+	for coverage in coverages:
 		entry = await parse_warranty_coverage(coverage)
 		listing["warranty"]["coverages"].append(entry)
 
-async def extract_full_listing_details(page, listing):
-	await fetch_details_page(page, VIN_DETAILS_URL.format(vin=listing.get("vin")))
+async def extract_url(page, listing):	
 	try:
-		await extract_warranty_info(page, listing)
+		carfax_url = await page.get_attribute(CARFAX_URL_ELEMENT, "href", timeout=2000)
+	except TimeoutError:
+		carfax_url = "None"
+	listing["carfax_url"] = carfax_url
+
+	try:		
+		link = await page.query_selector(WINDOW_STICKER_URL_ELEMENT)
+		window_sticker_url = await link.get_attribute("href") if link else None
+	except TimeoutError:
+		window_sticker_url = "None"
+	listing["window_sticker_url"] = window_sticker_url
+
+async def extract_full_listing_details(browser, listing):	
+	context = await browser.new_context()
+	await context.add_cookies(load_auth_cookies())
+	detail_page = await context.new_page()
+	try:
+		vin = listing.get("vin")
+		url = VIN_DETAILS_URL.format(vin=vin)
+		await detail_page.goto(url, timeout=60000)		
+		await detail_page.wait_for_selector(DETAIL_PAGE_ELEMENT, timeout=20000)
+		await extract_warranty_info(detail_page, listing)
+		await extract_url(detail_page, listing)
 	except Exception as e:
 		listing["error"] = f"Failed to fetch full details: {e}"
+	finally:
+		await detail_page.close()
 
-async def extract_listings(page, metadata):
+async def extract_listings(browser, page, metadata, max_listings=50):
 	listings = []
-	cards = await page.query_selector_all(HREF_ELEMENTS)
+	cards = await page.query_selector_all(LISTING_CARD_SELCTOR)
+
+	# Even though this is already an int, the runtime environment
+	# may pass it as a string, so we ensure it's an int
+	max_listings = int(max_listings)
+	
+	if len(cards) > max_listings:
+		logging.info(f"Found {len(cards)} listings, but limiting to {max_listings} as per --max_listings.")
+		cards = cards[:max_listings]
 
 	for idx, card in enumerate(tqdm(cards, desc="Extracting listings", unit="car")):
 		try:
@@ -191,22 +124,12 @@ async def extract_listings(page, metadata):
 				"vin": vin
 			}
 
-			await extract_full_listing_details(page, listing)  # Fetch full details in background
+			await extract_full_listing_details(browser, listing)  # Fetch full details in background
 			listings.append(listing)
 
 		except Exception as e:		# pragma: no cover
 			metadata["warnings"].append(f"Skipping listing #{idx+1}: {e}")
 	return listings
-
-async def safe_text(card, selector, label, metadata):
-	try:
-		element = await card.query_selector(selector)
-		return await element.inner_text() if element else "N/A"
-	except Exception as e:
-		msg = f"Failed to read {label}: {e}"
-		logging.warning(msg)
-		metadata["warnings"].append(msg)
-		return "N/A"
 
 async def safe_vin(card, idx, metadata):
 	try:
@@ -222,7 +145,7 @@ async def extract_mileage_and_listed(card, idx, metadata):
 	mileage = "N/A"
 	listed = "N/A"
 	try:
-		blocks = await card.query_selector_all(MILEAGE_AND_LISTDATE)
+		blocks = await card.query_selector_all(TEXT_BLOCKS_SELECTOR)
 		for block in blocks:
 			try:
 				text = (await block.inner_text()).strip()
@@ -243,25 +166,27 @@ def save_results(listings, metadata, args, output_dir="output"):
 	path = os.path.join(output_dir, filename)
 	with open(path, "w", encoding="utf-8") as f:
 		json.dump({"metadata": metadata, "listings": listings}, f, indent=2, ensure_ascii=False)
-	logging.info(f"Saved listings to {path}")
+	print(f"Saved {len(listings)} listings to {path}")
 
 async def auto_scroll_to_load_all(page, metadata, max_listings=300, delay_ms=250):
 	previous_count = 0
 	i = 0
+	print(f"Starting auto-scroll to load up to {max_listings} listings...")
 
 	while True:
-		cards = await page.query_selector_all(HREF_ELEMENTS)
+		cards = await page.query_selector_all(LISTING_CARD_SELCTOR)
 		current_count = len(cards)
 
+		print(f"\tFound {current_count} listings...")
+
 		if current_count >= int(max_listings):
-			print(f"\tReached max listings limit: {current_count} listings.")
+			print(f"\tStopping at {max_listings} (cap reached).")
 			break
 
 		if current_count == previous_count:
-			logging.info("No new listings loaded; reached end of results.")
+			print(f"\tScroll ended at {current_count} listings (no more found).")
 			break
 
-		print(f"\tFound {current_count} listings...")
 		previous_count = current_count
 		i += 1
 
@@ -271,7 +196,7 @@ async def auto_scroll_to_load_all(page, metadata, max_listings=300, delay_ms=250
 		""")
 
 		try:
-			await page.wait_for_selector(f"{HREF_ELEMENTS} >> nth={previous_count}", timeout=5000)
+			await page.wait_for_selector(f"{LISTING_CARD_SELCTOR} >> nth={previous_count}", timeout=5000)
 		except:
 			logging.info("No new listings detected after scroll wait.")
 			break
@@ -308,22 +233,24 @@ async def scrape(args):
 	query_params = build_query_params(args, metadata)
 	url = f"{BASE_URL}?{urlencode(query_params)}"
 	metadata["runtime"]["url"] = url
-	logging.info(f"Navigating to: {url}")
+	warn_if_missing_env_vars("SB_DB_AUTH_TOKEN_0", "SB_DB_AUTH_TOKEN_1")
 
 	async with async_playwright() as pw:
 		browser = await pw.chromium.launch(headless=True)
 		page = await browser.new_page()
+		
 		if not await fetch_page(page, url):
 			await browser.close()
 			return
 		await extract_numbers_from_sidebar(page, metadata)
 		await auto_scroll_to_load_all(page, metadata, max_listings=args.max_listings)
-		listings = await extract_listings(page, metadata)	# pragma: no cover
+		listings = await extract_listings(browser, page, metadata, max_listings=args.max_listings)	# pragma: no cover
 		save_results(listings, metadata, args)				# pragma: no cover
 		await browser.close()								# pragma: no cover
 
 # Entry point
 def main():  # pragma: no cover
+
 	parser = argparse.ArgumentParser(
 		description="Scrape vehicle listings from visor.vin.",
 		formatter_class=argparse.ArgumentDefaultsHelpFormatter

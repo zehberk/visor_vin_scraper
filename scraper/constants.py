@@ -21,8 +21,7 @@ PARAM_NAME_OVERRIDES = {        # For user-friendly parameter names
     "min_miles": "miles_min",
     "max_miles": "miles_max",
     "min_price": "price_min",
-    "max_price": "price_max",
-    # Add more if needed
+    "max_price": "price_max"
 }
 
 # Remapping constants for query parameters
@@ -33,10 +32,10 @@ REMAPPING_RULES = {
 }
 
 # HTML element selectors for main listing page
-HREF_ELEMENTS = "a[href^='/search/listings/']"
+LISTING_CARD_SELCTOR = "a[href^='/search/listings/']"
 TITLE_ELEMENT = "h2"
 PRICE_ELEMENT = "div.absolute.bottom-2.left-2 span"
-MILEAGE_AND_LISTDATE = "div.text-sm"
+TEXT_BLOCKS_SELECTOR = "div.text-sm"
 LOCATION_ELEMENT = "div.flex.items-start span"
 SCROLL_CONTAINER_SELECTOR = "div.h-dvh.overflow-y-auto"
 
@@ -47,5 +46,7 @@ COVERAGE_ELEMENTS = "div.grid.grid-cols-1.gap-6 div.bg-\\[\\#F6F6F6\\].p-3.space
 COVERAGE_TYPE_ELEMENT = "div.bg-\\[\\#3B3B3B\\]"
 COVERAGE_STATUS_ELEMENT = "div.text-sm div.text-sm"
 COVERAGE_LIMIT_ELEMENTS = "div.space-y-1 div.text-sm"
+CARFAX_URL_ELEMENT = 'a[data-posthog-event="View Carfax Report"]'
+WINDOW_STICKER_URL_ELEMENT = 'a[data-posthog-event="View Window Sticker"]'
 
 MAX_LISTINGS = 500  # Maximum listings to retrieve
