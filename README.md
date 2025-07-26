@@ -45,28 +45,34 @@ You must specify either:
 - `--make` and `--model` (required), or
 - `--preset` with both values defined
 
-### 🔹 Basic Usage
+### Basic Usage
 
 ```bash
 python -m scraper --make "Jeep" --model "Wrangler" --trim "Rubicon" --year "2023 2024" --sort "Newest"
 ```
 
-### 🔹 Using a Preset
+### Using a Preset
 
 ```bash
 python -m scraper --preset "default"
 ```
 
-Presets should be defined in `data/presets.json`.
+Presets should be defined in `presets/presets.json`. See [presets.docs.md](presets/presets.docs.md) for the format and allowed values.
 
-Use `--help` for a more thorough list of commands
+### Help
+
+Use `--help` for a more thorough list of arguments
+
+```bash
+python -m scraper --help
+```
 
 
 ## Output
 
 Results are saved to a `.json` file in the root directory, with the filename based on your query (e.g., `Jeep_Wrangler_listings_{timestamp}.json`).
 
-Progress and summary info are shown in the terminal.
+Progress and summary info are shown in the terminal. See [output.docs.md](output/output.docs.md)
 
 
 ## Testing

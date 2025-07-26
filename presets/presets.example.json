@@ -1,0 +1,17 @@
+{
+	"default": {
+		"make": "Toyota",
+		"model": "RAV4",
+		"trim": ["Adventure", "TRD Off-Road"],
+		"year": ["2022", "2023", "2024"],
+		"min_miles": 0,
+		"max_miles": 60000,
+		"miles": "10000-60000",
+		"min_price": 25000,
+		"max_price": 40000,
+		"price": "25000-40000",
+		"condition": ["Used", "Certified"],
+		"sort": "Newest",
+		"max_listings": 100
+	}
+}

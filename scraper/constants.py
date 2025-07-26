@@ -1,6 +1,6 @@
 from pathlib import Path
 
-PRESET_PATH = Path(__file__).parent.parent / "data" / "presets.json"
+PRESET_PATH = Path(__file__).parent.parent / "presets" / "presets.json"
 
 # String constants for the scraper
 BASE_URL = "https://visor.vin/search/listings"
@@ -10,8 +10,8 @@ SORT_OPTIONS = {
     "Best Match": "best_match",
     "Lowest Price": "cheapest",
     "Highest Price": "expensive",
-    "Newest Listings": "recent",
-    "Oldest Listings": "oldest",
+    "Newest": "recent",
+    "Oldest": "oldest",
     "Lowest Mileage": "lowest_miles",
     "Highest Mileage": "highest_miles",
 }

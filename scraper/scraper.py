@@ -183,7 +183,7 @@ async def extract_mileage_and_listed(card, idx, metadata):
 		metadata["warnings"].append(msg)
 	return mileage, listed
 
-def save_results(listings, metadata, args, output_dir="."):
+def save_results(listings, metadata, args, output_dir="output"):
 	filename = f"{args.make}_{args.model}_listings_{current_timestamp()}.json".replace(" ", "_")
 	path = os.path.join(output_dir, filename)
 	with open(path, "w", encoding="utf-8") as f:

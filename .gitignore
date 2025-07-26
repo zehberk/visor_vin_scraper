@@ -14,8 +14,8 @@ __pycache__/
 htmlcov/
 
 # Output listing files
-*.json
-!data/presets.json
+output/*.json
+!output/example_output.json
 
 # OS-generated files
 .DS_Store

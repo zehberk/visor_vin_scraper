@@ -1,0 +1,48 @@
+{
+  "metadata": {
+    "vehicle": {
+      "make": "Toyota",
+      "model": "RAV4",
+      "trim": [
+        "Adventure",
+        "TRD Off-Road"
+      ],
+      "year": [
+        "2022",
+        "2023"
+      ]
+    },
+    "filters": {
+      "min_miles": 10000,
+      "max_miles": 60000,
+      "miles": "10000-60000",
+      "min_price": 25000,
+      "max_price": 40000,
+      "price": "25000-40000",
+      "condition": [
+        "Used",
+        "Certified"
+      ],
+      "sort": "Newest",
+      "max_listings": 100
+    },
+    "site_info": {
+      "total_for_sale": 1
+    },
+    "runtime": {
+      "timestamp": "2025-07-26 02:17:24",
+      "url": "https://visor.vin/search/listings?make=Toyota&model=RAV4"
+    },
+    "warnings": []
+  },
+  "listings": [
+    {
+      "title": "2023 Toyota RAV4 Adventure AWD",
+      "price": "$35,000",
+      "mileage": "12,345 mi",
+      "listed": "Listed 10 days ago",
+      "location": "Denver, CO",
+      "vin": "2T3J1RFV1PW123456"
+    }
+  ]
+}
