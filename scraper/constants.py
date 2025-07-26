@@ -4,7 +4,7 @@ PRESET_PATH = Path(__file__).parent.parent / "presets" / "presets.json"
 
 # URL strings
 BASE_URL = "https://visor.vin/search/listings"
-VIN_DETAILS_URL = "{BASE_URL}/{vin}"
+VIN_DETAILS_URL = BASE_URL + "/{vin}"
 
 CONDITIONS = {"New", "Used", "Certified"} # Vehicle conditions
 SORT_OPTIONS = {
@@ -32,13 +32,20 @@ REMAPPING_RULES = {
     "condition": lambda values: ",".join(v.lower() for v in values)
 }
 
-# HTML element selectors
-HREF_ELEMENT = "a[href^='/search/listings/']"
-LISTING_COUNT_ELEMENT = "span.text-xl.text-gray-600"
+# HTML element selectors for main listing page
+HREF_ELEMENTS = "a[href^='/search/listings/']"
 TITLE_ELEMENT = "h2"
 PRICE_ELEMENT = "div.absolute.bottom-2.left-2 span"
-TEXT_SM_BLOCKS = "div.text-sm"
+MILEAGE_AND_LISTDATE = "div.text-sm"
 LOCATION_ELEMENT = "div.flex.items-start span"
 SCROLL_CONTAINER_SELECTOR = "div.h-dvh.overflow-y-auto"
+
+#HTML element selectors for detail page
+DETAIL_PAGE_ELEMENT = "div.h-dvh.w-full.space-y-3.overflow-y-auto"
+WARRANTY_STATUS_TEXT_ELEMENT = "div.text-base.text-black"
+COVERAGE_ELEMENTS = "div.grid.grid-cols-1.gap-6 div.bg-\\[\\#F6F6F6\\].p-3.space-y-3"
+COVERAGE_TYPE_ELEMENT = "div.bg-\\[\\#3B3B3B\\]"
+COVERAGE_STATUS_ELEMENT = "div.text-sm div.text-sm"
+COVERAGE_LIMIT_ELEMENTS = "div.space-y-1 div.text-sm"
 
 MAX_LISTINGS = 500  # Maximum listings to retrieve

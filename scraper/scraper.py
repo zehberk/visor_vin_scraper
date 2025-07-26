@@ -33,7 +33,7 @@ def build_metadata(args):
 		exit(1)
 
 	metadata = {
-    	"vehicle": {
+		"vehicle": {
 			"make": args.make,
 			"model": args.model,
 			"trim": args.trim,
@@ -104,9 +104,19 @@ def build_query_params(args, metadata):
 async def fetch_page(page, url):
 	try:
 		await page.goto(url, timeout=60000)
-		await page.wait_for_selector(HREF_ELEMENT, timeout=20000)
+		await page.wait_for_selector(HREF_ELEMENTS, timeout=20000)
 	except Exception as e:
 		logging.error(f"Page load or selector wait failed: {e}")
+		return False
+	return True
+
+async def fetch_details_page(page, vin):
+	try:
+		url = VIN_DETAILS_URL.format(vin=vin)
+		await page.goto(url, timeout=60000)
+		await page.wait_for_selector(DETAIL_PAGE_ELEMENT, timeout=20000)  # Wait for title to ensure page loaded
+	except Exception as e:
+		logging.error(f"Failed to load details page for VIN {vin}: {e}")
 		return False
 	return True
 
@@ -119,11 +129,50 @@ async def extract_numbers_from_sidebar(page, metadata):
 			metadata["site_info"]["total_for_sale"] = int(match.group(1).replace(",", ""))
 			logging.info(f"Total for sale nationwide: {metadata["site_info"]['total_for_sale']}")
 
-async def extract_full_listing_details(page, listing): pass
+async def parse_warranty_coverage(coverage):
+	entry = {}
+	type_el = await coverage.query_selector(COVERAGE_TYPE_ELEMENT)
+	entry["type"] = (await type_el.inner_text()).strip() if type_el else None
+
+	status_el = await coverage.query_selector(COVERAGE_STATUS_ELEMENT)
+	entry["status"] = (await status_el.inner_text()).strip() if status_el else None
+
+	limits = await coverage.query_selector_all(COVERAGE_LIMIT_ELEMENTS)
+	if len(limits) >= 6:
+		entry["time_left"] = (await limits[1].inner_text()).strip()
+		entry["time_total"] = (await limits[2].inner_text()).strip()
+		entry["miles_left"] = (await limits[4].inner_text()).strip()
+		entry["miles_total"] = (await limits[5].inner_text()).strip()
+
+	return entry
+
+async def extract_warranty_info(page, listing):
+	listing.setdefault("warranty", {}).setdefault("coverages", [])
+
+	warranty_el = await page.query_selector(WARRANTY_STATUS_TEXT_ELEMENT)
+	if warranty_el:
+		warranty_status = await warranty_el.inner_text()
+		listing["warranty"]["overall_status"] = warranty_status
+	else:
+		listing["warranty"]["overall_status"] = "No warranty info found"
+	
+	# page is the details page. since we don't have cards to enumerate on
+	# we can use page instead of card for calling safe_text or other functions
+	coverages = await page.query_selector_all(COVERAGE_ELEMENTS)
+	for coverage in enumerate(coverages):
+		entry = await parse_warranty_coverage(coverage)
+		listing["warranty"]["coverages"].append(entry)
+
+async def extract_full_listing_details(page, listing):
+	await fetch_details_page(page, VIN_DETAILS_URL.format(vin=listing.get("vin")))
+	try:
+		await extract_warranty_info(page, listing)
+	except Exception as e:
+		listing["error"] = f"Failed to fetch full details: {e}"
 
 async def extract_listings(page, metadata):
 	listings = []
-	cards = await page.query_selector_all(HREF_ELEMENT)
+	cards = await page.query_selector_all(HREF_ELEMENTS)
 
 	for idx, card in enumerate(tqdm(cards, desc="Extracting listings", unit="car")):
 		try:
@@ -133,14 +182,18 @@ async def extract_listings(page, metadata):
 			location = await safe_text(card, LOCATION_ELEMENT, f"location #{idx+1}", metadata)
 			vin = await safe_vin(card, idx, metadata)
 
-			listings.append({
+			listing = {
 				"title": title,
 				"price": price,
 				"mileage": mileage,
 				"listed": listed,
 				"location": location,
 				"vin": vin
-			})
+			}
+
+			await extract_full_listing_details(page, listing)  # Fetch full details in background
+			listings.append(listing)
+
 		except Exception as e:		# pragma: no cover
 			metadata["warnings"].append(f"Skipping listing #{idx+1}: {e}")
 	return listings
@@ -169,7 +222,7 @@ async def extract_mileage_and_listed(card, idx, metadata):
 	mileage = "N/A"
 	listed = "N/A"
 	try:
-		blocks = await card.query_selector_all(TEXT_SM_BLOCKS)
+		blocks = await card.query_selector_all(MILEAGE_AND_LISTDATE)
 		for block in blocks:
 			try:
 				text = (await block.inner_text()).strip()
@@ -197,7 +250,7 @@ async def auto_scroll_to_load_all(page, metadata, max_listings=300, delay_ms=250
 	i = 0
 
 	while True:
-		cards = await page.query_selector_all(HREF_ELEMENT)
+		cards = await page.query_selector_all(HREF_ELEMENTS)
 		current_count = len(cards)
 
 		if current_count >= int(max_listings):
@@ -218,7 +271,7 @@ async def auto_scroll_to_load_all(page, metadata, max_listings=300, delay_ms=250
 		""")
 
 		try:
-			await page.wait_for_selector(f"{HREF_ELEMENT} >> nth={previous_count}", timeout=5000)
+			await page.wait_for_selector(f"{HREF_ELEMENTS} >> nth={previous_count}", timeout=5000)
 		except:
 			logging.info("No new listings detected after scroll wait.")
 			break
