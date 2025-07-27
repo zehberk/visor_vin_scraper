@@ -100,7 +100,6 @@ def load_auth_cookies():
 		cookies.append({"name": "sb-db-auth-token.1", "value": token1, "domain": "visor.vin", "path": "/"})
 	return cookies
 
-
 async def safe_text(card, selector, label, metadata, default="N/A"):
 	try:
 		element = await card.query_selector(selector)
@@ -116,7 +115,6 @@ def warn_if_missing_env_vars(*keys):
 	for key in keys:
 		if not os.getenv(key):
 			logging.info(f"Optional environment variable not set: {key}. Premium features will not be scraped from the webpage")
-
 
 def capped_max_listings(value):
 	ivalue = int(value)

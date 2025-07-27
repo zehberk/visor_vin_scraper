@@ -23,6 +23,7 @@ PARAM_NAME_OVERRIDES = {        # For user-friendly parameter names
     "min_price": "price_min",
     "max_price": "price_max"
 }
+MAX_LISTINGS = 500  # Maximum listings to retrieve
 
 # Remapping constants for query parameters
 # This allows for more user-friendly input while maintaining the correct URL parameters
@@ -39,8 +40,9 @@ TEXT_BLOCKS_SELECTOR = "div.text-sm"
 LOCATION_ELEMENT = "div.flex.items-start span"
 SCROLL_CONTAINER_SELECTOR = "div.h-dvh.overflow-y-auto"
 
-#HTML element selectors for detail page
+# HTML element selector for detail page
 DETAIL_PAGE_ELEMENT = "div.h-dvh.w-full.space-y-3.overflow-y-auto"
+# HTML element selectors for warranty
 WARRANTY_STATUS_TEXT_ELEMENT = "div.text-base.text-black"
 COVERAGE_ELEMENTS = "div.grid.grid-cols-1.gap-6 div.bg-\\[\\#F6F6F6\\].p-3.space-y-3"
 COVERAGE_TYPE_ELEMENT = "div.bg-\\[\\#3B3B3B\\]"
@@ -48,6 +50,7 @@ COVERAGE_STATUS_ELEMENT = "div.text-sm div.text-sm"
 COVERAGE_LIMIT_ELEMENTS = "div.space-y-1 div.text-sm"
 CARFAX_URL_ELEMENT = 'a[data-posthog-event="View Carfax Report"]'
 WINDOW_STICKER_URL_ELEMENT = 'a[data-posthog-event="View Window Sticker"]'
+# HTML element selectors for seller
 LISTING_URL_ELEMENT = 'a[data-posthog-event="View Listing"]'
 SELLER_BLOCK_ELEMENT = 'td.p-3.border-input.align-middle.space-y-1\\.5 div.space-y-2'
 SELLER_NAME_ELEMENT = 'div.order-2'
@@ -55,5 +58,9 @@ GOOGLE_MAP_ELEMENT = 'a[data-posthog-event="Google Maps"]'
 BUTTON_ELEMENTS = 'button[data-slot="tooltip-trigger"]'
 STOCK_NUM_ELEMENT = 'div div'
 PHONE_NUM_ELEMENT = 'div'
-
-MAX_LISTINGS = 500  # Maximum listings to retrieve
+# HTML element selectors for market velocity
+VELOCITY_ELEMENTS = "div.space-y-4 div.grid.gap-4 div.bg-\\[\\#F6F6F6\\]"
+VELOCITY_SECTION_ELEMENTS = "div.space-y-4 div.grid.gap-4 div.bg-\\[\\#F6F6F6\\]"
+VEHICLE_SOLD_ELEMENT = "div.text-lg"
+DAYS_ON_MARKET_ELEMENT = 'div.flex div.text-sm.font-medium'
+DEMAND_ELEMENT = "div.text-lg.font-medium"

@@ -31,11 +31,11 @@ async def extract_numbers_from_sidebar(page, metadata):
 			metadata["site_info"]["total_for_sale"] = int(match.group(1).replace(",", ""))
 			logging.info(f"Total for sale nationwide: {metadata["site_info"]['total_for_sale']}")
 
-async def parse_warranty_coverage(coverage, idx, metadata):
+async def parse_warranty_coverage(coverage, index, metadata):
 	entry = {}
 	
-	entry["type"] = await safe_text(coverage, COVERAGE_TYPE_ELEMENT, f"Coverage type from #{idx}", metadata)
-	entry["status"] = await safe_text(coverage, COVERAGE_STATUS_ELEMENT, f"Coverage status for {entry["type"]} from #{idx}", metadata)
+	entry["type"] = await safe_text(coverage, COVERAGE_TYPE_ELEMENT, f"Coverage type from #{index}", metadata)
+	entry["status"] = await safe_text(coverage, COVERAGE_STATUS_ELEMENT, f"Coverage status for {entry["type"]} from #{index}", metadata)
 
 	limits = await coverage.query_selector_all(COVERAGE_LIMIT_ELEMENTS)
 	if len(limits) >= 6:
@@ -46,12 +46,12 @@ async def parse_warranty_coverage(coverage, idx, metadata):
 
 	return entry
 
-async def extract_warranty_info(page, listing, idx, metadata):
+async def extract_warranty_info(page, listing, index, metadata):
 	listing.setdefault("warranty", {}).setdefault("coverages", [])
 	listing["warranty"]["overall_status"] = await safe_text(
 		page, 
 		WARRANTY_STATUS_TEXT_ELEMENT, 
-		f"Warranty Status for #{idx}", 
+		f"Warranty Status for #{index}", 
 		metadata, 
 		"No warranty info found")
 	
@@ -59,10 +59,10 @@ async def extract_warranty_info(page, listing, idx, metadata):
 	# we can use page instead of card for calling safe_text or other functions
 	coverages = await page.query_selector_all(COVERAGE_ELEMENTS)
 	for coverage in coverages:
-		entry = await parse_warranty_coverage(coverage, idx, metadata)
+		entry = await parse_warranty_coverage(coverage, index, metadata)
 		listing["warranty"]["coverages"].append(entry)
 
-async def extract_url(page, listing, idx, metadata):	
+async def extract_url(page, listing, index, metadata):	
 	try:
 		carfax_url = await page.get_attribute(CARFAX_URL_ELEMENT, "href", timeout=2000)
 	except TimeoutError:
@@ -83,11 +83,11 @@ async def extract_url(page, listing, idx, metadata):
 		link = await page.query_selector(LISTING_URL_ELEMENT)
 		listing_url = await link.get_attribute("href") if link else None
 	except TimeoutError:
-		metadata["warnings"].append(f"Failed to get listing URL for #{idx}")
+		metadata["warnings"].append(f"Failed to get listing URL for #{index}")
 		listing_url = "None"
 	listing["listing_url"] = listing_url
 
-async def extract_seller_info(page, listing, idx, metadata):				
+async def extract_seller_info(page, listing, index, metadata):				
 	listing.setdefault("seller", {})
 
 	seller_div = await page.query_selector(SELLER_BLOCK_ELEMENT)
@@ -98,14 +98,14 @@ async def extract_seller_info(page, listing, idx, metadata):
 		listing["seller"]["phone"] = "N/A"
 		return
 	
-	seller_name = await safe_text(seller_div, SELLER_NAME_ELEMENT, f"Seller Name #{idx}", metadata)
+	seller_name = await safe_text(seller_div, SELLER_NAME_ELEMENT, f"Seller Name #{index}", metadata)
 	listing["seller"]["name"] = seller_name
 
 	try:
 		await page.wait_for_selector(GOOGLE_MAP_ELEMENT, timeout=2000)
 		seller_map_url = await page.get_attribute(GOOGLE_MAP_ELEMENT, "href")
 	except TimeoutError:
-		metadata["warnings"].append(f"Failed to read Map URL for Seller {idx}")
+		metadata["warnings"].append(f"Failed to read Map URL for Seller {index}")
 		seller_map_url = "N/A"
 	listing["seller"]["map_url"] = seller_map_url
 
@@ -113,15 +113,51 @@ async def extract_seller_info(page, listing, idx, metadata):
 	stock_num = phone_num = "N/A"
 
 	if len(button_elements) >= 1:
-		stock_num = await safe_text(button_elements[0], STOCK_NUM_ELEMENT, f"Stock Num #{idx}", metadata)
+		stock_num = await safe_text(button_elements[0], STOCK_NUM_ELEMENT, f"Stock Num #{index}", metadata)
 
 	if len(button_elements) >= 2:
-		phone_num = await safe_text(button_elements[1], PHONE_NUM_ELEMENT, f"Phone Num #{idx}", metadata)
+		phone_num = await safe_text(button_elements[1], PHONE_NUM_ELEMENT, f"Phone Num #{index}", metadata)
 	
 	listing["seller"]["stock_number"] = stock_num
 	listing["seller"]["phone"] = phone_num
 
-async def extract_full_listing_details(browser, listing, idx, metadata):	
+async def extract_market_velocity(page, listing, index, metadata):
+	try:
+		await page.wait_for_selector(VELOCITY_ELEMENTS, timeout=5000)
+		sections = await page.query_selector_all(VELOCITY_SECTION_ELEMENTS)
+
+		market_velocity = {}
+
+		if len(sections) >= 1:
+			sold_el = await sections[0].query_selector(VEHICLE_SOLD_ELEMENT)
+			if sold_el:
+				text = await sold_el.inner_text()
+				market_velocity["vehicles_sold_14d"] = int(text.strip())
+
+		if len(sections) >= 2:
+			labels = await sections[1].query_selector_all(DAYS_ON_MARKET_ELEMENT)
+			if len(labels) >= 1:
+				days = await labels[0].inner_text()
+				market_velocity["avg_days_on_market"] = int(days.strip().replace(" days", "").replace(" day", ""))
+			if len(labels) >= 2:
+				days = await labels[1].inner_text()
+				market_velocity["this_vehicle_days"] = int(days.strip().replace(" days", "").replace(" day", ""))
+
+		if len(sections) >= 3:
+			demand_el = await sections[2].query_selector(DEMAND_ELEMENT)
+			if demand_el:
+				text = await demand_el.inner_text()
+				percent = int(text.strip().replace("% chance", ""))
+				market_velocity["sell_chance_7d"] = round(percent / 100, 2)
+
+		if market_velocity:
+			listing["market_velocity"] = market_velocity
+
+	except Exception as e:
+		msg = f"Failed to extract market velocity for listing {index}: {e}"
+		metadata["warnings"].append(msg)
+
+async def extract_full_listing_details(browser, listing, index, metadata):	
 	context = await browser.new_context()
 	await context.add_cookies(load_auth_cookies())
 	detail_page = await context.new_page()
@@ -130,9 +166,10 @@ async def extract_full_listing_details(browser, listing, idx, metadata):
 		url = VIN_DETAILS_URL.format(vin=vin)
 		await detail_page.goto(url, timeout=60000)		
 		await detail_page.wait_for_selector(DETAIL_PAGE_ELEMENT, timeout=20000)
-		await extract_warranty_info(detail_page, listing, idx, metadata)
-		await extract_url(detail_page, listing, idx, metadata)
-		await extract_seller_info(detail_page, listing, idx, metadata)
+		await extract_warranty_info(detail_page, listing, index, metadata)
+		await extract_url(detail_page, listing, index, metadata)
+		await extract_seller_info(detail_page, listing, index, metadata)
+		await extract_market_velocity(detail_page, listing, index, metadata)
 	except Exception as e:
 		listing["error"] = f"Failed to fetch full details: {e}"
 	finally:
@@ -151,14 +188,16 @@ async def extract_listings(browser, page, metadata, max_listings=50):
 		cards = cards[:max_listings]
 
 	for idx, card in enumerate(tqdm(cards, desc="Extracting listings", unit="car")):
+		index = idx+1
 		try:
-			title = await safe_text(card, TITLE_ELEMENT, f"title #{idx+1}", metadata)
-			price = await safe_text(card, PRICE_ELEMENT, f"price #{idx+1}", metadata)
-			mileage, listed = await extract_mileage_and_listed(card, idx, metadata)
-			location = await safe_text(card, LOCATION_ELEMENT, f"location #{idx+1}", metadata)
-			vin = await safe_vin(card, idx, metadata)
+			title = await safe_text(card, TITLE_ELEMENT, f"title #{index}", metadata)
+			price = await safe_text(card, PRICE_ELEMENT, f"price #{index}", metadata)
+			mileage, listed = await extract_mileage_and_listed(card, index, metadata)
+			location = await safe_text(card, LOCATION_ELEMENT, f"location #{index}", metadata)
+			vin = await safe_vin(card, index, metadata)
 
 			listing = {
+				"id": index,
 				"title": title,
 				"price": price,
 				"mileage": mileage,
@@ -167,24 +206,24 @@ async def extract_listings(browser, page, metadata, max_listings=50):
 				"vin": vin
 			}
 
-			await extract_full_listing_details(browser, listing, idx+1, metadata)  # Fetch full details in background
+			await extract_full_listing_details(browser, listing, index, metadata)  # Fetch full details in background
 			listings.append(listing)
 
 		except Exception as e:		# pragma: no cover
-			metadata["warnings"].append(f"Skipping listing #{idx+1}: {e}")
+			metadata["warnings"].append(f"Skipping listing #{index}: {e}")
 	return listings
 
-async def safe_vin(card, idx, metadata):
+async def safe_vin(card, index, metadata):
 	try:
 		href = await card.get_attribute("href")
 		return href.split("/")[-1].split("?")[0] if href else None
 	except Exception as e:
-		msg = f"Listing #{idx+1}: Failed to extract VIN: {e}"
+		msg = f"Listing #{index}: Failed to extract VIN: {e}"
 		logging.warning(msg)
 		metadata["warnings"].append(msg)
 		return None
 
-async def extract_mileage_and_listed(card, idx, metadata):
+async def extract_mileage_and_listed(card, index, metadata):
 	mileage = "N/A"
 	listed = "N/A"
 	try:
@@ -199,7 +238,7 @@ async def extract_mileage_and_listed(card, idx, metadata):
 			except:
 				continue
 	except Exception as e:
-		msg = f"Listing #{idx+1}: Failed to read mileage/listed: {e}"
+		msg = f"Listing #{index}: Failed to read mileage/listed: {e}"
 		logging.warning(msg)
 		metadata["warnings"].append(msg)
 	return mileage, listed
@@ -247,7 +286,6 @@ async def auto_scroll_to_load_all(page, metadata, max_listings=300, delay_ms=250
 		await page.wait_for_timeout(delay_ms)  # Optional: wait a little extra for UI to settle
 
 	metadata["runtime"]["scrolls"] = i
-
 
 async def scrape(args):
 
