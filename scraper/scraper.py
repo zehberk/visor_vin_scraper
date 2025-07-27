@@ -31,13 +31,11 @@ async def extract_numbers_from_sidebar(page, metadata):
 			metadata["site_info"]["total_for_sale"] = int(match.group(1).replace(",", ""))
 			logging.info(f"Total for sale nationwide: {metadata["site_info"]['total_for_sale']}")
 
-async def parse_warranty_coverage(coverage):
+async def parse_warranty_coverage(coverage, idx, metadata):
 	entry = {}
-	type_el = await coverage.query_selector(COVERAGE_TYPE_ELEMENT)
-	entry["type"] = (await type_el.inner_text()).strip() if type_el else None
-
-	status_el = await coverage.query_selector(COVERAGE_STATUS_ELEMENT)
-	entry["status"] = (await status_el.inner_text()).strip() if status_el else None
+	
+	entry["type"] = await safe_text(coverage, COVERAGE_TYPE_ELEMENT, f"Coverage type from #{idx}", metadata)
+	entry["status"] = await safe_text(coverage, COVERAGE_STATUS_ELEMENT, f"Coverage status for {entry["type"]} from #{idx}", metadata)
 
 	limits = await coverage.query_selector_all(COVERAGE_LIMIT_ELEMENTS)
 	if len(limits) >= 6:
@@ -48,27 +46,27 @@ async def parse_warranty_coverage(coverage):
 
 	return entry
 
-async def extract_warranty_info(page, listing):
+async def extract_warranty_info(page, listing, idx, metadata):
 	listing.setdefault("warranty", {}).setdefault("coverages", [])
-
-	warranty_el = await page.query_selector(WARRANTY_STATUS_TEXT_ELEMENT)
-	if warranty_el:
-		warranty_status = await warranty_el.inner_text()
-		listing["warranty"]["overall_status"] = warranty_status
-	else:
-		listing["warranty"]["overall_status"] = "No warranty info found"
+	listing["warranty"]["overall_status"] = await safe_text(
+		page, 
+		WARRANTY_STATUS_TEXT_ELEMENT, 
+		f"Warranty Status for #{idx}", 
+		metadata, 
+		"No warranty info found")
 	
 	# page is the details page. since we don't have cards to enumerate on
 	# we can use page instead of card for calling safe_text or other functions
 	coverages = await page.query_selector_all(COVERAGE_ELEMENTS)
 	for coverage in coverages:
-		entry = await parse_warranty_coverage(coverage)
+		entry = await parse_warranty_coverage(coverage, idx, metadata)
 		listing["warranty"]["coverages"].append(entry)
 
-async def extract_url(page, listing):	
+async def extract_url(page, listing, idx, metadata):	
 	try:
 		carfax_url = await page.get_attribute(CARFAX_URL_ELEMENT, "href", timeout=2000)
 	except TimeoutError:
+		# Don't log in metadata because user may not have credentials to use this feature
 		carfax_url = "None"
 	listing["carfax_url"] = carfax_url
 
@@ -77,6 +75,7 @@ async def extract_url(page, listing):
 		link = await page.query_selector(WINDOW_STICKER_URL_ELEMENT)
 		window_sticker_url = await link.get_attribute("href") if link else None
 	except TimeoutError:
+		# Don't log in metadata because user may not have credentials to use this feature
 		window_sticker_url = "None"
 	listing["window_sticker_url"] = window_sticker_url
 
@@ -84,10 +83,45 @@ async def extract_url(page, listing):
 		link = await page.query_selector(LISTING_URL_ELEMENT)
 		listing_url = await link.get_attribute("href") if link else None
 	except TimeoutError:
+		metadata["warnings"].append(f"Failed to get listing URL for #{idx}")
 		listing_url = "None"
 	listing["listing_url"] = listing_url
 
-async def extract_full_listing_details(browser, listing):	
+async def extract_seller_info(page, listing, idx, metadata):				
+	listing.setdefault("seller", {})
+
+	seller_div = await page.query_selector(SELLER_BLOCK_ELEMENT)
+	if not seller_div:
+		listing["seller"]["name"] = "N/A"
+		listing["seller"]["map_url"] = "N/A"
+		listing["seller"]["stock_number"] = "N/A"
+		listing["seller"]["phone"] = "N/A"
+		return
+	
+	seller_name = await safe_text(seller_div, SELLER_NAME_ELEMENT, f"Seller Name #{idx}", metadata)
+	listing["seller"]["name"] = seller_name
+
+	try:
+		await page.wait_for_selector(GOOGLE_MAP_ELEMENT, timeout=2000)
+		seller_map_url = await page.get_attribute(GOOGLE_MAP_ELEMENT, "href")
+	except TimeoutError:
+		metadata["warnings"].append(f"Failed to read Map URL for Seller {idx}")
+		seller_map_url = "N/A"
+	listing["seller"]["map_url"] = seller_map_url
+
+	button_elements = await seller_div.query_selector_all(BUTTON_ELEMENTS)
+	stock_num = phone_num = "N/A"
+
+	if len(button_elements) >= 1:
+		stock_num = await safe_text(button_elements[0], STOCK_NUM_ELEMENT, f"Stock Num #{idx}", metadata)
+
+	if len(button_elements) >= 2:
+		phone_num = await safe_text(button_elements[1], PHONE_NUM_ELEMENT, f"Phone Num #{idx}", metadata)
+	
+	listing["seller"]["stock_number"] = stock_num
+	listing["seller"]["phone"] = phone_num
+
+async def extract_full_listing_details(browser, listing, idx, metadata):	
 	context = await browser.new_context()
 	await context.add_cookies(load_auth_cookies())
 	detail_page = await context.new_page()
@@ -96,8 +130,9 @@ async def extract_full_listing_details(browser, listing):
 		url = VIN_DETAILS_URL.format(vin=vin)
 		await detail_page.goto(url, timeout=60000)		
 		await detail_page.wait_for_selector(DETAIL_PAGE_ELEMENT, timeout=20000)
-		await extract_warranty_info(detail_page, listing)
-		await extract_url(detail_page, listing)
+		await extract_warranty_info(detail_page, listing, idx, metadata)
+		await extract_url(detail_page, listing, idx, metadata)
+		await extract_seller_info(detail_page, listing, idx, metadata)
 	except Exception as e:
 		listing["error"] = f"Failed to fetch full details: {e}"
 	finally:
@@ -132,7 +167,7 @@ async def extract_listings(browser, page, metadata, max_listings=50):
 				"vin": vin
 			}
 
-			await extract_full_listing_details(browser, listing)  # Fetch full details in background
+			await extract_full_listing_details(browser, listing, idx+1, metadata)  # Fetch full details in background
 			listings.append(listing)
 
 		except Exception as e:		# pragma: no cover

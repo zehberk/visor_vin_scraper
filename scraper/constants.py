@@ -49,5 +49,11 @@ COVERAGE_LIMIT_ELEMENTS = "div.space-y-1 div.text-sm"
 CARFAX_URL_ELEMENT = 'a[data-posthog-event="View Carfax Report"]'
 WINDOW_STICKER_URL_ELEMENT = 'a[data-posthog-event="View Window Sticker"]'
 LISTING_URL_ELEMENT = 'a[data-posthog-event="View Listing"]'
+SELLER_BLOCK_ELEMENT = 'td.p-3.border-input.align-middle.space-y-1\\.5 div.space-y-2'
+SELLER_NAME_ELEMENT = 'div.order-2'
+GOOGLE_MAP_ELEMENT = 'a[data-posthog-event="Google Maps"]'
+BUTTON_ELEMENTS = 'button[data-slot="tooltip-trigger"]'
+STOCK_NUM_ELEMENT = 'div div'
+PHONE_NUM_ELEMENT = 'div'
 
 MAX_LISTINGS = 500  # Maximum listings to retrieve

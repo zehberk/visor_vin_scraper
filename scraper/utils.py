@@ -101,10 +101,10 @@ def load_auth_cookies():
 	return cookies
 
 
-async def safe_text(card, selector, label, metadata):
+async def safe_text(card, selector, label, metadata, default="N/A"):
 	try:
 		element = await card.query_selector(selector)
-		return await element.inner_text() if element else "N/A"
+		return await element.inner_text() if element else default
 	except Exception as e:
 		msg = f"Failed to read {label}: {e}"
 		logging.warning(msg)
