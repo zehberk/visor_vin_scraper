@@ -93,21 +93,26 @@ async def extract_seller_info(page, listing, index, metadata):
 	seller_div = await page.query_selector(SELLER_BLOCK_ELEMENT)
 	if not seller_div:
 		listing["seller"]["name"] = "N/A"
+		listing["seller"]["location"] = "N/A"
 		listing["seller"]["map_url"] = "N/A"
 		listing["seller"]["stock_number"] = "N/A"
 		listing["seller"]["phone"] = "N/A"
 		return
 	
-	seller_name = await safe_text(seller_div, SELLER_NAME_ELEMENT, f"Seller Name #{index}", metadata)
-	listing["seller"]["name"] = seller_name
+	seller_info = await safe_text(seller_div, SELLER_NAME_ELEMENT, f"Seller Info #{index}", metadata)
+	if " in " in seller_info:
+		name, location = seller_info.split(" in ", 1)
+		listing["seller"]["name"] = name
+		listing["seller"]["location"] = location
+	else:
+		metadata["warnings"].append(f"Failed to read seller name/location in listing {index}")
 
 	try:
 		await page.wait_for_selector(GOOGLE_MAP_ELEMENT, timeout=2000)
 		seller_map_url = await page.get_attribute(GOOGLE_MAP_ELEMENT, "href")
+		listing["seller"]["map_url"] = seller_map_url
 	except TimeoutError:
-		metadata["warnings"].append(f"Failed to read Map URL for Seller {index}")
-		seller_map_url = "N/A"
-	listing["seller"]["map_url"] = seller_map_url
+		metadata["warnings"].append(f"Failed to read Map URL for seller in listing {index}")
 
 	button_elements = await seller_div.query_selector_all(BUTTON_ELEMENTS)
 	stock_num = phone_num = "N/A"
