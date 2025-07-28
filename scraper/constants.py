@@ -47,7 +47,8 @@ WARRANTY_STATUS_TEXT_ELEMENT = "div.text-base.text-black"
 COVERAGE_ELEMENTS = "div.grid.grid-cols-1.gap-6 div.bg-\\[\\#F6F6F6\\].p-3.space-y-3"
 COVERAGE_TYPE_ELEMENT = "div.bg-\\[\\#3B3B3B\\]"
 COVERAGE_STATUS_ELEMENT = "div.text-sm > div.text-sm"
-COVERAGE_LIMIT_ELEMENTS = "div.space-y-1 > div.text-sm"
+COVERAGE_LIMIT_ELEMENTS = "div.space-y-1"
+COVERAGE_LIMIT_VALUES_ELEMENTS = "div.flex.justify-between div.text-sm"
 CARFAX_URL_ELEMENT = 'a[data-posthog-event="View Carfax Report"]'
 WINDOW_STICKER_URL_ELEMENT = 'a[data-posthog-event="View Window Sticker"]'
 # HTML element selectors for seller

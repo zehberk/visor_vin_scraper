@@ -1,48 +1,111 @@
 {
   "metadata": {
     "vehicle": {
-      "make": "Toyota",
-      "model": "RAV4",
-      "trim": [
-        "Adventure",
-        "TRD Off-Road"
-      ],
-      "year": [
-        "2022",
-        "2023"
-      ]
+      "make": "ExampleMake",
+      "model": "ExampleModel",
+      "trim": ["ExampleTrim"],
+      "year": ["2023", "2024"]
     },
     "filters": {
       "min_miles": 10000,
       "max_miles": 60000,
       "miles": "10000-60000",
-      "min_price": 25000,
-      "max_price": 40000,
-      "price": "25000-40000",
-      "condition": [
-        "Used",
-        "Certified"
-      ],
-      "sort": "Newest",
-      "max_listings": 100
+      "min_price": 20000,
+      "max_price": 35000,
+      "price": "20000-35000",
+      "condition": ["Used", "Certified"],
+      "sort": "Lowest Price",
+      "max_listings": 1
     },
     "site_info": {
-      "total_for_sale": 1
+      "total_for_sale": 1000
     },
     "runtime": {
-      "timestamp": "2025-07-26 02:17:24",
-      "url": "https://visor.vin/search/listings?make=Toyota&model=RAV4"
+      "timestamp": "2025-07-28 10:33:30",
+      "url": "https://visor.vin/search/listings?make=ExampleMake&model=ExampleModel"
     },
     "warnings": []
   },
   "listings": [
     {
-      "title": "2023 Toyota RAV4 Adventure AWD",
-      "price": "$35,000",
-      "mileage": "12,345 mi",
-      "listed": "Listed 10 days ago",
-      "location": "Denver, CO",
-      "vin": "2T3J1RFV1PW123456"
+      "title": "2024 ExampleMake ExampleModel ExampleTrim",
+      "price": "$24,999",
+      "mileage": "28,000 mi",
+      "listed": "Listed 5 days ago",
+      "location": "Sample City, ST",
+      "vin": "XXXXXXXEXAMPLVIN1",
+      "listing_url": "https://exampledealer.com/inventory/used-vehicle-listing",
+      "specs": {
+        "Transmission": "Automatic",
+        "Exterior Color": "Blue",
+        "Drivetrain": "AWD",
+        "Interior Color": "Black",
+        "Fuel Type": "Gasoline",
+        "Engine": "2.5L I4"
+      },
+      "installed_addons": {
+        "items": [
+          {
+            "name": "Floor Mats",
+            "price": 150
+          },
+          {
+            "name": "Roof Rack",
+            "price": 300
+          }
+        ],
+        "total": 450
+      },
+      "additional_docs": {
+        "carfax_url": "https://www.carfax.com/vehicle/sample-report",
+        "window_sticker_url": "https://windowsticker.example.com/sticker.pdf"
+      },
+      "seller": {
+        "name": "Example Dealership",
+        "location": "Sample City, ST",
+        "map_url": "https://maps.google.com/?q=example+dealership",
+        "stock_number": "EX12345",
+        "phone": "(123) 456-7890"
+      },
+      "warranty": {
+        "coverages": [
+          {
+            "type": "Basic",
+            "status": "Active"
+          },
+          {
+            "type": "Powertrain",
+            "status": "Active"
+          },
+          {
+            "type": "Rust",
+            "status": "Active"
+          }
+        ],
+        "overall_status": "Fully Active"
+      },
+      "market_velocity": {
+        "vehicles_sold_14d": 50,
+        "avg_days_on_market": 45,
+        "this_vehicle_days": 10,
+        "sell_chance_7d": 0.25
+      },
+      "price_history": [
+        {
+          "date": "July 25th, 2025",
+          "price": 24999,
+          "price_change": -500,
+          "mileage": 28000,
+          "lowest": true
+        },
+        {
+          "date": "July 15th, 2025",
+          "price": 25499,
+          "price_change": -500,
+          "mileage": 28000,
+          "lowest": false
+        }
+      ]
     }
   ]
 }

@@ -13,9 +13,9 @@ Describes the user-specified vehicle criteria.
 **Example:**
 ```json
 "vehicle": {
-	"make": "Toyota",
-	"model": "RAV4",
-	"trim": ["Adventure", "TRD Off-Road"],
+	"make": "ExampleMake",
+	"model": "ExampleModel",
+	"trim": ["ExampleTrim", "ExampleTrim2"],
 	"year": ["2022", "2023"]
 }
 ```
@@ -55,7 +55,7 @@ Details about when and how the scraper was executed.
 ```json
 "runtime": {
 	"timestamp": "2025-07-25 16:03:12",
-	"url": "https://visor.vin/search/listings?make=Toyota&model=RAV4"
+	"url": "https://visor.vin/search/listings?make=ExampleMake&model=ExampleModel"
 }
 ```
 
@@ -80,23 +80,150 @@ Each entry represents an individual vehicle listing that was scraped. Listings a
 **Example:**
 ```json
 {
-	"title": "2023 Toyota RAV4 Adventure AWD",
+	"title": "2023 ExampleMake ExampleModel ExampleTrim AWD",
 	"price": "$35,000",
 	"mileage": "12,345 mi",
-	"listed": "Listed 10 days ago",
-	"location": "Denver, CO",
-	"vin": "2T3J1RFV1PW123456"
+	"vin": "XXXXXXXEXAMPLVIN1",
+	"listing_url": "https://www.dealership.com/carlisting"
 }
 ```
 
 - `title` (string): The listing title as shown on the website.
 - `price` (string): The price listed, including formatting.
 - `mileage` (string): Mileage displayed in the listing.
-- `listed` (string): Text describing when the vehicle was listed (e.g., "Listed 7 days ago").
-- `location` (string): City and state of the vehicle location.
 - `vin` (string or null): Extracted Vehicle Identification Number.
+- `listing_url` (string): The webpage that the car originated from
 
----
+### `specs` (object)
+Key vehicle specifications as shown on the listing.
+
+**Example:**
+```json
+"specs": {
+  "Transmission": "Automatic",
+  "Exterior Color": "Blue",
+  "Drivetrain": "AWD",
+  "Interior Color": "Black",
+  "Fuel Type": "Gasoline",
+  "Engine": "2.5L I4"
+}
+```
+
+
+### `installed_addons` (object)
+Any dealer-installed accessories or options with pricing.
+
+**Example:**
+```json
+"installed_addons": {
+  "items": [
+    { "name": "Floor Mats", "price": 150 },
+    { "name": "Roof Rack", "price": 300 }
+  ],
+  "total": 450
+}
+```
+
+
+### `additional_docs` (object)
+Links to supplementary documentation such as Carfax and window sticker.
+
+**Example:**
+```json
+"additional_docs": {
+  "carfax_url": "https://www.carfax.com/vehicle/sample-report",
+  "window_sticker_url": "https://windowsticker.example.com/sticker.pdf"
+}
+```
+Please note that if a user is not subscribed to a subscription, these will be marked as `Unavilable`
+
+
+### `seller` (object)
+Information about the dealer or seller of the vehicle.
+
+**Example:**
+```json
+"seller": {
+  "name": "Example Dealership",
+  "location": "Sample City, ST",
+  "map_url": "https://maps.google.com/?q=example+dealership",
+  "stock_number": "EX12345",
+  "phone": "(123) 456-7890"
+}
+```
+
+
+### `warranty` (object)
+Status of major warranty types.
+
+**Example:**
+```json
+"warranty": {
+  "coverages": [
+    {
+      "type": "Basic",
+      "status": "Miles expired",
+      "time_left": "3 mo left",
+      "time_total": "/ 3 yrs",
+      "miles_left": "Expired 106k mi ago",
+      "miles_total": "/ 36k mi"
+    },
+    {
+      "type": "Powertrain",
+      "status": "Miles expired",
+      "time_left": "2 yr, 3 mo left",
+      "time_total": "/ 5 yrs",
+      "miles_left": "Expired 82k mi ago",
+      "miles_total": "/ 60k mi"
+    },
+    {
+      "type": "Rust",
+      "status": "Active",
+      "time_left": "2 yr, 3 mo left",
+      "time_total": "/ 5 yrs",
+      "miles_left": "No expiration",
+      "miles_total": "/ Unlimited miles"
+    }
+  ],
+  "overall_status": "Partially Active"
+}
+```
+
+
+### `market_velocity` (object)
+Metrics about how fast vehicles like this sell.
+
+**Example:**
+```json
+"market_velocity": {
+  "vehicles_sold_14d": 50,
+  "avg_days_on_market": 45,
+  "this_vehicle_days": 10,
+  "sell_chance_7d": 0.25
+}
+```
+- `vehicles_sold_14d` (int): The number of this excact model that have sold in the last two weeks.
+- `avg_days_on_market` (int): The average number of days before this exact model of vehicle sits before being sold.
+- `this_vehicle_days` (int): How many days this vehicle has been listed for.
+- `sell_chance_7d` (float): The chance (in % format) that this exact vehicle will be sold in the next 7 days.
+
+
+### `price_history` (array of objects)
+A record of price changes over time.
+
+**Example:**
+```json
+"price_history": [
+  {
+    "date": "July 25th, 2025",
+    "price": 24999,
+    "price_change": -500,
+    "mileage": 28000,
+    "lowest": true
+  },
+  ...
+]
+```
 
 ## Notes
 

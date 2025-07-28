@@ -37,11 +37,25 @@ async def parse_warranty_coverage(coverage, index, metadata):
 	entry["type"] = await safe_text(coverage, COVERAGE_TYPE_ELEMENT, f"Coverage type from #{index}", metadata)
 	entry["status"] = await safe_text(coverage, COVERAGE_STATUS_ELEMENT, f"Coverage status for {entry["type"]} from #{index}", metadata)
 
-	limits = await coverage.query_selector_all(COVERAGE_LIMIT_ELEMENTS)
-	if len(limits) >= 6:
-		for i, label in [(1, "time_left"), (2, "time_total"), (4, "miles_left"), (5, "miles_total")]:
-			if (val := await safe_inner_text(limits[i], label, index, metadata)) is not None:
-				entry[label] = val
+	try:
+		limits = await coverage.query_selector_all(COVERAGE_LIMIT_ELEMENTS)
+		if len(limits) >= 2:
+			# Time values
+			time_values = await limits[0].query_selector_all(COVERAGE_LIMIT_VALUES_ELEMENTS)
+			time_left = await safe_inner_text(time_values[0], "Time Left", index, metadata) if len(time_values) > 0 else None
+			time_total = await safe_inner_text(time_values[1], "Time Total", index, metadata) if len(time_values) > 1 else None
+
+			# Miles values
+			miles_values = await limits[1].query_selector_all(COVERAGE_LIMIT_VALUES_ELEMENTS)
+			miles_left = await safe_inner_text(miles_values[0], "Miles Left", index, metadata) if len(miles_values) > 0 else None
+			miles_total = await safe_inner_text(miles_values[1], "Miles Total", index, metadata) if len(miles_values) > 1 else None
+			
+			entry["time_left"] = time_left
+			entry["time_total"] = time_total
+			entry["miles_left"] = miles_left
+			entry["miles_total"] = miles_total
+	except Exception as e:
+		metadata["warnings"].append(e)
 
 	return entry
 
@@ -60,7 +74,6 @@ async def extract_warranty_info(page, listing, index, metadata):
 	for coverage in coverages:
 		entry = await parse_warranty_coverage(coverage, index, metadata)
 		listing["warranty"]["coverages"].append(entry)
-
 
 async def extract_additional_documents(page, listing, index, metadata):
 	listing.setdefault("additional_docs", {})

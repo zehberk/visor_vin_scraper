@@ -594,35 +594,45 @@ async def test_scroll_progresses_multiple_times():
 #region Parse Warranty Coverage Tests
 
 async def test_parse_warranty_full_data():
+
+	# Create mock elements for text nodes
+	elem_ok = AsyncMock()
+	elem_ok.inner_text.return_value = "OK Value"
+
+	# Create mock containers (e.g. each "div.space-y-1" section)
+	time_section = MagicMock()
+	time_section.query_selector_all = AsyncMock(return_value=[elem_ok, elem_ok])  # both work
+
+	miles_section = MagicMock()
+	miles_section.query_selector_all = AsyncMock(return_value=[elem_ok, elem_ok])  # first fails
+
+	# Mock top-level coverage section that returns time and miles sections
 	coverage = MagicMock()
-	coverage.query_selector_all = AsyncMock(return_value=[
-		AsyncMock(),  # 0: not used
-		AsyncMock(inner_text=AsyncMock(return_value="12 months")),  # 1
-		AsyncMock(inner_text=AsyncMock(return_value="36 months")),  # 2
-		AsyncMock(),  # 3: not used
-		AsyncMock(inner_text=AsyncMock(return_value="12,000 mi")),  # 4
-		AsyncMock(inner_text=AsyncMock(return_value="36,000 mi")),  # 5
-	])
+	coverage.query_selector_all = AsyncMock(return_value=[time_section, miles_section])
 
 	# Mock safe_text
-	scraper.safe_text = AsyncMock(side_effect=["Powertrain", "Active"])
+	scraper.safe_text = AsyncMock(side_effect=["Limited", "Pending"])
 
 	metadata = {"warnings": []}
-	entry = await parse_warranty_coverage(coverage, 1, metadata)
+	entry = await parse_warranty_coverage(coverage, 4, metadata)
 
-	assert entry["type"] == "Powertrain"
-	assert entry["status"] == "Active"
-	assert entry["time_left"] == "12 months"
-	assert entry["time_total"] == "36 months"
-	assert entry["miles_left"] == "12,000 mi"
-	assert entry["miles_total"] == "36,000 mi"
+	assert entry["type"] == "Limited"
+	assert entry["status"] == "Pending"
+	assert entry["time_left"] == "OK Value"
+	assert entry["time_total"] == "OK Value"
+	assert entry["miles_left"] == "OK Value"
+	assert entry["miles_total"] == "OK Value"
 
 async def test_parse_warranty_partial_data():
-	coverage = MagicMock()
-	coverage.query_selector_all = AsyncMock(return_value=[
-		AsyncMock(), AsyncMock(), AsyncMock()  # fewer than 6 elements
-	])
+	# Create a mock section with no sub-elements (simulate partial/missing inner blocks)
+	partial_section = MagicMock()
+	partial_section.query_selector_all = AsyncMock(return_value=[])
 
+	# Return only one valid section instead of both (simulate partial data)
+	coverage = MagicMock()
+	coverage.query_selector_all = AsyncMock(return_value=[partial_section])  # Only 1 section
+
+	# Mock safe_text for type and status
 	scraper.safe_text = AsyncMock(side_effect=["Bumper-to-Bumper", "Expired"])
 
 	metadata = {"warnings": []}
@@ -647,28 +657,36 @@ async def test_parse_warranty_safe_text_returns_na():
 	assert "time_left" not in entry
 
 async def test_parse_warranty_limits_raise_exception():
-	# Simulate query_selector_all working but one inner_text fails
+	# Create mock elements for text nodes
 	elem_ok = AsyncMock()
-	elem_ok.inner_text.return_value = "24 months"
+	elem_ok.inner_text.return_value = "OK Value"
 
 	elem_bad = AsyncMock()
 	elem_bad.inner_text.side_effect = Exception("fail")
 
-	coverage = MagicMock()
-	coverage.query_selector_all = AsyncMock(return_value=[
-		None, elem_ok, elem_ok, None, elem_bad, elem_ok
-	])
+	# Create mock containers (e.g. each "div.space-y-1" section)
+	time_section = MagicMock()
+	time_section.query_selector_all = AsyncMock(return_value=[elem_ok, elem_ok])  # both work
 
+	miles_section = MagicMock()
+	miles_section.query_selector_all = AsyncMock(return_value=[elem_bad, elem_ok])  # first fails
+
+	# Mock top-level coverage section that returns time and miles sections
+	coverage = MagicMock()
+	coverage.query_selector_all = AsyncMock(return_value=[time_section, miles_section])
+
+	# Mock safe_text
 	scraper.safe_text = AsyncMock(side_effect=["Limited", "Pending"])
 
 	metadata = {"warnings": []}
 	entry = await parse_warranty_coverage(coverage, 4, metadata)
 
-	# Only successful calls should be present
 	assert entry["type"] == "Limited"
 	assert entry["status"] == "Pending"
-	assert entry["time_left"] == "24 months"
-	assert "miles_left" not in entry  # failed one should be skipped silently
+	assert entry["time_left"] == "OK Value"
+	assert entry["time_total"] == "OK Value"
+	assert entry["miles_left"] == None
+	assert entry["miles_total"] == "OK Value"
 
 #endregion
 
