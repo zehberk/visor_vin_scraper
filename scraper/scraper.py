@@ -16,7 +16,7 @@ logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 async def fetch_page(page, url):
 	try:
 		await page.goto(url, timeout=60000)
-		await page.wait_for_selector(LISTING_CARD_SELCTOR, timeout=20000)
+		await page.wait_for_selector(LISTING_CARD_SELECTOR, timeout=20000)
 	except Exception as e:
 		logging.error(f"Page load or selector wait failed: {e}")
 		return False
@@ -39,10 +39,9 @@ async def parse_warranty_coverage(coverage, index, metadata):
 
 	limits = await coverage.query_selector_all(COVERAGE_LIMIT_ELEMENTS)
 	if len(limits) >= 6:
-		entry["time_left"] = (await limits[1].inner_text()).strip()
-		entry["time_total"] = (await limits[2].inner_text()).strip()
-		entry["miles_left"] = (await limits[4].inner_text()).strip()
-		entry["miles_total"] = (await limits[5].inner_text()).strip()
+		for i, label in [(1, "time_left"), (2, "time_total"), (4, "miles_left"), (5, "miles_total")]:
+			if (val := await safe_inner_text(limits[i], label, index, metadata)) is not None:
+				entry[label] = val
 
 	return entry
 
@@ -62,31 +61,11 @@ async def extract_warranty_info(page, listing, index, metadata):
 		entry = await parse_warranty_coverage(coverage, index, metadata)
 		listing["warranty"]["coverages"].append(entry)
 
+
 async def extract_additional_documents(page, listing, index, metadata):
 	listing.setdefault("additional_docs", {})
-	carfax_url = window_sticker_url = "Unavailable"
-	try:
-		link = await page.query_selector(WINDOW_STICKER_URL_ELEMENT)
-		carfax_url = await link.get_attribute("href") if link else "Unavailable"
-	except TimeoutError as e:
-		# We are logging in warnings, but marking as unimportant because a user may not have cookies saved or plus privileges
-		metadata["warnings"].append(f"[Info] Additional document timed out for listing #{index}. Cookies out of date/not set or subscription inactive")
-	except Exception as err:
-		# This is a serious error, output to the console
-		logging.error(f"{err}")
-	listing["additional_docs"]["carfax_url"] = carfax_url
-
-	# Can't get the href directly because it is not constant between listsings
-	try:
-		link = await page.query_selector(WINDOW_STICKER_URL_ELEMENT)
-		window_sticker_url = await link.get_attribute("href") if link else "Unavailable"
-	except TimeoutError as e:
-		# We are logging in warnings, but marking as unimportant because a user may not have cookies saved or plus privileges
-		metadata["warnings"].append(f"[Info] Additional document timed out for listing #{index}. Cookies out of date/not set or subscription inactive")
-	except Exception as err:
-		# This is a serious error, output to the console
-		logging.error(f"{err}")
-	listing["additional_docs"]["window_sticker_url"] = window_sticker_url
+	listing["additional_docs"]["carfax_url"] = await get_url(page, CARFAX_URL_ELEMENT, index, metadata)
+	listing["additional_docs"]["window_sticker_url"] =  await get_url(page, WINDOW_STICKER_URL_ELEMENT, index, metadata)
 
 async def extract_seller_info(page, listing, index, metadata):				
 	listing.setdefault("seller", {})
@@ -114,6 +93,7 @@ async def extract_seller_info(page, listing, index, metadata):
 		listing["seller"]["map_url"] = seller_map_url
 	except TimeoutError:
 		metadata["warnings"].append(f"Failed to read Map URL for seller in listing {index}")
+		listing["seller"]["map_url"] = "N/A"
 
 	button_elements = await seller_div.query_selector_all(BUTTON_ELEMENTS)
 	stock_num = phone_num = "N/A"
@@ -164,68 +144,82 @@ async def extract_market_velocity(page, listing, index, metadata):
 		metadata["warnings"].append(msg)
 
 async def extract_install_options(page, listing, index, metadata):
-	listing.setdefault("installed_addons", {})
-	await page.wait_for_selector(ADDON_LI_ELEMENTS, timeout=2000)
-	addon_elements = page.query_selector_all(ADDON_LI_ELEMENTS)
-	
-	addons = []
-	total = 0
-	for idx, addon in enumerate(await addon_elements):
-		text = await addon.inner_text()
-		if text.startswith("Total options:"):
-			match = PRICE_MATCH_REGEX.search(text)
-			if match:
-				total = int(match.group(1).replace(",", ""))
-		else:
-			match = ADDON_REGEX.search(text)
-			if match:
-				name = match.group(1).strip()
-				price = int(match.group(2).replace(",", ""))
-			else:
-				name = text.strip()
-				price = 0
-
-			addons.append({"name": name, "price": price})
-
+	# listing.setdefault("installed_addons", {})
 	listing["installed_addons"] = {		
-		"items": addons,
-		"total": total		
+			"items": [],
+			"total": 0		
 	}
+
+	try:
+		await page.wait_for_selector(ADDON_LI_ELEMENTS, timeout=2000)
+		addon_elements = page.query_selector_all(ADDON_LI_ELEMENTS)
+		
+		addons = []
+		total = 0
+		for idx, addon in enumerate(await addon_elements):
+			text = await addon.inner_text()
+			if text.startswith("Total options:"):
+				match = PRICE_MATCH_REGEX.search(text)
+				if match:
+					total = int(match.group(1).replace(",", ""))
+			else:
+				match = ADDON_REGEX.search(text)
+				if match:
+					name = match.group(1).strip()
+					price = int(match.group(2).replace(",", ""))
+				else:
+					name = text.strip()
+					price = 0
+
+				addons.append({"name": name, "price": price})
+				
+		listing["installed_addons"] = {		
+			"items": addons,
+			"total": total		
+		}
+	except TimeoutError as t:
+		metadata["warnings"].append(f"Could not extract install options for listing #{index}: {t}")
+	except Exception as e:
+		metadata["warnings"].append(f"Could not extract install options for listing #{index}: {e}")
 
 async def extract_spec_details(page, listing, index, metadata):
 	listing.setdefault("specs", {})
 	specs = {}
 	SKIP_LABELS = {"VIN", "Warranty Status"}  # These are already being handled in other parts of the code
 
-	await page.wait_for_selector(SPEC_TABLE_ELEMENT, timeout=2000)
-	rows = await page.query_selector_all(SPEC_ROW_ELEMENTS)
+	try:
+		await page.wait_for_selector(SPEC_TABLE_ELEMENT, timeout=2000)
+		rows = await page.query_selector_all(SPEC_ROW_ELEMENTS)
 
-	for row in rows:
-		cells = await row.query_selector_all("td")
-		if not cells:
-			continue
-		
-		# 4-column row: two spec pairs
-		if len(cells) == 4:
-			for i in (0, 2):
-				label = (await cells[i].inner_text()).strip().rstrip(":")
-				if label in SKIP_LABELS:
-					continue
-				value = (await cells[i+1].inner_text()).strip()
-				specs[label] = value  # optionally normalize keys here
+		for row in rows:
+			cells = await row.query_selector_all("td")
+			if not cells:
+				continue
+			
+			# 4-column row: two spec pairs
+			if len(cells) == 4:
+				for i in (0, 2):
+					label = (await safe_inner_text(cells[i], "Spec", index, metadata) or "").rstrip(":")
+					if not label or label in SKIP_LABELS:
+						continue
+					specs[label] = await safe_inner_text(cells[i+1], f"{label} value", index, metadata)
 
-		# 2-column row: special handling
-		elif len(cells) == 2:
-			label = (await cells[0].inner_text()).strip().rstrip(":")
-			if label == "Installed Options":
-				await extract_install_options(page, listing, index, metadata)
-			elif label == "Additional Documentation":
-				await extract_additional_documents(page, listing, index, metadata)
-			elif label == "Seller":
-				await extract_seller_info(page, listing, index, metadata)
-	# Store specs in listing after loop
-	if specs:
-		listing["specs"] = specs	
+			# 2-column row: special handling
+			elif len(cells) == 2:
+				label = (await cells[0].inner_text()).strip().rstrip(":")
+				if label == "Installed Options":
+					await extract_install_options(page, listing, index, metadata)
+				elif label == "Additional Documentation":
+					await extract_additional_documents(page, listing, index, metadata)
+				elif label == "Seller":
+					await extract_seller_info(page, listing, index, metadata)
+		# Store specs in listing after loop
+		if specs:
+			listing["specs"] = specs
+	except TimeoutError as t:
+		metadata["warnings"].append(f"Could not extract spec details for listing #{index}: {t}")
+	except Exception as e:
+		metadata["warnings"].append(f"Could not extract spec details for listing #{index}: {e}")
 
 async def extract_price_history(page, listing, index, metadata):
 	listing.setdefault("price_history", {})
@@ -306,7 +300,7 @@ async def extract_full_listing_details(browser, listing, index, metadata):
 
 async def extract_listings(browser, page, metadata, max_listings=50):
 	listings = []
-	cards = await page.query_selector_all(LISTING_CARD_SELCTOR)
+	cards = await page.query_selector_all(LISTING_CARD_SELECTOR)
 
 	# Even though this is already an int, the runtime environment
 	# may pass it as a string, so we ensure it's an int
@@ -321,7 +315,7 @@ async def extract_listings(browser, page, metadata, max_listings=50):
 		try:
 			title = await safe_text(card, TITLE_ELEMENT, f"title #{index}", metadata)
 			price = await safe_text(card, PRICE_ELEMENT, f"price #{index}", metadata)
-			mileage = await extract_mileage(card, index, metadata)
+			mileage = await safe_text(card, MILEAGE_ELEMENT, f"mileage ${index}", metadata)
 			vin = await safe_vin(card, index, metadata)
 
 			listing = {
@@ -332,7 +326,12 @@ async def extract_listings(browser, page, metadata, max_listings=50):
 				"vin": vin
 			}
 
-			await extract_full_listing_details(browser, listing, index, metadata)  # Fetch full details in background
+			try:
+				await extract_full_listing_details(browser, listing, index, metadata)  # Fetch full details in background
+			except:
+				msg = f"Failed to extract the full details on listing #{index}"
+				metadata["warnings"].append(msg)
+				logging.error(msg)
 			listings.append(listing)
 
 		except Exception as e:		# pragma: no cover
@@ -349,23 +348,6 @@ async def safe_vin(card, index, metadata):
 		metadata["warnings"].append(msg)
 		return None
 
-async def extract_mileage(card, index, metadata):
-	mileage = "N/A"
-	try:
-		blocks = await card.query_selector_all(TEXT_BLOCKS_SELECTOR)
-		for block in blocks:
-			try:
-				text = (await block.inner_text()).strip()
-				if "mi" in text and mileage == "N/A":
-					mileage = text
-			except:
-				continue
-	except Exception as e:
-		msg = f"Listing #{index}: Failed to read mileage/listed: {e}"
-		logging.warning(msg)
-		metadata["warnings"].append(msg)
-	return mileage
-
 def save_results(listings, metadata, args, output_dir="output"):
 	filename = f"{args.make}_{args.model}_listings_{current_timestamp()}.json".replace(" ", "_")
 	path = os.path.join(output_dir, filename)
@@ -379,7 +361,7 @@ async def auto_scroll_to_load_all(page, metadata, max_listings=300, delay_ms=250
 	print(f"Starting auto-scroll to load up to {max_listings} listings...")
 
 	while True:
-		cards = await page.query_selector_all(LISTING_CARD_SELCTOR)
+		cards = await page.query_selector_all(LISTING_CARD_SELECTOR)
 		current_count = len(cards)
 
 		print(f"\tFound {current_count} listings...")
@@ -401,7 +383,7 @@ async def auto_scroll_to_load_all(page, metadata, max_listings=300, delay_ms=250
 		""")
 
 		try:
-			await page.wait_for_selector(f"{LISTING_CARD_SELCTOR} >> nth={previous_count}", timeout=5000)
+			await page.wait_for_selector(f"{LISTING_CARD_SELECTOR} >> nth={previous_count}", timeout=5000)
 		except:
 			logging.info("No new listings detected after scroll wait.")
 			break

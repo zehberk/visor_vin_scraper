@@ -20,7 +20,6 @@ def stopwatch(label="Elapsed"):
 
 def normalize_years(raw_years):
 	result = set()
-	errors = []
 
 	def convert_year(year_str: str) -> int:
 		y = int(year_str)
@@ -43,18 +42,13 @@ def normalize_years(raw_years):
 			else:
 				result.add(convert_year(entry))
 		except ValueError as e:
-			errors.append(f"[Year Error] Skipping '{entry}': {e}")
+			logging.error(f"[Year Error] Skipping '{entry}': {e}")
 		except Exception as e:
-			errors.append(f"[Year Error] Could not parse '{entry}': {e}")
+			logging.error(f"[Year Error] Could not parse '{entry}': {e}")
 
 	if not result:
-		for msg in errors:
-			print(msg)
 		logging.error("No valid years provided. Please check your --year format.")
 		exit(1)
-	elif errors:
-		for msg in errors:
-			print(msg)
 
 	return sorted(result)
 
@@ -98,7 +92,14 @@ async def safe_text(card, selector, label, metadata, default="N/A"):
 		msg = f"Failed to read {label}: {e}"
 		logging.warning(msg)
 		metadata["warnings"].append(msg)
-		return "N/A"
+		return default
+
+async def safe_inner_text(element, label, index, metadata):
+	try:
+		return (await element.inner_text()).strip()
+	except Exception as e:
+		metadata["warnings"].append(f"Listing #{index}: Failed to read {label}: {e}")
+		return None
 
 def warn_if_missing_env_vars(*keys):
 	load_dotenv()
@@ -210,3 +211,18 @@ def convert_browser_cookies_to_playwright(path):
 		playwright_cookies.append(playwright_cookie)
 
 	return playwright_cookies
+
+async def get_url(page, selector, index, metadata):
+	url = "Unavailable"
+
+	try:
+		link = await page.query_selector(selector)
+		url = await link.get_attribute("href") if link else "Unavailable"
+	except TimeoutError as e:
+		# We are logging in warnings, but marking as unimportant because a user may not have cookies saved or plus privileges
+		metadata["warnings"].append(f"[Info] Additional document timed out for listing #{index}. Cookies out of date/not set or subscription inactive")
+	except Exception as err:
+		# This is a serious error, output to the console
+		logging.error(f"{err}")
+
+	return url

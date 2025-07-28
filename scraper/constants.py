@@ -12,7 +12,7 @@ SORT_OPTIONS = {
     "Best Match": "best_match",
     "Lowest Price": "cheapest",
     "Highest Price": "expensive",
-    "Newest": "recent",
+    "Newest": "newest",
     "Oldest": "oldest",
     "Lowest Mileage": "lowest_miles",
     "Highest Mileage": "highest_miles",
@@ -34,10 +34,10 @@ REMAPPING_RULES = {
 }
 
 # HTML element selectors for main listing page
-LISTING_CARD_SELCTOR = "a[href^='/search/listings/']"
+LISTING_CARD_SELECTOR = "a[href^='/search/listings/']"
 TITLE_ELEMENT = "h2"
 PRICE_ELEMENT = "div.absolute.bottom-2.left-2 > span"
-TEXT_BLOCKS_SELECTOR = "div.text-sm"
+MILEAGE_ELEMENT = "div.flex.flex-row.gap-x-2 > div.text-sm"
 SCROLL_CONTAINER_SELECTOR = "div.h-dvh.overflow-y-auto"
 
 # HTML element selector for detail page
