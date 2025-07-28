@@ -26,7 +26,7 @@ async def extract_numbers_from_sidebar(page, metadata):
 	sidebar = await page.query_selector("text=/\\d+ for sale nationwide/")
 	if sidebar:
 		text = await sidebar.inner_text()
-		match = re.search(r"(\d[\d,]*) for sale nationwide", text)
+		match = TOTAL_NATIONWIDE_REGEX.search(text)
 		if match:
 			metadata["site_info"]["total_for_sale"] = int(match.group(1).replace(",", ""))
 			logging.info(f"Total for sale nationwide: {metadata["site_info"]['total_for_sale']}")
@@ -164,44 +164,69 @@ async def extract_market_velocity(page, listing, index, metadata):
 		msg = f"Failed to extract market velocity for listing {index}: {e}"
 		metadata["warnings"].append(msg)
 
+async def extract_install_options(page, listing, index, metadata):
+	listing.setdefault("installed_addons", {})
+	await page.wait_for_selector(ADDON_UL_ELEMENT, timeout=2000)
+	addon_elements = page.query_selector_all(ADDON_LI_ELEMENTS)
+	
+	addons = []
+	total = 0
+	for idx, addon in enumerate(await addon_elements):
+		text = await addon.inner_text()
+		if text.startswith("Total options:"):
+			match = TOTAL_OPTIONS_PRICE_REGEX.search(text)
+			if match:
+				total = int(match.group(1).replace(",", ""))
+		else:
+			match = ADDON_REGEX.search(text)
+			if match:
+				name = match.group(1).strip()
+				price = int(match.group(2).replace(",", ""))
+			else:
+				name = text.strip()
+				price = 0
+
+			addons.append({"name": name, "price": price})
+
+	listing["installed_addons"] = {		
+		"items": addons,
+		"total": total		
+	}
+
 async def extract_spec_details(page, listing, index, metadata):
-				listing.setdefault("specs", {})
-				specs = {}
-				SKIP_LABELS = {"VIN", "Warranty Status"}  # These are already being handled in other parts of the code
+	listing.setdefault("specs", {})
+	specs = {}
+	SKIP_LABELS = {"VIN", "Warranty Status"}  # These are already being handled in other parts of the code
 
-				await page.wait_for_selector("tbody.w-full", timeout=2000)
-				rows = await page.query_selector_all("tbody.w-full tr")
+	await page.wait_for_selector(SPEC_TABLE_ELEMENT, timeout=2000)
+	rows = await page.query_selector_all(SPEC_ROW_ELEMENTS)
 
-				for row in rows:
-					cells = await row.query_selector_all("td")
-					if not cells:
-						continue
-					
-					# 4-column row: two spec pairs
-					if len(cells) == 4:
-						for i in (0, 2):
-							label = (await cells[i].inner_text()).strip().rstrip(":")
-							if label in SKIP_LABELS:
-								continue
-							value = (await cells[i+1].inner_text()).strip()
-							specs[label] = value  # optionally normalize keys here
+	for row in rows:
+		cells = await row.query_selector_all("td")
+		if not cells:
+			continue
+		
+		# 4-column row: two spec pairs
+		if len(cells) == 4:
+			for i in (0, 2):
+				label = (await cells[i].inner_text()).strip().rstrip(":")
+				if label in SKIP_LABELS:
+					continue
+				value = (await cells[i+1].inner_text()).strip()
+				specs[label] = value  # optionally normalize keys here
 
-					# 2-column row: special handling
-					elif len(cells) == 2:
-						label = (await cells[0].inner_text()).strip().rstrip(":")
-						content = cells[1]
-
-						if label == "Installed Options":
-							options = await content.inner_html()
-							listing["options"] = "N/A" # TODO: Update in new commit
-
-						elif label == "Additional Documentation":
-							await extract_additional_documents(page, listing, index, metadata)
-						elif label == "Seller":
-							await extract_seller_info(page, listing, index, metadata)
-				# Store specs in listing after loop
-				if specs:
-					listing["specs"] = specs	
+		# 2-column row: special handling
+		elif len(cells) == 2:
+			label = (await cells[0].inner_text()).strip().rstrip(":")
+			if label == "Installed Options":
+				await extract_install_options(page, listing, index, metadata)
+			elif label == "Additional Documentation":
+				await extract_additional_documents(page, listing, index, metadata)
+			elif label == "Seller":
+				await extract_seller_info(page, listing, index, metadata)
+	# Store specs in listing after loop
+	if specs:
+		listing["specs"] = specs	
 
 async def extract_full_listing_details(browser, listing, index, metadata):	
 	context = await browser.new_context()

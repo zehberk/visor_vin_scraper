@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 PRESET_PATH = Path(__file__).parent.parent / "presets" / "presets.json"
 
@@ -63,3 +64,14 @@ VELOCITY_SECTION_ELEMENTS = "div.space-y-4 div.grid.gap-4 div.bg-\\[\\#F6F6F6\\]
 VEHICLE_SOLD_ELEMENT = "div.text-lg"
 DAYS_ON_MARKET_ELEMENT = 'div.flex div.text-sm.font-medium'
 DEMAND_ELEMENT = "div.text-lg.font-medium"
+# HTML element selectors for vehicle specs
+SPEC_TABLE_ELEMENT = "tbody.w-full"
+SPEC_ROW_ELEMENTS = "tbody.w-full tr"
+# HTML element selectors for add-ons
+ADDON_UL_ELEMENT = "ul.list-disc.list-inside"
+ADDON_LI_ELEMENTS = "ul.list-disc.list-inside > li"
+
+# Regex
+TOTAL_NATIONWIDE_REGEX = re.compile(r"(\d[\d,]*) for sale nationwide")
+TOTAL_OPTIONS_PRICE_REGEX = re.compile(r"\$([\d,]+)")
+ADDON_REGEX = re.compile(r"^(.*?)[\u00a0 ]*\(\$(\d[\d,]*)\)")
