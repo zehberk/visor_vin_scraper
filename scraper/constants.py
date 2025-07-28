@@ -1,16 +1,18 @@
 from pathlib import Path
+import re
 
 PRESET_PATH = Path(__file__).parent.parent / "presets" / "presets.json"
 
-# String constants for the scraper
+# URL strings
 BASE_URL = "https://visor.vin/search/listings"
+VIN_DETAILS_URL = BASE_URL + "/{vin}"
 
 CONDITIONS = {"New", "Used", "Certified"} # Vehicle conditions
 SORT_OPTIONS = {
     "Best Match": "best_match",
     "Lowest Price": "cheapest",
     "Highest Price": "expensive",
-    "Newest": "recent",
+    "Newest": "newest",
     "Oldest": "oldest",
     "Lowest Mileage": "lowest_miles",
     "Highest Mileage": "highest_miles",
@@ -20,9 +22,9 @@ PARAM_NAME_OVERRIDES = {        # For user-friendly parameter names
     "min_miles": "miles_min",
     "max_miles": "miles_max",
     "min_price": "price_min",
-    "max_price": "price_max",
-    # Add more if needed
+    "max_price": "price_max"
 }
+MAX_LISTINGS = 500  # Maximum listings to retrieve
 
 # Remapping constants for query parameters
 # This allows for more user-friendly input while maintaining the correct URL parameters
@@ -31,13 +33,50 @@ REMAPPING_RULES = {
     "condition": lambda values: ",".join(v.lower() for v in values)
 }
 
-# HTML element selectors
-HREF_ELEMENT = "a[href^='/search/listings/']"
-LISTING_COUNT_ELEMENT = "span.text-xl.text-gray-600"
+# HTML element selectors for main listing page
+LISTING_CARD_SELECTOR = "a[href^='/search/listings/']"
 TITLE_ELEMENT = "h2"
-PRICE_ELEMENT = "div.absolute.bottom-2.left-2 span"
-TEXT_SM_BLOCKS = "div.text-sm"
-LOCATION_ELEMENT = "div.flex.items-start span"
+PRICE_ELEMENT = "div.absolute.bottom-2.left-2 > span"
+MILEAGE_ELEMENT = "div.flex.flex-row.gap-x-2 > div.text-sm"
 SCROLL_CONTAINER_SELECTOR = "div.h-dvh.overflow-y-auto"
 
-MAX_LISTINGS = 500  # Maximum listings to retrieve
+# HTML element selector for detail page
+DETAIL_PAGE_ELEMENT = "div.h-dvh.w-full.space-y-3.overflow-y-auto"
+# HTML element selectors for warranty
+WARRANTY_STATUS_TEXT_ELEMENT = "div.text-base.text-black"
+COVERAGE_ELEMENTS = "div.grid.grid-cols-1.gap-6 div.bg-\\[\\#F6F6F6\\].p-3.space-y-3"
+COVERAGE_TYPE_ELEMENT = "div.bg-\\[\\#3B3B3B\\]"
+COVERAGE_STATUS_ELEMENT = "div.text-sm > div.text-sm"
+COVERAGE_LIMIT_ELEMENTS = "div.space-y-1"
+COVERAGE_LIMIT_VALUES_ELEMENTS = "div.flex.justify-between div.text-sm"
+CARFAX_URL_ELEMENT = 'a[data-posthog-event="View Carfax Report"]'
+WINDOW_STICKER_URL_ELEMENT = 'a[data-posthog-event="View Window Sticker"]'
+# HTML element selectors for seller
+LISTING_URL_ELEMENT = 'a[data-posthog-event="View Listing"]'
+SELLER_BLOCK_ELEMENT = 'td.p-3.border-input.align-middle.space-y-1\\.5 div.space-y-2'
+SELLER_NAME_ELEMENT = 'div.order-2'
+GOOGLE_MAP_ELEMENT = 'a[data-posthog-event="Google Maps"]'
+BUTTON_ELEMENTS = 'button[data-slot="tooltip-trigger"]'
+STOCK_NUM_ELEMENT = 'div > div'
+PHONE_NUM_ELEMENT = 'div'
+# HTML element selectors for market velocity
+VELOCITY_ELEMENTS = "div.space-y-4 div.grid.gap-4 div.bg-\\[\\#F6F6F6\\]"
+VELOCITY_SECTION_ELEMENTS = "div.space-y-4 div.grid.gap-4 div.bg-\\[\\#F6F6F6\\]"
+VEHICLE_SOLD_ELEMENT = "div.text-lg"
+DAYS_ON_MARKET_ELEMENT = 'div.flex div.text-sm.font-medium'
+DEMAND_ELEMENT = "div.text-lg.font-medium"
+# HTML element selectors for vehicle specs
+SPEC_TABLE_ELEMENT = "tbody.w-full"
+SPEC_ROW_ELEMENTS = "tbody.w-full > tr"
+# HTML element selectors for add-ons
+ADDON_LI_ELEMENTS = "ul.list-disc.list-inside > li"
+# HTML element selectors for price history
+PRICE_HISTORY_ELEMENT = "div.space-y-3.pt-3.w-full"
+PRICE_CHANGE_ELEMENTS = "div.flex.items-center.justify-between.text-base"
+
+# Regex
+TOTAL_NATIONWIDE_REGEX = re.compile(r"(\d[\d,]*) for sale nationwide")
+ADDON_REGEX = re.compile(r"^(.*?)[\u00a0 ]*\(\$(\d[\d,]*)\)")
+PRICE_CHANGE_REGEX = re.compile(r"(-?\$[\d,]+)")
+PRICE_MATCH_REGEX = re.compile(r"\$([\d,]+)")
+MILES_MATCH_REGEX = re.compile(r"([\d,]+)")

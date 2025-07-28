@@ -37,6 +37,16 @@ A lightweight CLI tool that scrapes car listings from [visor.vin](https://visor.
    playwright install
    ```
 
+5. Authentication Setup
+   
+   This script can be run without cookies, but you will not be able to see any of the features that a subscription can give you (installed options, additional documents, etc.). As of right now, cookie automation is not available; however, there is a simple workaround.
+
+   To get your cookies imported easily, you can install a browser extension called EditThisCookie, navigate to visor.vin, open the extension and click Export. This will copy all your cookies to the clipboard.
+
+   Once that is done, create a file called cookies.json and place it in the .session folder.
+
+   ***Warning:*** If you run this script without authentication, it will run for considerably longer!
+
 
 ## Running the Scraper
 
