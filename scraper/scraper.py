@@ -419,7 +419,6 @@ async def scrape(args):
 	query_params = build_query_params(args, metadata)
 	url = f"{BASE_URL}?{urlencode(query_params)}"
 	metadata["runtime"]["url"] = url
-	warn_if_missing_env_vars("SB_DB_AUTH_TOKEN_0", "SB_DB_AUTH_TOKEN_1")
 
 	async with async_playwright() as pw:
 		browser = await pw.chromium.launch(headless=True)

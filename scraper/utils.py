@@ -8,7 +8,6 @@ import re
 import time
 from scraper.constants import *
 from contextlib import contextmanager
-from dotenv import load_dotenv
 from datetime import datetime
 
 @contextmanager
@@ -100,12 +99,6 @@ async def safe_inner_text(element, label, index, metadata):
 	except Exception as e:
 		metadata["warnings"].append(f"Listing #{index}: Failed to read {label}: {e}")
 		return None
-
-def warn_if_missing_env_vars(*keys):
-	load_dotenv()
-	for key in keys:
-		if not os.getenv(key):
-			logging.info(f"Optional environment variable not set: {key}. Premium features will not be scraped from the webpage")
 
 def capped_max_listings(value):
 	ivalue = int(value)
