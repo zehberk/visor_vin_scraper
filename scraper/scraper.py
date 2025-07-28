@@ -7,7 +7,7 @@ import re
 import sys
 from tqdm import tqdm
 from urllib.parse import urlencode
-from playwright.async_api import async_playwright
+from playwright.async_api import async_playwright, TimeoutError
 from scraper.constants import *
 from scraper.utils import *
 
@@ -62,30 +62,32 @@ async def extract_warranty_info(page, listing, index, metadata):
 		entry = await parse_warranty_coverage(coverage, index, metadata)
 		listing["warranty"]["coverages"].append(entry)
 
-async def extract_url(page, listing, index, metadata):	
+async def extract_additional_documents(page, listing, index, metadata):
+	listing.setdefault("additional_docs", {})
+	carfax_url = window_sticker_url = "Unavailable"
 	try:
-		carfax_url = await page.get_attribute(CARFAX_URL_ELEMENT, "href", timeout=2000)
-	except TimeoutError:
-		# Don't log in metadata because user may not have credentials to use this feature
-		carfax_url = "None"
-	listing["carfax_url"] = carfax_url
+		link = await page.query_selector(WINDOW_STICKER_URL_ELEMENT)
+		print(f"{link}")
+		carfax_url = await link.get_attribute("href") if link else "Unavailable"
+	except TimeoutError as e:
+		# We are logging in warnings, but marking as unimportant because a user may not have cookies saved or plus privileges
+		metadata["warnings"].append(f"[Info] Additional document timed out for listing #{index}. Cookies out of date/not set or subscription inactive")
+	except Exception as err:
+		# This is a serious error, output to the console
+		logging.error(f"{err}")
+	listing["additional_docs"]["carfax_url"] = carfax_url
 
 	# Can't get the href directly because it is not constant between listsings
-	try:		
+	try:
 		link = await page.query_selector(WINDOW_STICKER_URL_ELEMENT)
-		window_sticker_url = await link.get_attribute("href") if link else None
-	except TimeoutError:
-		# Don't log in metadata because user may not have credentials to use this feature
-		window_sticker_url = "None"
-	listing["window_sticker_url"] = window_sticker_url
-
-	try:		
-		link = await page.query_selector(LISTING_URL_ELEMENT)
-		listing_url = await link.get_attribute("href") if link else None
-	except TimeoutError:
-		metadata["warnings"].append(f"Failed to get listing URL for #{index}")
-		listing_url = "None"
-	listing["listing_url"] = listing_url
+		window_sticker_url = await link.get_attribute("href") if link else "Unavailable"
+	except TimeoutError as e:
+		# We are logging in warnings, but marking as unimportant because a user may not have cookies saved or plus privileges
+		metadata["warnings"].append(f"[Info] Additional document timed out for listing #{index}. Cookies out of date/not set or subscription inactive")
+	except Exception as err:
+		# This is a serious error, output to the console
+		logging.error(f"{err}")
+	listing["additional_docs"]["window_sticker_url"] = window_sticker_url
 
 async def extract_seller_info(page, listing, index, metadata):				
 	listing.setdefault("seller", {})
@@ -162,18 +164,64 @@ async def extract_market_velocity(page, listing, index, metadata):
 		msg = f"Failed to extract market velocity for listing {index}: {e}"
 		metadata["warnings"].append(msg)
 
+async def extract_spec_details(page, listing, index, metadata):
+				listing.setdefault("specs", {})
+				specs = {}
+				SKIP_LABELS = {"VIN", "Warranty Status"}  # These are already being handled in other parts of the code
+
+				await page.wait_for_selector("tbody.w-full", timeout=2000)
+				rows = await page.query_selector_all("tbody.w-full tr")
+
+				for row in rows:
+					cells = await row.query_selector_all("td")
+					if not cells:
+						continue
+					
+					# 4-column row: two spec pairs
+					if len(cells) == 4:
+						for i in (0, 2):
+							label = (await cells[i].inner_text()).strip().rstrip(":")
+							if label in SKIP_LABELS:
+								continue
+							value = (await cells[i+1].inner_text()).strip()
+							specs[label] = value  # optionally normalize keys here
+
+					# 2-column row: special handling
+					elif len(cells) == 2:
+						label = (await cells[0].inner_text()).strip().rstrip(":")
+						content = cells[1]
+
+						if label == "Installed Options":
+							options = await content.inner_html()
+							listing["options"] = "N/A" # TODO: Update in new commit
+
+						elif label == "Additional Documentation":
+							await extract_additional_documents(page, listing, index, metadata)
+						elif label == "Seller":
+							await extract_seller_info(page, listing, index, metadata)
+				# Store specs in listing after loop
+				if specs:
+					listing["specs"] = specs	
+
 async def extract_full_listing_details(browser, listing, index, metadata):	
 	context = await browser.new_context()
-	await context.add_cookies(load_auth_cookies())
+	await context.add_cookies(convert_browser_cookies_to_playwright(".session/cookies.json"))
 	detail_page = await context.new_page()
 	try:
 		vin = listing.get("vin")
 		url = VIN_DETAILS_URL.format(vin=vin)
 		await detail_page.goto(url, timeout=60000)		
-		await detail_page.wait_for_selector(DETAIL_PAGE_ELEMENT, timeout=20000)
+		await detail_page.wait_for_selector(DETAIL_PAGE_ELEMENT, timeout=20000)		
+
+		try:		
+			link = await detail_page.query_selector(LISTING_URL_ELEMENT)
+			listing_url = await link.get_attribute("href") if link else None
+		except TimeoutError:
+			metadata["warnings"].append(f"Failed to get listing URL for #{index}")
+			listing_url = "None"
+		listing["listing_url"] = listing_url
+		await extract_spec_details(detail_page, listing, index, metadata)
 		await extract_warranty_info(detail_page, listing, index, metadata)
-		await extract_url(detail_page, listing, index, metadata)
-		await extract_seller_info(detail_page, listing, index, metadata)
 		await extract_market_velocity(detail_page, listing, index, metadata)
 	except Exception as e:
 		listing["error"] = f"Failed to fetch full details: {e}"
@@ -197,8 +245,7 @@ async def extract_listings(browser, page, metadata, max_listings=50):
 		try:
 			title = await safe_text(card, TITLE_ELEMENT, f"title #{index}", metadata)
 			price = await safe_text(card, PRICE_ELEMENT, f"price #{index}", metadata)
-			mileage, listed = await extract_mileage_and_listed(card, index, metadata)
-			location = await safe_text(card, LOCATION_ELEMENT, f"location #{index}", metadata)
+			mileage = await extract_mileage(card, index, metadata)
 			vin = await safe_vin(card, index, metadata)
 
 			listing = {
@@ -206,8 +253,6 @@ async def extract_listings(browser, page, metadata, max_listings=50):
 				"title": title,
 				"price": price,
 				"mileage": mileage,
-				"listed": listed,
-				"location": location,
 				"vin": vin
 			}
 
@@ -228,9 +273,8 @@ async def safe_vin(card, index, metadata):
 		metadata["warnings"].append(msg)
 		return None
 
-async def extract_mileage_and_listed(card, index, metadata):
+async def extract_mileage(card, index, metadata):
 	mileage = "N/A"
-	listed = "N/A"
 	try:
 		blocks = await card.query_selector_all(TEXT_BLOCKS_SELECTOR)
 		for block in blocks:
@@ -238,15 +282,13 @@ async def extract_mileage_and_listed(card, index, metadata):
 				text = (await block.inner_text()).strip()
 				if "mi" in text and mileage == "N/A":
 					mileage = text
-				elif "Listed" in text and listed == "N/A":
-					listed = text
 			except:
 				continue
 	except Exception as e:
 		msg = f"Listing #{index}: Failed to read mileage/listed: {e}"
 		logging.warning(msg)
 		metadata["warnings"].append(msg)
-	return mileage, listed
+	return mileage
 
 def save_results(listings, metadata, args, output_dir="output"):
 	filename = f"{args.make}_{args.model}_listings_{current_timestamp()}.json".replace(" ", "_")

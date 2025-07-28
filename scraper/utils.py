@@ -1,6 +1,8 @@
 # utils.py
 import argparse
+import json
 import logging
+import math
 import os
 import re
 import time
@@ -199,3 +201,24 @@ def build_query_params(args, metadata):
 
 	return cleaned
 
+def convert_browser_cookies_to_playwright(path):
+	with open(path, "r") as f:
+		raw_cookies = json.load(f)
+
+	playwright_cookies = []
+	for c in raw_cookies:
+		playwright_cookie = {
+			"name": c["name"],
+			"value": c["value"],
+			"domain": c["domain"],
+			"path": c.get("path", "/"),
+			"secure": c.get("secure", False),
+			"httpOnly": c.get("httpOnly", False),
+			"sameSite": c.get("sameSite", "Lax").capitalize()
+		}
+		if "expirationDate" in c:
+			# expirationDate is a float (Chrome), expires must be int (Playwright)
+			playwright_cookie["expires"] = int(math.floor(c["expirationDate"]))
+		playwright_cookies.append(playwright_cookie)
+
+	return playwright_cookies

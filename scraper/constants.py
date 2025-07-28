@@ -37,7 +37,6 @@ LISTING_CARD_SELCTOR = "a[href^='/search/listings/']"
 TITLE_ELEMENT = "h2"
 PRICE_ELEMENT = "div.absolute.bottom-2.left-2 span"
 TEXT_BLOCKS_SELECTOR = "div.text-sm"
-LOCATION_ELEMENT = "div.flex.items-start span"
 SCROLL_CONTAINER_SELECTOR = "div.h-dvh.overflow-y-auto"
 
 # HTML element selector for detail page
