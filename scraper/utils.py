@@ -50,7 +50,7 @@ def normalize_years(raw_years):
 	if not result:
 		for msg in errors:
 			print(msg)
-		print("[Error] No valid years provided. Please check your --year format.")
+		logging.error("No valid years provided. Please check your --year format.")
 		exit(1)
 	elif errors:
 		for msg in errors:
@@ -84,23 +84,11 @@ def parse_range_arg(name: str, raw: str):
 		
 		return min_val, max_val
 	except Exception as e:
-		print(f"[Error] Invalid format for --{name}: '{raw}' → {e}")
+		logging.error(f"[Error] Invalid format for --{name}: '{raw}' → {e}")
 		exit(1)
 
 def current_timestamp():
 	return datetime.now().strftime("%Y%m%d_%H%M%S")
-
-def load_auth_cookies():
-	load_dotenv()
-	cookies = []
-	token0 = os.getenv("SB_DB_AUTH_TOKEN_0")
-	token1 = os.getenv("SB_DB_AUTH_TOKEN_1")
-
-	if token0:
-		cookies.append({"name": "sb-db-auth-token.0", "value": token0, "domain": "visor.vin", "path": "/"})
-	if token1:
-		cookies.append({"name": "sb-db-auth-token.1", "value": token1, "domain": "visor.vin", "path": "/"})
-	return cookies
 
 async def safe_text(card, selector, label, metadata, default="N/A"):
 	try:

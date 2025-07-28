@@ -165,7 +165,7 @@ async def extract_market_velocity(page, listing, index, metadata):
 
 async def extract_install_options(page, listing, index, metadata):
 	listing.setdefault("installed_addons", {})
-	await page.wait_for_selector(ADDON_UL_ELEMENT, timeout=2000)
+	await page.wait_for_selector(ADDON_LI_ELEMENTS, timeout=2000)
 	addon_elements = page.query_selector_all(ADDON_LI_ELEMENTS)
 	
 	addons = []
@@ -173,7 +173,7 @@ async def extract_install_options(page, listing, index, metadata):
 	for idx, addon in enumerate(await addon_elements):
 		text = await addon.inner_text()
 		if text.startswith("Total options:"):
-			match = TOTAL_OPTIONS_PRICE_REGEX.search(text)
+			match = PRICE_MATCH_REGEX.search(text)
 			if match:
 				total = int(match.group(1).replace(",", ""))
 		else:
@@ -230,8 +230,8 @@ async def extract_spec_details(page, listing, index, metadata):
 async def extract_price_history(page, listing, index, metadata):
 	listing.setdefault("price_history", {})
 	price_history = []
-	await page.wait_for_selector("div.space-y-3.pt-3.w-full", timeout=2000)
-	price_changes = await page.query_selector_all("div.flex.items-center.justify-between.text-base")
+	await page.wait_for_selector(PRICE_HISTORY_ELEMENT, timeout=2000)
+	price_changes = await page.query_selector_all(PRICE_CHANGE_ELEMENTS)
 	
 	for change in price_changes:
 		entry = {
@@ -252,7 +252,7 @@ async def extract_price_history(page, listing, index, metadata):
 			entry["date"] = (await left_divs[0].inner_text()).strip()
 		if len(left_divs) >= 2:
 			price_change_text = await left_divs[1].inner_text()
-			match = re.search(r"(-?\$[\d,]+)", price_change_text)
+			match = PRICE_CHANGE_REGEX.search(price_change_text)
 			if match:
 				entry["price_change"] = int(match.group(1).replace("$", "").replace(",", ""))
 
@@ -262,15 +262,18 @@ async def extract_price_history(page, listing, index, metadata):
 			price_text = await right_divs[0].inner_text()
 			entry["lowest"] = "Lowest" in price_text
 			if "$" in price_text:
-				price_match = re.search(r"\$([\d,]+)", price_text)
+				price_match = PRICE_CHANGE_REGEX.search(price_text)
 				if price_match:
-					entry["price"] = int(price_match.group(1).replace(",", ""))
+					entry["price"] = int(price_match.group(1).replace(",", "").replace("$", ""))
 
-		if len(right_divs) >= 2:
-			miles_text = await right_divs[1].inner_text()
-			miles_match = re.search(r"([\d,]+)", miles_text)
-			if miles_match:
-				entry["mileage"] = int(miles_match.group(1).replace(",", ""))
+		for div in right_divs:
+			miles_text = await div.inner_text()
+			if miles_text.strip().endswith("mi"):
+				miles_match = MILES_MATCH_REGEX.search(miles_text)
+				if miles_match:
+					entry["mileage"] = int(miles_match.group(1).replace(",", ""))
+				break
+
 
 		price_history.append(entry)
 	listing["price_history"] = price_history

@@ -36,7 +36,7 @@ REMAPPING_RULES = {
 # HTML element selectors for main listing page
 LISTING_CARD_SELCTOR = "a[href^='/search/listings/']"
 TITLE_ELEMENT = "h2"
-PRICE_ELEMENT = "div.absolute.bottom-2.left-2 span"
+PRICE_ELEMENT = "div.absolute.bottom-2.left-2 > span"
 TEXT_BLOCKS_SELECTOR = "div.text-sm"
 SCROLL_CONTAINER_SELECTOR = "div.h-dvh.overflow-y-auto"
 
@@ -46,8 +46,8 @@ DETAIL_PAGE_ELEMENT = "div.h-dvh.w-full.space-y-3.overflow-y-auto"
 WARRANTY_STATUS_TEXT_ELEMENT = "div.text-base.text-black"
 COVERAGE_ELEMENTS = "div.grid.grid-cols-1.gap-6 div.bg-\\[\\#F6F6F6\\].p-3.space-y-3"
 COVERAGE_TYPE_ELEMENT = "div.bg-\\[\\#3B3B3B\\]"
-COVERAGE_STATUS_ELEMENT = "div.text-sm div.text-sm"
-COVERAGE_LIMIT_ELEMENTS = "div.space-y-1 div.text-sm"
+COVERAGE_STATUS_ELEMENT = "div.text-sm > div.text-sm"
+COVERAGE_LIMIT_ELEMENTS = "div.space-y-1 > div.text-sm"
 CARFAX_URL_ELEMENT = 'a[data-posthog-event="View Carfax Report"]'
 WINDOW_STICKER_URL_ELEMENT = 'a[data-posthog-event="View Window Sticker"]'
 # HTML element selectors for seller
@@ -56,7 +56,7 @@ SELLER_BLOCK_ELEMENT = 'td.p-3.border-input.align-middle.space-y-1\\.5 div.space
 SELLER_NAME_ELEMENT = 'div.order-2'
 GOOGLE_MAP_ELEMENT = 'a[data-posthog-event="Google Maps"]'
 BUTTON_ELEMENTS = 'button[data-slot="tooltip-trigger"]'
-STOCK_NUM_ELEMENT = 'div div'
+STOCK_NUM_ELEMENT = 'div > div'
 PHONE_NUM_ELEMENT = 'div'
 # HTML element selectors for market velocity
 VELOCITY_ELEMENTS = "div.space-y-4 div.grid.gap-4 div.bg-\\[\\#F6F6F6\\]"
@@ -66,12 +66,16 @@ DAYS_ON_MARKET_ELEMENT = 'div.flex div.text-sm.font-medium'
 DEMAND_ELEMENT = "div.text-lg.font-medium"
 # HTML element selectors for vehicle specs
 SPEC_TABLE_ELEMENT = "tbody.w-full"
-SPEC_ROW_ELEMENTS = "tbody.w-full tr"
+SPEC_ROW_ELEMENTS = "tbody.w-full > tr"
 # HTML element selectors for add-ons
-ADDON_UL_ELEMENT = "ul.list-disc.list-inside"
 ADDON_LI_ELEMENTS = "ul.list-disc.list-inside > li"
+# HTML element selectors for price history
+PRICE_HISTORY_ELEMENT = "div.space-y-3.pt-3.w-full"
+PRICE_CHANGE_ELEMENTS = "div.flex.items-center.justify-between.text-base"
 
 # Regex
 TOTAL_NATIONWIDE_REGEX = re.compile(r"(\d[\d,]*) for sale nationwide")
-TOTAL_OPTIONS_PRICE_REGEX = re.compile(r"\$([\d,]+)")
 ADDON_REGEX = re.compile(r"^(.*?)[\u00a0 ]*\(\$(\d[\d,]*)\)")
+PRICE_CHANGE_REGEX = re.compile(r"(-?\$[\d,]+)")
+PRICE_MATCH_REGEX = re.compile(r"\$([\d,]+)")
+MILES_MATCH_REGEX = re.compile(r"([\d,]+)")
