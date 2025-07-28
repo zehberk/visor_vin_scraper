@@ -67,7 +67,6 @@ async def extract_additional_documents(page, listing, index, metadata):
 	carfax_url = window_sticker_url = "Unavailable"
 	try:
 		link = await page.query_selector(WINDOW_STICKER_URL_ELEMENT)
-		print(f"{link}")
 		carfax_url = await link.get_attribute("href") if link else "Unavailable"
 	except TimeoutError as e:
 		# We are logging in warnings, but marking as unimportant because a user may not have cookies saved or plus privileges
@@ -228,6 +227,54 @@ async def extract_spec_details(page, listing, index, metadata):
 	if specs:
 		listing["specs"] = specs	
 
+async def extract_price_history(page, listing, index, metadata):
+	listing.setdefault("price_history", {})
+	price_history = []
+	await page.wait_for_selector("div.space-y-3.pt-3.w-full", timeout=2000)
+	price_changes = await page.query_selector_all("div.flex.items-center.justify-between.text-base")
+	
+	for change in price_changes:
+		entry = {
+			"date": None,
+			"price": None,
+			"price_change": None,
+			"mileage": None,
+			"lowest": False
+		}
+
+		blocks = await change.query_selector_all("div.space-y-1")
+		if len(blocks) != 2:
+			continue
+
+		# Left Block
+		left_divs = await blocks[0].query_selector_all("div")
+		if len(left_divs) >= 1:
+			entry["date"] = (await left_divs[0].inner_text()).strip()
+		if len(left_divs) >= 2:
+			price_change_text = await left_divs[1].inner_text()
+			match = re.search(r"(-?\$[\d,]+)", price_change_text)
+			if match:
+				entry["price_change"] = int(match.group(1).replace("$", "").replace(",", ""))
+
+		# Right Block
+		right_divs = await blocks[1].query_selector_all("div")
+		if len(right_divs) >= 1:
+			price_text = await right_divs[0].inner_text()
+			entry["lowest"] = "Lowest" in price_text
+			if "$" in price_text:
+				price_match = re.search(r"\$([\d,]+)", price_text)
+				if price_match:
+					entry["price"] = int(price_match.group(1).replace(",", ""))
+
+		if len(right_divs) >= 2:
+			miles_text = await right_divs[1].inner_text()
+			miles_match = re.search(r"([\d,]+)", miles_text)
+			if miles_match:
+				entry["mileage"] = int(miles_match.group(1).replace(",", ""))
+
+		price_history.append(entry)
+	listing["price_history"] = price_history
+
 async def extract_full_listing_details(browser, listing, index, metadata):	
 	context = await browser.new_context()
 	await context.add_cookies(convert_browser_cookies_to_playwright(".session/cookies.json"))
@@ -248,6 +295,7 @@ async def extract_full_listing_details(browser, listing, index, metadata):
 		await extract_spec_details(detail_page, listing, index, metadata)
 		await extract_warranty_info(detail_page, listing, index, metadata)
 		await extract_market_velocity(detail_page, listing, index, metadata)
+		await extract_price_history(detail_page, listing, index, metadata)
 	except Exception as e:
 		listing["error"] = f"Failed to fetch full details: {e}"
 	finally:
