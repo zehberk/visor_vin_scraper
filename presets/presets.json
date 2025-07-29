@@ -3,8 +3,9 @@
 		"make": "Subaru",
 		"model": "Outback",
         "trim": ["Wilderness"],
-		"year": ["2023", "2024", "2025"],
-		"max_listings": "1",
+		"year": ["2024", "2025"],
+		"miles": "0-65000",
+		"max_listings": "50",
 		"sort": "Lowest Price"
 	},
 	"4xe": {
@@ -12,7 +13,7 @@
 		"model": "Grand Cherokee",
 		"trim": ["4xe Trailhawk"],
 		"year": ["2020-2025"],
-		"max_listings": "200",
+		"max_listings": "50",
 		"sort": "Lowest Price"
 	}
 }
