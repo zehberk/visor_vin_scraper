@@ -27,3 +27,4 @@ Thumbs.db
 
 # Test code
 scraper/test_script.py
+presets/presets.json
