@@ -26,13 +26,6 @@ PARAM_NAME_OVERRIDES = {        # For user-friendly parameter names
 }
 MAX_LISTINGS = 500  # Maximum listings to retrieve
 
-# Remapping constants for query parameters
-# This allows for more user-friendly input while maintaining the correct URL parameters
-REMAPPING_RULES = {
-    "sort": SORT_OPTIONS,
-    "condition": lambda values: ",".join(v.lower() for v in values)
-}
-
 # HTML element selectors for main listing page
 LISTING_CARD_SELECTOR = "a[href^='/search/listings/']"
 TITLE_ELEMENT = "h2"

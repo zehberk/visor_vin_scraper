@@ -21,14 +21,14 @@ def normalize_years(raw_years):
 	result = set()
 
 	def convert_year(year_str: str) -> int:
-		y = int(year_str)
+		y = int(year_str.strip())
 		if len(year_str) == 4:
 			return y
 		elif y >= 50:
 			return 1900 + y
 		else:
 			return 2000 + y
-
+		
 	for entry in raw_years:
 		try:
 			if "-" in entry:
@@ -48,8 +48,8 @@ def normalize_years(raw_years):
 	if not result:
 		logging.error("No valid years provided. Please check your --year format.")
 		exit(1)
-
-	return sorted(result)
+		
+	return ",".join(str(y) for y in sorted(result))
 
 def remove_null_entries(d: dict) -> dict:
 	return {k: v for k, v in d.items() if v is not None}
@@ -153,7 +153,17 @@ def build_query_params(args, metadata):
 	if args.sort in SORT_OPTIONS:
 		args.sort = SORT_OPTIONS[args.sort]
 
-	args_dict = vars(args)
+
+	# Remapping constants for query parameters
+	# This allows for more user-friendly input while maintaining the correct URL parameters
+	REMAPPING_RULES = {
+		"sort": SORT_OPTIONS,
+		"condition": lambda values: ",".join(v.lower() for v in values),
+		"year": normalize_years
+	}
+
+	IGNORE_ARGS = {"max_listings", "price", "miles"}
+	args_dict = {k: v for k, v in vars(args).items() if k not in IGNORE_ARGS}
 	query_params = {}
 
 	for key, value in args_dict.items():
