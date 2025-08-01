@@ -9,7 +9,6 @@ VIN_DETAILS_URL = BASE_URL + "/{vin}"
 
 CONDITIONS = {"New", "Used", "Certified"} # Vehicle conditions
 SORT_OPTIONS = {
-    "Best Match": "best_match",
     "Lowest Price": "cheapest",
     "Highest Price": "expensive",
     "Newest": "newest",

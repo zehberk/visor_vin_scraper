@@ -6,12 +6,12 @@ import math
 import os
 import re
 import time
-from scraper.constants import *
+from visor_scraper.constants import *
 from contextlib import contextmanager
 from datetime import datetime
 
 @contextmanager
-def stopwatch(label="Elapsed"):
+def stopwatch(label="Elapsed"):			# pragma: no cover
 	start = time.time()
 	yield
 	end = time.time()
@@ -45,7 +45,7 @@ def normalize_years(raw_years):
 		except Exception as e:
 			logging.error(f"[Year Error] Could not parse '{entry}': {e}")
 
-	if not result:
+	if not result or len(result) == 0:
 		logging.error("No valid years provided. Please check your --year format.")
 		exit(1)
 		
@@ -130,7 +130,7 @@ def build_metadata(args):
 	}
 
 	filters = vars(args).copy()
-	for k in ("make", "model", "trim", "year", "preset"):
+	for k in ("make", "model", "trim", "year", "preset", "save_preset"):
 		filters.pop(k, None)
 	metadata["filters"] = remove_null_entries(filters)
 
@@ -161,8 +161,10 @@ def build_query_params(args, metadata):
 		"condition": lambda values: ",".join(v.lower() for v in values),
 		"year": normalize_years
 	}
+	IGNORE_ARGS = {"max_listings", "price", "miles", "save_preset"}
+	VALID_ARGS = {"make", "model", "trim", "year", "sort"}
+	VALID_KEYS = set(VALID_ARGS) | set(PARAM_NAME_OVERRIDES.keys())
 
-	IGNORE_ARGS = {"max_listings", "price", "miles"}
 	args_dict = {k: v for k, v in vars(args).items() if k not in IGNORE_ARGS}
 	query_params = {}
 
@@ -170,6 +172,12 @@ def build_query_params(args, metadata):
 		try:
 			remapper = REMAPPING_RULES.get(key)
 			param_name = PARAM_NAME_OVERRIDES.get(key, key)
+			
+			if key not in VALID_KEYS:				
+				msg = f"Failed to process argument '{param_name}' is not a valid argument."
+				logging.warning(msg)
+				metadata["warnings"].append(msg)
+				continue
 
 			if isinstance(remapper, dict):
 				query_params[param_name] = remapper.get(value, value)

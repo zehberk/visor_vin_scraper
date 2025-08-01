@@ -2,36 +2,36 @@ import logging
 from unittest.mock import AsyncMock, MagicMock
 import pytest
 import re
-from scraper.utils import *
+from visor_scraper.utils import *
 
 #region Normalize Years Tests
 
 def test_four_digit_year():
-	assert normalize_years(["2021"]) == [2021]
+	assert normalize_years(["2021"]) == "2021"
 
 def test_two_digit_shorthand_post_2000():
-	assert normalize_years(["20"]) == [2020]
+	assert normalize_years(["20"]) == "2020"
 
 def test_two_digit_shorthand_pre_2000():
-	assert normalize_years(["99"]) == [1999]
+	assert normalize_years(["99"]) == "1999"
 
 def test_year_range():
-	assert normalize_years(["2020-2022"]) == [2020, 2021, 2022]
+	assert normalize_years(["2020-2022"]) == "2020,2021,2022"
 
 def test_mixed_shorthand_and_full_years():
-	assert normalize_years(["20", "2021", "22"]) == [2020, 2021, 2022]
+	assert normalize_years(["20", "2021", "22"]) == "2020,2021,2022"
 
 def test_shorthand_range():
-	assert normalize_years(["20-22"]) == [2020, 2021, 2022]
+	assert normalize_years(["20-22"]) == "2020,2021,2022"
 
 def test_reversed_range_skipped():
-	assert normalize_years(["2022-2020", "2023"]) == [2023]
+	assert normalize_years(["2022-2020", "2023"]) == "2023"
 
 def test_partial_failure_still_returns_valid_years(caplog):
 	with caplog.at_level(logging.ERROR):
 		result = normalize_years(["20-19", "21"])
 	assert any("[Year Error]" in msg for msg in caplog.messages)
-	assert result == [2021]
+	assert result == "2021"
 
 def test_normalize_years_catches_generic_exceptions(caplog):
 	with caplog.at_level(logging.ERROR), pytest.raises(SystemExit):
@@ -51,7 +51,7 @@ def test_all_reversed_ranges_exit():
 		normalize_years(["2022-2020", "24-22"])
 		
 def test_edge_years():
-    assert normalize_years(["50" , "49"]) == [ 1950, 2049]
+    assert normalize_years(["50" , "49"]) == "1950,2049"
 	
 # endregion
 

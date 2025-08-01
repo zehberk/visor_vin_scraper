@@ -8,8 +8,8 @@ import sys
 from tqdm import tqdm
 from urllib.parse import urlencode
 from playwright.async_api import async_playwright, TimeoutError
-from scraper.constants import *
-from scraper.utils import *
+from visor_scraper.constants import *
+from visor_scraper.utils import *
 
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 
@@ -105,7 +105,7 @@ async def extract_seller_info(page, listing, index, metadata):
 		seller_map_url = await page.get_attribute(GOOGLE_MAP_ELEMENT, "href")
 		listing["seller"]["map_url"] = seller_map_url
 	except TimeoutError:
-		metadata["warnings"].append(f"⚠️ Google Maps link not found for seller in listing #{index}. Location info will be unavailable.")
+		metadata["warnings"].append(f"Google Maps link not found for seller in listing #{index}")
 		listing["seller"]["map_url"] = "N/A"
 
 	button_elements = await seller_div.query_selector_all(BUTTON_ELEMENTS)
@@ -406,28 +406,6 @@ async def auto_scroll_to_load_all(page, metadata, max_listings=300, delay_ms=250
 	metadata["runtime"]["scrolls"] = i
 
 async def scrape(args):
-
-	if args.preset:
-		if not PRESET_PATH.exists():
-			logging.error(f"Preset file not found: {PRESET_PATH}")
-			exit(1)
-		with open(PRESET_PATH) as f:
-			presets = json.load(f)
-		if args.preset not in presets:
-			logging.error(f"Profile '{args.preset}' not found.")
-			exit(1)
-		# Determine which args were passed explicitly on the command line
-		explicit_flags = {arg.lstrip("-") for arg in sys.argv[1:] if arg.startswith("-")}
-
-		# Fill in missing args with profile defaults
-		for k, v in presets[args.preset].items():
-			if k not in explicit_flags:
-				setattr(args, k, v)
-
-	if not args.preset and (not args.make or not args.model):
-		logging.error("You must provide either a --preset OR both --make and --model.")
-		exit(1)	
-
 	metadata = build_metadata(args)
 	query_params = build_query_params(args, metadata)
 	url = f"{BASE_URL}?{urlencode(query_params)}"
@@ -446,6 +424,75 @@ async def scrape(args):
 		save_results(listings, metadata, args)				# pragma: no cover
 		await browser.close()								# pragma: no cover
 
+def save_preset_if_requested(args):
+	if not args.save_preset:
+		return
+	
+	while True:
+		preset_name = input("Enter a name for this preset: ").strip()
+		if not preset_name:
+			logging.error("Preset name cannot be empty.")
+			exit(1)
+
+		# Exclude non-search-related flags
+		exclude = {"preset", "save_preset"}
+		preset_data = {k: v for k, v in vars(args).items() if k not in exclude and v is not None}
+
+		# Load existing presets
+		if PRESET_PATH.exists():
+			with open(PRESET_PATH) as f:
+				presets = json.load(f)
+		else:
+			presets = {}
+
+		if preset_name in presets:
+			print(preset_name)
+			accept = input(f"{preset_name} already exists. Would you like to overwrite it (y/n)?").strip()
+			print(accept)
+			if accept.lower() in {"y", "yes"}:		
+				presets[preset_name] = preset_data
+				break
+			else:
+				continue		# pragma: no cover
+		else:
+			presets[preset_name] = preset_data
+			break
+
+	with open(PRESET_PATH, "w") as f:
+		json.dump(presets, f, indent=2)
+	logging.info(f"Preset '{preset_name}' saved.")
+
+def resolve_args(args):
+	if args.preset and args.save_preset:
+		logging.error("You cannot use --preset and --save-preset together.")
+		exit(1)
+
+	if args.preset:
+		if not PRESET_PATH.exists():
+			logging.error(f"Preset file not found: {PRESET_PATH}")
+			exit(1)
+
+		with open(PRESET_PATH) as f:
+			presets = json.load(f)
+
+		preset_data = presets.get(args.preset)
+		if not preset_data:
+			logging.error(f"Profile '{args.preset}' not found.")
+			exit(1)
+
+		explicit_flags = {arg.lstrip("-") for arg in sys.argv[1:] if arg.startswith("-")}
+		for k, v in preset_data.items():
+			if k not in explicit_flags:
+				setattr(args, k, v)
+	elif args.save_preset:
+		save_preset_if_requested(args)
+		
+	if not args.make or not args.model:
+		logging.error("You must provide either a --preset OR both --make and --model.")
+		exit(1)
+
+	return args
+
 # Entry point
 def main():  # pragma: no cover
 
@@ -461,25 +508,26 @@ def main():  # pragma: no cover
 	sorting = parser.add_argument_group("Sorting options")
 	
 	presets.add_argument("--preset", type=str, help="Optional preset name from presets.json")
+	presets.add_argument("--save-preset", action="store_true", help="Save this search as a preset")
 
-	required.add_argument("-m", "--make", type=str, help="Vehicle make (e.g., Jeep)")
-	required.add_argument("-o", "--model", type=str, help="Vehicle model (e.g., Wrangler)")
+	required.add_argument("--make", type=str, help="Vehicle make (e.g., Jeep)")
+	required.add_argument("--model", type=str, help="Vehicle model (e.g., Wrangler)")
 
 	behavior.add_argument("--max_listings", type=capped_max_listings, default=50, help="Maximum number of listings to retrieve (default: 50, max: 500)")
 
-	filters.add_argument("-t", "--trim", nargs="+", type=str, help="One or more trim names (quoted if multi-word)")
-	filters.add_argument("-y", "--year", nargs="+", help="Model years or ranges (e.g., 2021 2022-2024 20-22)")
+	filters.add_argument("--trim", nargs="+", type=str, help="One or more trim names (quoted if multi-word)")
+	filters.add_argument("--year", nargs="+", help="Model years or ranges (e.g., 2021 2022-2024 20-22)")
 	filters.add_argument("--min_miles", type=int, help="Minimum mileage")
 	filters.add_argument("--max_miles", type=int, help="Maximum mileage")
-	filters.add_argument("-l", "--miles", type=str, help="Mileage range (e.g., 10000-60000). Overrides min/max")
+	filters.add_argument("--miles", type=str, help="Mileage range (e.g., 10000-60000). Overrides min/max")
 	filters.add_argument("--min_price", type=int, help="Minimum price")
 	filters.add_argument("--max_price", type=int, help="Maximum price")
-	filters.add_argument("-p", "--price", type=str, help="Price range (e.g., 10000-60000). Overrides min/max")
-	filters.add_argument("-c", "--condition", choices=CONDITIONS, nargs="+", help="Condition(s) to filter (New, Used, Certified)")
+	filters.add_argument("--price", type=str, help="Price range (e.g., 10000-60000). Overrides min/max")
+	filters.add_argument("--condition", choices=CONDITIONS, nargs="+", help="Condition(s) to filter (New, Used, Certified)")
 
-	sorting.add_argument("-s", "--sort", choices=SORT_OPTIONS.keys(), default="Newest", help="Sort order for results")
+	sorting.add_argument("--sort", choices=SORT_OPTIONS.keys(), default="Newest", help="Sort order for results")
 
-	args = parser.parse_args()
+	args = resolve_args(parser.parse_args())
 	asyncio.run(scrape(args))
 
 if __name__ == "__main__":	#pragma: no cover
