@@ -1,13 +1,13 @@
 import argparse
 import json
 import pytest
-import scraper.scraper as scraper
-import scraper.utils as utils
+import visor_scraper.scraper as scraper
+import visor_scraper.utils as utils
 from itertools import chain, repeat
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, ANY, mock_open, patch
-from scraper.constants import LISTING_CARD_SELECTOR, MAX_LISTINGS, REMAPPING_RULES, PRESET_PATH
-from scraper.scraper import *
+from visor_scraper.constants import LISTING_CARD_SELECTOR, MAX_LISTINGS, PRESET_PATH
+from visor_scraper.scraper import *
 
 #region Capped Max Listings Tests
 
@@ -66,7 +66,7 @@ def test_build_metadata_with_years():
 		condition=["Used"], max__listings=50, sort="PriceHigh"
 	)
 	metadata = build_metadata(args)
-	assert metadata["vehicle"]["year"] == [2022, 2023, 2024]
+	assert metadata["vehicle"]["year"] == "2022,2023,2024"
 	assert metadata["filters"]["min_miles"] == 10000
 	assert metadata["filters"]["max_miles"] == 50000
 	assert metadata["filters"]["condition"] == ["Used"]
@@ -77,7 +77,7 @@ def test_build_metadata_with_years():
 
 def test_query_params_converts_bools_and_lists():
 	args = SimpleNamespace(
-		make="Toyota", model="RAV4", trim=["XLE", "Adventure"], year=["2021"],
+		make="Toyota", model="RAV4", trim=["XLE", "Adventure"], year="2021",
 		min_miles=None, max_miles=None, miles=None,
 		min_price=None, max_price=None, price=None,
 		condition=["used", "certified"], max_listings=50, sort="Newest"
@@ -167,7 +167,6 @@ def test_query_params_invalid_argument_type_logs_warning(caplog):
 		"warnings": []
 	}
 
-	REMAPPING_RULES["broken_field"] = lambda v: (_ for _ in ()).throw(ValueError("boom"))
 	build_query_params(args, metadata)
 
 	assert any("Failed to process argument 'broken_field'" in w for w in metadata["warnings"])
@@ -347,7 +346,7 @@ async def test_extract_listings_limits_to_max_listings():
 	card2.query_selector.side_effect = card1.query_selector.side_effect
 	card2.get_attribute = AsyncMock(return_value="DEF789101")
 
-	with patch("scraper.scraper.extract_full_listing_details", new_callable=AsyncMock):
+	with patch("visor_scraper.scraper.extract_full_listing_details", new_callable=AsyncMock):
 		listings = await extract_listings(browser, page, metadata, max_listings=1)
 
 	assert len(listings) == 1
@@ -401,41 +400,6 @@ async def test_scrape_exits_without_preset_or_make_model():
 	with pytest.raises(SystemExit):
 		await scrape(args)
 
-async def test_scrape_loads_preset(monkeypatch):
-
-	# Simulate --preset=outbacks
-	args = SimpleNamespace(
-		preset="outbacks",
-		make=None,
-		model=None,
-		trim=None,
-		year=None,
-		min_miles=None, max_miles=None, miles=None,
-		min_price=None, max_price=None, price=None,
-		condition=None, max_listings=50, sort="Newest"
-	)
-
-	# Provide mock preset data
-	preset_data = {
-		"outbacks": {
-			"make": "Subaru",
-			"model": "Outback",
-			"trim": ["Wilderness"],
-			"year": ["2023"]
-		}
-	}
-
-	monkeypatch.setattr("scraper.scraper.fetch_page", AsyncMock(return_value=False))
-	monkeypatch.setattr("scraper.scraper.save_results", lambda *a, **k: None)
-
-	with patch("builtins.open", mock_open(read_data=json.dumps(preset_data))):
-		await scrape(args)
-
-	assert args.make == "Subaru"
-	assert args.model == "Outback"
-	assert args.trim == ["Wilderness"]
-	assert args.year == ["2023"]
-
 async def test_scrape_invalid_preset_exits():
 	args = SimpleNamespace(
 		preset="nonexistent",
@@ -452,8 +416,8 @@ async def test_scrape_invalid_preset_exits():
 		with pytest.raises(SystemExit):
 			await scrape(args)
 
-@patch("scraper.scraper.fetch_page", new_callable=AsyncMock)
-@patch("scraper.scraper.async_playwright")
+@patch("visor_scraper.scraper.fetch_page", new_callable=AsyncMock)
+@patch("visor_scraper.scraper.async_playwright")
 async def test_scrape_exits_if_fetch_page_fails(mock_playwright, mock_fetch_page):
 	mock_fetch_page.return_value = False
 
@@ -493,10 +457,10 @@ async def test_missing_presets_file_raises(monkeypatch):
 	with pytest.raises(SystemExit):
 		await scraper.scrape(args)
 
-@patch("scraper.scraper.auto_scroll_to_load_all", new_callable=AsyncMock)
-@patch("scraper.scraper.extract_numbers_from_sidebar", new_callable=AsyncMock)
-@patch("scraper.scraper.fetch_page", new_callable=AsyncMock, return_value=True)
-@patch("scraper.scraper.async_playwright")
+@patch("visor_scraper.scraper.auto_scroll_to_load_all", new_callable=AsyncMock)
+@patch("visor_scraper.scraper.extract_numbers_from_sidebar", new_callable=AsyncMock)
+@patch("visor_scraper.scraper.fetch_page", new_callable=AsyncMock, return_value=True)
+@patch("visor_scraper.scraper.async_playwright")
 async def test_scrape_calls_sidebar_and_scroll(mock_playwright, mock_fetch_page, mock_extract_sidebar, mock_scroll):
 	# Setup browser mocks
 	mock_browser = AsyncMock()
@@ -688,6 +652,22 @@ async def test_parse_warranty_limits_raise_exception():
 	assert entry["miles_left"] == None
 	assert entry["miles_total"] == "OK Value"
 
+@patch("visor_scraper.scraper.safe_text", new_callable=AsyncMock)
+async def test_parse_warranty_coverage_handles_exception(mock_safe_text):
+	mock_safe_text.side_effect = ["Powertrain", "Expired"]  # or whatever values are expected
+
+	coverage = AsyncMock()
+	coverage.query_selector_all.side_effect = Exception("mock failure")
+
+	metadata = {"warnings": []}
+	index = 3
+
+	entry = await parse_warranty_coverage(coverage, index, metadata)
+
+	assert entry["type"] == "Powertrain"
+	assert entry["status"] == "Expired"
+	assert "mock failure" in str(metadata["warnings"][0])
+
 #endregion
 
 #region Extract Warranty Info Tests
@@ -736,7 +716,7 @@ async def test_extract_warranty_info_no_coverages():
 
 #region Extract Additional Documents Tests
 
-@patch("scraper.scraper.get_url", new_callable=AsyncMock)
+@patch("visor_scraper.scraper.get_url", new_callable=AsyncMock)
 async def test_extract_additional_documents_sets_fields(mock_get_url):
 	mock_get_url.side_effect = [
 		"https://example.com/carfax",
@@ -753,7 +733,7 @@ async def test_extract_additional_documents_sets_fields(mock_get_url):
 	assert listing["additional_docs"]["window_sticker_url"] == "https://example.com/sticker"
 
 
-@patch("scraper.scraper.get_url", new_callable=AsyncMock)
+@patch("visor_scraper.scraper.get_url", new_callable=AsyncMock)
 async def test_extract_additional_documents_calls_get_url_correctly(mock_get_url):
 	mock_get_url.side_effect = AsyncMock(side_effect=["A", "B"])
 	
@@ -854,7 +834,7 @@ async def test_extract_seller_info_map_timeout():
 	await extract_seller_info(page, listing, 4, metadata)
 
 	assert listing["seller"]["map_url"] == "N/A" or "map_url" not in listing["seller"]
-	assert "Failed to read Map URL for seller in listing 4" in metadata["warnings"]
+	assert "Google Maps link not found for seller in listing #4" in metadata["warnings"]
 
 #endregion 
 
@@ -1033,6 +1013,29 @@ async def test_extract_install_options_timeout():
 	# Should still set the structure even if empty
 	assert listing["installed_addons"] == {"items": [], "total": 0}
 
+async def test_extract_install_options_handles_generic_exception():
+	page = AsyncMock()
+	index = 7
+	listing = {}
+
+	# wait_for_selector succeeds
+	page.wait_for_selector = AsyncMock()
+
+	# query_selector_all raises an unexpected exception
+	page.query_selector_all = AsyncMock(side_effect=Exception("mock failure"))
+
+	metadata = {"warnings": []}
+
+	await extract_install_options(page, listing, index, metadata)
+
+	assert "installed_addons" in listing
+	assert listing["installed_addons"]["items"] == []
+	assert listing["installed_addons"]["total"] == 0
+
+	assert len(metadata["warnings"]) == 1
+	assert f"listing #{index}" in metadata["warnings"][0]
+	assert "mock failure" in metadata["warnings"][0]
+
 #endregion
 
 #region Extract Spec Details Tests
@@ -1141,8 +1144,8 @@ async def test_extract_spec_details_handles_unexpected_exception():
 
 	assert any("Could not extract spec details for listing #99: Spec table exploded" in w for w in metadata["warnings"])
 
-@patch("scraper.scraper.extract_additional_documents", new_callable=AsyncMock)
-@patch("scraper.scraper.extract_seller_info", new_callable=AsyncMock)
+@patch("visor_scraper.scraper.extract_additional_documents", new_callable=AsyncMock)
+@patch("visor_scraper.scraper.extract_seller_info", new_callable=AsyncMock)
 async def test_extract_spec_details_additional_docs_and_seller(mock_seller_info, mock_additional_docs):
 	page = AsyncMock()
 	listing = {}
@@ -1274,10 +1277,10 @@ async def test_extract_price_history_empty():
 
 #region Extract Full Listing Details Tests
 
-@patch("scraper.scraper.extract_spec_details", new_callable=AsyncMock)
-@patch("scraper.scraper.extract_warranty_info", new_callable=AsyncMock)
-@patch("scraper.scraper.extract_market_velocity", new_callable=AsyncMock)
-@patch("scraper.scraper.extract_price_history", new_callable=AsyncMock)
+@patch("visor_scraper.scraper.extract_spec_details", new_callable=AsyncMock)
+@patch("visor_scraper.scraper.extract_warranty_info", new_callable=AsyncMock)
+@patch("visor_scraper.scraper.extract_market_velocity", new_callable=AsyncMock)
+@patch("visor_scraper.scraper.extract_price_history", new_callable=AsyncMock)
 async def test_extract_full_listing_details_success(mock_price, mock_velocity, mock_warranty, mock_specs):
 	browser = AsyncMock()
 	context = AsyncMock()
@@ -1309,10 +1312,10 @@ async def test_extract_full_listing_details_success(mock_price, mock_velocity, m
 	context.add_cookies.assert_awaited_once()
 	page.close.assert_awaited_once()
 
-@patch("scraper.scraper.extract_spec_details", new_callable=AsyncMock)
-@patch("scraper.scraper.extract_warranty_info", new_callable=AsyncMock)
-@patch("scraper.scraper.extract_market_velocity", new_callable=AsyncMock)
-@patch("scraper.scraper.extract_price_history", new_callable=AsyncMock)
+@patch("visor_scraper.scraper.extract_spec_details", new_callable=AsyncMock)
+@patch("visor_scraper.scraper.extract_warranty_info", new_callable=AsyncMock)
+@patch("visor_scraper.scraper.extract_market_velocity", new_callable=AsyncMock)
+@patch("visor_scraper.scraper.extract_price_history", new_callable=AsyncMock)
 async def test_extract_full_listing_details_url_timeout(*_):
 	browser = AsyncMock()
 	context = AsyncMock()
@@ -1353,3 +1356,100 @@ async def test_extract_full_listing_details_runtime_failure():
 
 #endregion
 
+#region Save Preset If Requested Tests
+
+def test_save_preset_skips_when_flag_false(caplog):
+	args = SimpleNamespace(save_preset=False)
+	save_preset_if_requested(args)  # Should not raise or log anything
+	assert "Preset" not in caplog.text
+
+def test_save_preset_empty_name_exits(monkeypatch):
+	args = SimpleNamespace(save_preset=True)
+	monkeypatch.setattr("builtins.input", lambda _: "")
+	with pytest.raises(SystemExit):
+		save_preset_if_requested(args)
+
+@patch("builtins.input", side_effect=["test_preset"])
+def test_save_preset_creates_new(mock_input, monkeypatch, tmp_path):
+	args = SimpleNamespace(save_preset=True, make="Subaru", model="Outback", preset=None)
+
+	# Patch PRESET_PATH to a clean, non-existent temp file
+	path = tmp_path / "presets.json"
+	monkeypatch.setattr("visor_scraper.scraper.PRESET_PATH", path)
+
+	save_preset_if_requested(args)
+
+	assert path.exists()
+	with open(path) as f:
+		data = json.load(f)
+
+	assert "test_preset" in data
+	assert data["test_preset"]["make"] == "Subaru"
+	assert data["test_preset"]["model"] == "Outback"
+
+@patch("builtins.input", side_effect=["test_preset", "y"])
+def test_save_preset_overwrites_existing(mock_input, monkeypatch, tmp_path):
+	args = SimpleNamespace(save_preset=True, make="Toyota", model="RAV4", preset=None)
+
+	path = tmp_path / "presets.json"
+	monkeypatch.setattr("visor_scraper.scraper.PRESET_PATH", path)
+
+	with open(path, "w") as f:
+		json.dump({"test_preset": {"make": "Old", "model": "Car"}}, f)
+
+	save_preset_if_requested(args)
+
+	with open(path) as f:
+		data = json.load(f)
+	assert data["test_preset"]["make"] == "Toyota"
+	assert data["test_preset"]["model"] == "RAV4"
+
+#endregion
+
+#region Resolve Args Tests
+
+def test_resolve_args_conflicting_flags_exits():
+	args = SimpleNamespace(preset="foo", save_preset=True, make=None, model=None)
+	with pytest.raises(SystemExit):
+		resolve_args(args)
+
+def test_resolve_args_missing_required_args_exits():
+	args = SimpleNamespace(preset=None, save_preset=False, make=None, model=None)
+	with pytest.raises(SystemExit):
+		resolve_args(args)
+
+def test_resolve_args_missing_preset_file(monkeypatch):
+	args = SimpleNamespace(preset="foo", save_preset=False, make=None, model=None)
+	monkeypatch.setattr("visor_scraper.scraper.PRESET_PATH", Path("nonexistent.json"))
+	with pytest.raises(SystemExit):
+		resolve_args(args)
+
+def test_resolve_args_missing_preset_entry(monkeypatch, tmp_path):
+	args = SimpleNamespace(preset="foo", save_preset=False, make=None, model=None)
+	preset_path = tmp_path / "presets.json"
+	preset_path.write_text(json.dumps({"bar": {"make": "Honda", "model": "CR-V"}}))
+	monkeypatch.setattr("visor_scraper.scraper.PRESET_PATH", preset_path)
+	with pytest.raises(SystemExit):
+		resolve_args(args)
+
+@patch("visor_scraper.scraper.sys.argv", ["main.py", "--preset=outbacks"])
+def test_resolve_args_applies_preset(monkeypatch, tmp_path):
+	args = SimpleNamespace(preset="outbacks", save_preset=False, make=None, model=None)
+	preset_path = tmp_path / "presets.json"
+	preset_path.write_text(json.dumps({
+		"outbacks": {"make": "Subaru", "model": "Outback", "trim": ["Wilderness"]}
+	}))
+	monkeypatch.setattr("visor_scraper.scraper.PRESET_PATH", preset_path)
+
+	resolved = resolve_args(args)
+	assert resolved.make == "Subaru"
+	assert resolved.model == "Outback"
+	assert resolved.trim == ["Wilderness"]
+
+@patch("visor_scraper.scraper.save_preset_if_requested")
+def test_resolve_args_triggers_save_preset(mock_save, monkeypatch):
+	args = SimpleNamespace(preset=None, save_preset=True, make="Toyota", model="RAV4")
+	result = resolve_args(args)
+	mock_save.assert_called_once_with(result)
+
+#endregion
