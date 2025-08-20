@@ -161,7 +161,7 @@ def build_query_params(args, metadata):
 		"condition": lambda values: ",".join(v.lower() for v in values),
 		"year": normalize_years
 	}
-	IGNORE_ARGS = {"max_listings", "price", "miles", "save_preset"}
+	IGNORE_ARGS = {"max_listings", "price", "miles", "preset", "save_preset"}
 	VALID_ARGS = {"make", "model", "trim", "year", "sort"}
 	VALID_KEYS = set(VALID_ARGS) | set(PARAM_NAME_OVERRIDES.keys())
 
