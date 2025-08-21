@@ -209,7 +209,7 @@ async def extract_install_options(page, listing, index, metadata):
 			"total": total		
 		}
 	except TimeoutError as t:
-		metadata["warnings"].append(f"Could not extract install options for listing #{index}: {t}")
+		metadata["warnings"].append(f"Timeout when extracting car add-ons for listing #{index}.")
 	except Exception as e:
 		metadata["warnings"].append(f"Could not extract install options for listing #{index}: {e}")
 
