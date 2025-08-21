@@ -16,11 +16,23 @@ logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 async def fetch_page(page, url):
 	try:
 		await page.goto(url, timeout=60000)
-		await page.wait_for_selector(LISTING_CARD_SELECTOR, timeout=20000)
-	except Exception as e:
-		logging.error(f"Page load or selector wait failed: {e}")
+		await page.wait_for_function(
+			"(args) => !!(document.querySelector(args.sel) || document.body.innerText.includes(args.empty))",
+			arg={"sel": LISTING_CARD_SELECTOR, "empty": NO_LISTINGS_FOUND_TEXT},
+			timeout=10000
+		)
+
+		# Branch based on what appeared.
+		if await page.locator(LISTING_CARD_SELECTOR).count() > 0:
+			return True
+		logging.info("No listings found.")
+		return True  # still 'success' — downstream will find 0 cards
+	except TimeoutError as e:
+		logging.error(f"Page did not reach results or empty state: {e}")
 		return False
-	return True
+	except Exception as e:
+		logging.error(f"Page load failed: {e}")
+		return False
 
 async def extract_numbers_from_sidebar(page, metadata):
 	sidebar = await page.query_selector("text=/\\d+ for sale nationwide/")
@@ -421,6 +433,8 @@ async def scrape(args):
 		await extract_numbers_from_sidebar(page, metadata)
 		await auto_scroll_to_load_all(page, metadata, max_listings=args.max_listings)
 		listings = await extract_listings(browser, page, metadata, max_listings=args.max_listings)	# pragma: no cover
+		if (len(listings) == 0):
+			metadata["warnings"].append("No listings found. Please check your input and try again")
 		save_results(listings, metadata, args)				# pragma: no cover
 		await browser.close()								# pragma: no cover
 
