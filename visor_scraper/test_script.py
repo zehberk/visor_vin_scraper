@@ -12,7 +12,7 @@ import math
  # 4S4BTGUDXR3181217 - Addon options
  # 4S4BTGSDXP3146838 - Carfax/Window
  # 4S4BTGSDXR3119061 - Price History
-async def check_detail_page(vin="4S4BTGSDXR3119061"): # pragma: no cover
+async def check_detail_page(vin="4S4BTGUD4S3167531"): # pragma: no cover
 	url = f"https://visor.vin/search/listings/{vin}"
 	async with async_playwright() as pw:
 		browser = await pw.chromium.launch(headless=True)

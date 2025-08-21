@@ -169,13 +169,19 @@ async def extract_market_velocity(page, listing, index, metadata):
 		metadata["warnings"].append(msg)
 
 async def extract_install_options(page, listing, index, metadata):
-	# listing.setdefault("installed_addons", {})
 	listing["installed_addons"] = {		
 			"items": [],
 			"total": 0		
 	}
 
 	try:
+		no_opts = await page.query_selector("div.text-\\[\\#797979\\]")
+		if no_opts:
+			text = (await no_opts.inner_text()).strip()
+			if text == "No options found":
+				# Bail early, don’t log anything
+				return
+		
 		await page.wait_for_selector(ADDON_LI_ELEMENTS, timeout=2000)
 		addon_elements = page.query_selector_all(ADDON_LI_ELEMENTS)
 		
