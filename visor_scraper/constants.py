@@ -26,6 +26,7 @@ PARAM_NAME_OVERRIDES = {        # For user-friendly parameter names
 MAX_LISTINGS = 500  # Maximum listings to retrieve
 
 # HTML element selectors for main listing page
+NO_LISTINGS_FOUND_TEXT = "No listings to see"
 LISTING_CARD_SELECTOR = "a[href^='/search/listings/']"
 TITLE_ELEMENT = "h2"
 PRICE_ELEMENT = "div.absolute.bottom-2.left-2 > span"

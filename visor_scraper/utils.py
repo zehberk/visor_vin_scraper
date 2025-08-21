@@ -159,7 +159,7 @@ def build_query_params(args, metadata):
 	REMAPPING_RULES = {
 		"sort": SORT_OPTIONS,
 		"condition": lambda values: ",".join(v.lower() for v in values),
-		"year": normalize_years
+		"year": normalize_years if args.year else []
 	}
 	IGNORE_ARGS = {"max_listings", "price", "miles", "preset", "save_preset"}
 	VALID_ARGS = {"make", "model", "trim", "year", "sort"}
