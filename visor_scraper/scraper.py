@@ -386,7 +386,7 @@ def save_results(listings, metadata, args, output_dir="output"):
 		json.dump({"metadata": metadata, "listings": listings}, f, indent=2, ensure_ascii=False)
 	print(f"Saved {len(listings)} listings to {path}")
 
-async def auto_scroll_to_load_all(page, metadata, max_listings=300, delay_ms=250):
+async def auto_scroll_to_load_all(page, metadata, max_listings, delay_ms=250):
 	previous_count = 0
 	i = 0
 	print(f"Starting auto-scroll to load up to {max_listings} listings...")
@@ -481,8 +481,11 @@ async def scrape(args):
 			await browser.close()
 			return
 		await extract_numbers_from_sidebar(page, metadata)
-		await auto_scroll_to_load_all(page, metadata, max_listings=args.max_listings)
-		listings = await extract_listings(browser, page, metadata, max_listings=args.max_listings)	# pragma: no cover
+		if args.max_listings > 50:
+			await auto_scroll_to_load_all(page, metadata, args.max_listings)
+		else:
+			metadata["runtime"]["scrolls"] = 0
+		listings = await extract_listings(browser, page, metadata, args.max_listings)	# pragma: no cover
 		if (len(listings) == 0):
 			metadata["warnings"].append("No listings found. Please check your input and try again")
 		save_results(listings, metadata, args)				# pragma: no cover
