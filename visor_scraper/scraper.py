@@ -423,11 +423,48 @@ async def auto_scroll_to_load_all(page, metadata, max_listings=300, delay_ms=250
 
 	metadata["runtime"]["scrolls"] = i
 
+async def download_sticker(listing):
+	return
+
+async def download_carfax(listing):
+	return
+
+async def download_files(listings):
+	async with async_playwright() as pw:
+		req = await pw.request.new_context()
+		for lst in tqdm(listings, desc="Downloading window stickers", unit="car"):
+			url = lst.get("additional_docs", {}).get("window_sticker_url")
+			vin = lst.get("vin")
+			title = lst.get("title")
+
+			# Title and VIN will always have a value
+			folder = os.path.join("output", title, vin)
+			os.makedirs(folder, exist_ok=True)
+
+			if not url or url == "Unavailable" :
+				continue
+
+			path = os.path.join(folder, "sticker.pdf")
+			# skip if already present
+			if os.path.exists(path) and os.path.getsize(path) > 0:
+				continue
+
+			resp = await req.get(url)
+			if not resp.ok:
+				# optional: log/collect failures here
+				continue
+
+			with open(path, "wb") as f:
+				f.write(await resp.body())
+
+		await req.dispose()
+
 async def scrape(args):
 	metadata = build_metadata(args)
 	query_params = build_query_params(args, metadata)
 	url = f"{BASE_URL}?{urlencode(query_params)}"
 	metadata["runtime"]["url"] = url
+	listings = None
 
 	async with async_playwright() as pw:
 		browser = await pw.chromium.launch(headless=True)
@@ -443,6 +480,9 @@ async def scrape(args):
 			metadata["warnings"].append("No listings found. Please check your input and try again")
 		save_results(listings, metadata, args)				# pragma: no cover
 		await browser.close()								# pragma: no cover
+		
+	if listings:
+		await download_files(listings)
 
 def save_preset_if_requested(args):
 	if not args.save_preset:

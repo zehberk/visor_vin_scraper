@@ -26,7 +26,8 @@ presets/presets.json
 Thumbs.db
 
 # Test code
-scraper/test_script.py
+visor_scraper/test_script.py
 presets/presets.json
 presets/presets.json
 evalutation_instructions.md
+*.pdf
