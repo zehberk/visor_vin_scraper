@@ -423,8 +423,30 @@ async def auto_scroll_to_load_all(page, metadata, max_listings=300, delay_ms=250
 
 	metadata["runtime"]["scrolls"] = i
 
-async def download_sticker(listing):
-	return
+def save_listing_json(listing, folder):
+	path = os.path.join(folder, "listing.json")
+	with open(path, "w", encoding="utf-8") as f:
+		json.dump(listing, f, indent=2, ensure_ascii=False)
+
+	return path
+
+async def download_sticker(request, listing, folder):
+	url = listing.get("additional_docs", {}).get("window_sticker_url")
+	if not url or url == "Unavailable" :
+		return False
+	
+	path = os.path.join(folder, "sticker.pdf")
+	# skip if already present
+	if os.path.exists(path) and os.path.getsize(path) > 0:
+		return True
+
+	resp = await request.get(url)
+	if not resp.ok:
+		# optional: log/collect failures here
+		return False
+	with open(path, "wb") as f:
+		f.write(await resp.body())
+	return True
 
 async def download_carfax(listing):
 	return
@@ -433,29 +455,14 @@ async def download_files(listings):
 	async with async_playwright() as pw:
 		req = await pw.request.new_context()
 		for lst in tqdm(listings, desc="Downloading window stickers", unit="car"):
-			url = lst.get("additional_docs", {}).get("window_sticker_url")
-			vin = lst.get("vin")
-			title = lst.get("title")
-
 			# Title and VIN will always have a value
+			title = lst.get("title")
+			vin = lst.get("vin")	
 			folder = os.path.join("output", title, vin)
 			os.makedirs(folder, exist_ok=True)
 
-			if not url or url == "Unavailable" :
-				continue
-
-			path = os.path.join(folder, "sticker.pdf")
-			# skip if already present
-			if os.path.exists(path) and os.path.getsize(path) > 0:
-				continue
-
-			resp = await req.get(url)
-			if not resp.ok:
-				# optional: log/collect failures here
-				continue
-
-			with open(path, "wb") as f:
-				f.write(await resp.body())
+			save_listing_json(lst, folder)
+			await download_sticker(req, lst, folder)
 
 		await req.dispose()
 
