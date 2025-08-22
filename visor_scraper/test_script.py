@@ -13,70 +13,33 @@ import math
  # 4S4BTGSDXP3146838 - Carfax/Window
  # 4S4BTGSDXR3119061 - Price History
 async def check_detail_page(vin="4S4BTGUD4S3167531"): # pragma: no cover
-	url = f"https://visor.vin/search/listings/{vin}"
+	# url = f"https://visor.vin/search/listings/{vin}"
+	url = "https://windowsticker.subaru.com/customerMonroneyLabel/pdf?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3Nzg1MzYwMDEsImlzcyI6InN1YmFydSIsImF1ZCI6InNob3dtYXgiLCJlbnYiOiJwcm9kIiwid3MiOiJ3aW5kb3dTdGlja2VyL3IifQ.i6582N-cIJqcTGswegYQZUFCQLA_OlXUoI6E9ATcIdM&vin=4S4BTGUD0S3311415"
 	async with async_playwright() as pw:
 		browser = await pw.chromium.launch(headless=True)
-		context = await browser.new_context()
+		context = await browser.new_context(accept_downloads=True)
 		# await context.add_cookies(load_auth_cookies())
 		await context.add_cookies(convert_browser_cookies_to_playwright(".session/cookies.json"))
 		page = await context.new_page()
 
 		try:
-			with stopwatch("Page Load Time"):
-				await page.goto(url)
-				await page.wait_for_selector(DETAIL_PAGE_ELEMENT, timeout=10000)
+			# with stopwatch("Page Load Time"):
+			# 	await page.goto(url)
+			# 	await page.wait_for_selector(DETAIL_PAGE_ELEMENT, timeout=10000)
 			
-			with stopwatch("Price History"):
-				price_history = []
-				await page.wait_for_selector("div.space-y-3.pt-3.w-full", timeout=2000)
-				price_changes = await page.query_selector_all("div.flex.items-center.justify-between.text-base")
-				
-				for idx, change in enumerate(price_changes):
-					i = idx+1
-					entry = {
-						"date": None,
-						"price": None,
-						"price_change": None,
-						"mileage": None,
-						"lowest": False
-					}
-
-					blocks = await change.query_selector_all("div.space-y-1")
-					if len(blocks) != 2:
-						print(f"Too few/many blocks in ${i}!")
-						continue
-
-					# Left Block
-					left_divs = await blocks[0].query_selector_all("div")
-					if len(left_divs) >= 1:
-						entry["date"] = (await left_divs[0].inner_text()).strip()
-					if len(left_divs) >= 2:
-						price_change_text = await left_divs[1].inner_text()
-						match = re.search(r"(-?\$[\d,]+)", price_change_text)
-						if match:
-							entry["price_change"] = int(match.group(1).replace("$", "").replace(",", ""))
-
-					# Right Block
-					right_divs = await blocks[1].query_selector_all("div")
-					if len(right_divs) >= 1:
-						price_text = await right_divs[0].inner_text()
-						entry["lowest"] = "Lowest" in price_text
-						if "$" in price_text:
-							price_match = re.search(r"\$([\d,]+)", price_text)
-							if price_match:
-								entry["price"] = int(price_match.group(1).replace(",", ""))
-
-					if len(right_divs) >= 2:
-						miles_text = await right_divs[1].inner_text()
-						miles_match = re.search(r"([\d,]+)", miles_text)
-						if miles_match:
-							entry["mileage"] = int(miles_match.group(1).replace(",", ""))
-
-					price_history.append(entry)
-				print(json.dumps(price_history, indent=2))
+			with stopwatch("Window Sticker Download"):
+				output_file = "sticker.pdf"
+				req = await pw.request.new_context()
+				resp = await req.get(url)
+				if not resp.ok:
+					raise RuntimeError(f"Failed: {resp.status}")
+				with open(output_file, "wb") as f:
+					f.write(await resp.body())
+				await req.dispose()
+				print(f"Downloaded to {output_file}")
 				
 		except Exception as e:
-			print(f"❌ Failed to load or find element: {e}")
+			print(f"Failed to save sticker: {e}")
 		finally:
 			await browser.close()
 
