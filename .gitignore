@@ -28,6 +28,6 @@ Thumbs.db
 # Test code
 visor_scraper/test_script.py
 presets/presets.json
-presets/presets.json
+playwright-profile/*
 evalutation_instructions.md
 *.pdf
