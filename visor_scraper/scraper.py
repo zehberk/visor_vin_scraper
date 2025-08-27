@@ -113,8 +113,10 @@ async def extract_seller_info(page, listing, index, metadata):
 		seller_map_url = await page.get_attribute(GOOGLE_MAP_ELEMENT, "href")
 		listing["seller"]["map_url"] = seller_map_url
 	except TimeoutError:
-		metadata["warnings"].append(f"Google Maps link not found for seller in listing #{index}")
+		# Changed warning to a less severe message
+		metadata["warnings"].append(f"Skipping Google Maps for seller in listing #{index}")
 		listing["seller"]["map_url"] = "N/A"
+
 
 	button_elements = await seller_div.query_selector_all(BUTTON_ELEMENTS)
 	stock_num = phone_num = "N/A"
