@@ -1,14 +1,9 @@
-import argparse
-import asyncio
-import json
-import logging
-import os
-import re
-import sys
+import argparse, asyncio, json, logging, os, sys
 from tqdm import tqdm
 from urllib.parse import urlencode
 from playwright.async_api import async_playwright, TimeoutError
 from visor_scraper.constants import *
+from visor_scraper.download import *
 from visor_scraper.utils import *
 
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
@@ -422,49 +417,6 @@ async def auto_scroll_to_load_all(page, metadata, max_listings, delay_ms=250):
 		await page.wait_for_timeout(delay_ms)  # Optional: wait a little extra for UI to settle
 
 	metadata["runtime"]["scrolls"] = i
-
-def save_listing_json(listing, folder):
-	path = os.path.join(folder, "listing.json")
-	with open(path, "w", encoding="utf-8") as f:
-		json.dump(listing, f, indent=2, ensure_ascii=False)
-
-	return path
-
-async def download_sticker(request, listing, folder):
-	url = listing.get("additional_docs", {}).get("window_sticker_url")
-	if not url or url == "Unavailable" :
-		return False
-	
-	path = os.path.join(folder, "sticker.pdf")
-	# skip if already present
-	if os.path.exists(path) and os.path.getsize(path) > 0:
-		return True
-
-	resp = await request.get(url)
-	if not resp.ok:
-		# optional: log/collect failures here
-		return False
-	with open(path, "wb") as f:
-		f.write(await resp.body())
-	return True
-
-async def download_carfax(listing):
-	return
-
-async def download_files(listings):
-	async with async_playwright() as pw:
-		req = await pw.request.new_context()
-		for lst in tqdm(listings, desc="Downloading window stickers", unit="car"):
-			# Title and VIN will always have a value
-			title = lst.get("title")
-			vin = lst.get("vin")	
-			folder = os.path.join("output", title, vin)
-			os.makedirs(folder, exist_ok=True)
-
-			save_listing_json(lst, folder)
-			await download_sticker(req, lst, folder)
-
-		await req.dispose()
 
 async def scrape(args):
 	metadata = build_metadata(args)
