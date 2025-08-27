@@ -170,13 +170,10 @@ async def extract_install_options(page, listing, index, metadata):
 	}
 
 	try:
-		no_opts = await page.query_selector("div.text-\\[\\#797979\\]")
+		no_opts = await page.query_selector("text=No options found")
 		if no_opts:
-			text = (await no_opts.inner_text()).strip()
-			if text == "No options found":
-				# Bail early, don’t log anything
-				return
-		
+			return
+				
 		await page.wait_for_selector(ADDON_LI_ELEMENTS, timeout=2000)
 		addon_elements = page.query_selector_all(ADDON_LI_ELEMENTS)
 		
