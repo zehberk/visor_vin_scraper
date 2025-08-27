@@ -355,7 +355,7 @@ async def extract_listings(browser, page, metadata, max_listings=50):
 			except:
 				msg = f"Failed to extract the full details on listing #{index}"
 				metadata["warnings"].append(msg)
-				logging.error(msg)
+				logging.error(msg)				
 			listings.append(listing)
 
 		except Exception as e:		# pragma: no cover
