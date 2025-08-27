@@ -440,7 +440,7 @@ async def scrape(args):
 		save_results(listings, metadata, args)				# pragma: no cover
 		await browser.close()								# pragma: no cover
 		
-	if listings:
+	if listings and args.save_docs:
 		await download_files(listings)
 
 def save_preset_if_requested(args):
@@ -521,6 +521,7 @@ def main():  # pragma: no cover
 	)
 
 	presets = parser.add_argument_group("Preset profiles")
+	docs = parser.add_argument_group("Documents")
 	required = parser.add_argument_group("Required arguments")
 	behavior = parser.add_argument_group("Scraper behavior")
 	filters = parser.add_argument_group("Search filters")
@@ -528,6 +529,8 @@ def main():  # pragma: no cover
 	
 	presets.add_argument("--preset", type=str, help="Optional preset name from presets.json")
 	presets.add_argument("--save-preset", action="store_true", help="Save this search as a preset")
+
+	docs.add_argument("--save_docs", action="store_true", help="Save the documents retrieved from the listings")
 
 	required.add_argument("--make", type=str, help="Vehicle make (e.g., Jeep)")
 	required.add_argument("--model", type=str, help="Vehicle model (e.g., Wrangler)")
