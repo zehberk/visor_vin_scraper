@@ -3,7 +3,7 @@ from tqdm import tqdm
 from urllib.parse import urlencode
 from playwright.async_api import async_playwright, TimeoutError
 from visor_scraper.constants import *
-from visor_scraper.download import *
+from visor_scraper.download import download_files
 from visor_scraper.utils import *
 
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
@@ -84,6 +84,7 @@ async def extract_warranty_info(page, listing, index, metadata):
 
 async def extract_additional_documents(page, listing, index, metadata):
 	listing.setdefault("additional_docs", {})
+	listing["additional_docs"]["autocheck_url"] = await get_url(page, AUTOCHECK_URL_ELEMENT, index, metadata)
 	listing["additional_docs"]["carfax_url"] = await get_url(page, CARFAX_URL_ELEMENT, index, metadata)
 	listing["additional_docs"]["window_sticker_url"] =  await get_url(page, WINDOW_STICKER_URL_ELEMENT, index, metadata)
 

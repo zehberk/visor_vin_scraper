@@ -42,6 +42,7 @@ COVERAGE_TYPE_ELEMENT = "div.bg-\\[\\#3B3B3B\\]"
 COVERAGE_STATUS_ELEMENT = "div.text-sm > div.text-sm"
 COVERAGE_LIMIT_ELEMENTS = "div.space-y-1"
 COVERAGE_LIMIT_VALUES_ELEMENTS = "div.flex.justify-between div.text-sm"
+AUTOCHECK_URL_ELEMENT = 'a[data-posthog-event="View AutoCheck Report"]'
 CARFAX_URL_ELEMENT = 'a[data-posthog-event="View Carfax Report"]'
 WINDOW_STICKER_URL_ELEMENT = 'a[data-posthog-event="View Window Sticker"]'
 # HTML element selectors for seller
