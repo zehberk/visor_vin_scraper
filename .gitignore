@@ -13,11 +13,15 @@ __pycache__/
 .coverage
 htmlcov/
 
+# Custom chrome profile
+.chrome_profile/*
+
 # User presets
 presets/presets.json
 
 # Output listing files
 *.json
+*.pdf
 !output/example_output.json
 !presets/presets.example.json
 
@@ -30,4 +34,3 @@ visor_scraper/test_script.py
 presets/presets.json
 playwright-profile/*
 evalutation_instructions.md
-*.pdf

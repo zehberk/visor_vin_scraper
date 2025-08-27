@@ -9,7 +9,7 @@ from playwright.async_api import async_playwright
 
 # --------- CONFIG (edit if needed) ----------
 CHROME_EXE    = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
-USER_DATA_DIR = r"C:\ChromeScraper_CDP"   # dedicated profile for Carfax auth
+USER_DATA_DIR = str(f"{os.path.abspath(os.getcwd())}/.chrome_profile")   # dedicated profile for Carfax auth, must use absolute path
 DEVTOOLS_PORT = 9223                      # pick an open port
 
 OUTPUT_ROOT   = "output"                  # matches scraper.py
