@@ -21,7 +21,9 @@ presets/presets.json
 
 # Output listing files
 *.json
+*.jsonc
 *.pdf
+*.txt
 !output/example_output.json
 !presets/presets.example.json
 

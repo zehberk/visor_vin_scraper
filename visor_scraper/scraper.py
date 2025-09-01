@@ -5,6 +5,7 @@ from playwright.async_api import async_playwright, TimeoutError
 from visor_scraper.constants import *
 from visor_scraper.download import download_files
 from visor_scraper.utils import *
+from prompts.level1 import create_level1_file
 
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 
@@ -373,11 +374,13 @@ async def safe_vin(card, index, metadata):
 		return None
 
 def save_results(listings, metadata, args, output_dir="output"):
-	filename = f"{args.make}_{args.model}_listings_{current_timestamp()}.json".replace(" ", "_")
+	ts = current_timestamp()
+	filename = f"{args.make}_{args.model}_listings_{ts}.json".replace(" ", "_")
 	path = os.path.join(output_dir, filename)
 	with open(path, "w", encoding="utf-8") as f:
 		json.dump({"metadata": metadata, "listings": listings}, f, indent=2, ensure_ascii=False)
 	print(f"Saved {len(listings)} listings to {path}")
+	return ts
 
 async def auto_scroll_to_load_all(page, metadata, max_listings, delay_ms=250):
 	previous_count = 0
@@ -438,9 +441,10 @@ async def scrape(args):
 		listings = await extract_listings(browser, page, metadata, args.max_listings)	# pragma: no cover
 		if (len(listings) == 0):
 			metadata["warnings"].append("No listings found. Please check your input and try again")
-		save_results(listings, metadata, args)				# pragma: no cover
+		timestamp = save_results(listings, metadata, args)	# pragma: no cover
 		await browser.close()								# pragma: no cover
-		
+	if listings:
+		level1_path = create_level1_file(listings, metadata, args, timestamp)
 	if listings and args.save_docs:
 		await download_files(listings)
 
