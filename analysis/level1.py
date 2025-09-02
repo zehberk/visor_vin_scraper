@@ -88,127 +88,123 @@ LEVEL_ONE_PROMPT = """// LEVEL 1 LISTING ANALYSIS — READ ME FIRST
 // }
 """
 
+
 def _bool_from_url(val: str | None) -> bool:
-	"""True iff a usable URL string appears present (not 'Unavailable'/empty/None)."""
-	if not val:
-		return False
-	s = str(val).strip().lower()
-	return s not in {"", "unavailable", "n/a", "none", "null"}
+    """True iff a usable URL string appears present (not 'Unavailable'/empty/None)."""
+    if not val:
+        return False
+    s = str(val).strip().lower()
+    return s not in {"", "unavailable", "n/a", "none", "null"}
+
 
 def _price_history_lowest(price_history: list[dict] | None) -> bool:
-	"""True if any entry marks lowest=True."""
-	if not price_history:
-		return False
-	for p in price_history:
-		try:
-			if bool(p.get("lowest")):
-				return True
-		except Exception:
-			pass
-	return False
+    """True if any entry marks lowest=True."""
+    if not price_history:
+        return False
+    for p in price_history:
+        try:
+            if bool(p.get("lowest")):
+                return True
+        except Exception:
+            pass
+    return False
+
 
 def _days_on_market(listing: dict) -> int | None:
-	"""Pull DOM from common locations."""
-	# Preferred: nested velocity block
-	try:
-		dom = listing.get("market_velocity", {}).get("this_vehicle_days")
-		avg = listing.get("market_velocity", {}).get("avg_days_on_market")
-		return int(dom) - int(avg) if dom is not None and avg is not None else None
-	except Exception:
-		pass
-	return None
+    """Pull DOM from common locations."""
+    # Preferred: nested velocity block
+    try:
+        dom = listing.get("market_velocity", {}).get("this_vehicle_days")
+        avg = listing.get("market_velocity", {}).get("avg_days_on_market")
+        return int(dom) - int(avg) if dom is not None and avg is not None else None
+    except Exception:
+        pass
+    return None
+
 
 def build_quicklist(slimmed: list[dict], make: str, model: str) -> str:
-	"""
-	Returns a comment block listing unique year+trim combos, e.g.:
-	// UNIQUE YEAR+TRIM (deduped)
-	// 2024 RAM 1500 Laramie RWD
-	// 2025 RAM 1500 Laramie 4WD
-	"""
-	def _year_key(t: str) -> int:
-		m = re.match(r"^\s*(\d{4})\b", t)
-		return int(m.group(1)) if m else 9999
-	
-	titles = [str(l.get("title", "")) for l in slimmed if l.get("title")]
-	unique = sorted(set(titles), key=lambda t: (_year_key(t), t.lower()))
-	lines = ["//", "// QUICKLIST - unique (year+trim) for one-call lookups"]
-	lines += [f"// {title}" for title in unique]
-	return "\n".join(lines) + "\n"
+    """
+    Returns a comment block listing unique year+trim combos, e.g.:
+    // UNIQUE YEAR+TRIM (deduped)
+    // 2024 RAM 1500 Laramie RWD
+    // 2025 RAM 1500 Laramie 4WD
+    """
+
+    def _year_key(t: str) -> int:
+        m = re.match(r"^\s*(\d{4})\b", t)
+        return int(m.group(1)) if m else 9999
+
+    titles = [str(l.get("title", "")) for l in slimmed if l.get("title")]
+    unique = sorted(set(titles), key=lambda t: (_year_key(t), t.lower()))
+    lines = ["//", "// QUICKLIST - unique (year+trim) for one-call lookups"]
+    lines += [f"// {title}" for title in unique]
+    return "\n".join(lines) + "\n"
+
 
 def _slim(listing: dict) -> dict:
-	"""Convert a raw listing into the minimal Level-1 schema."""
-	# Price/mileage may be strings like "$32,500" or "52,025 mi"
-	def _to_int(val):
-		if val is None:
-			return None
-		if isinstance(val, (int, float)):
-			return int(val)
-		chars = "".join(ch for ch in str(val) if ch.isdigit())
-		return int(chars) if chars else None
-	
-	addl = listing.get("additional_docs", {}) or {}
-	carfax_present = _bool_from_url(addl.get("carfax_url"))
-	autocheck_present = _bool_from_url(addl.get("autocheck_url"))
-	sticker_present = _bool_from_url(addl.get("window_sticker_url"))
+    """Convert a raw listing into the minimal Level-1 schema."""
 
-	war = listing.get("warranty", {}) or {}
-	# Treat "present" as: either a non-unknown overall_status or any coverages listed
-	warranty_present = bool(war.get("coverages")) or (
-		str(war.get("overall_status", "")).strip().lower() not in {"", "unknown", "n/a", "none"}
-	)
+    # Price/mileage may be strings like "$32,500" or "52,025 mi"
+    def _to_int(val):
+        if val is None:
+            return None
+        if isinstance(val, (int, float)):
+            return int(val)
+        chars = "".join(ch for ch in str(val) if ch.isdigit())
+        return int(chars) if chars else None
 
-	return {
-		"id": listing.get("id"),
-		"vin": listing.get("vin"),
-		"title": listing.get("title"),
-		"price": _to_int(listing.get("price")),
-		"mileage": _to_int(listing.get("mileage")),
-		"days_on_market_delta": _days_on_market(listing),
-		"price_history_lowest": _price_history_lowest(listing.get("price_history")),
-		"report_present": carfax_present or autocheck_present,
-		"window_sticker_present": sticker_present,
-		"warranty_info_present": warranty_present
-	}
+    addl = listing.get("additional_docs", {}) or {}
+    carfax_present = _bool_from_url(addl.get("carfax_url"))
+    autocheck_present = _bool_from_url(addl.get("autocheck_url"))
+    sticker_present = _bool_from_url(addl.get("window_sticker_url"))
 
-def create_level1_file(listings: list[dict], metadata: dict, args, timestamp: str) -> Path:
-	"""
-	Builds 'level1_input_<Make>_<Model>_<Timestamp>.jsonc' next to your outputs.
-	Returns the file path.
-	Call this AFTER you've saved listings.json and closed the browser.
-	"""
-	if not listings:
-		raise ValueError("No listings provided to create_level1_file().")
+    war = listing.get("warranty", {}) or {}
+    # Treat "present" as: either a non-unknown overall_status or any coverages listed
+    warranty_present = bool(war.get("coverages")) or (
+        str(war.get("overall_status", "")).strip().lower()
+        not in {"", "unknown", "n/a", "none"}
+    )
 
-	# Derive make/model from args when available; else from first listing/title.
-	make = (getattr(args, "make", None) or listings[0].get("make") or "Unknown")
-	model = (getattr(args, "model", None) or listings[0].get("model") or "Unknown")
+    return {
+        "id": listing.get("id"),
+        "vin": listing.get("vin"),
+        "title": listing.get("title"),
+        "price": _to_int(listing.get("price")),
+        "mileage": _to_int(listing.get("mileage")),
+        "days_on_market_delta": _days_on_market(listing),
+        "price_history_lowest": _price_history_lowest(listing.get("price_history")),
+        "report_present": carfax_present or autocheck_present,
+        "window_sticker_present": sticker_present,
+        "warranty_info_present": warranty_present,
+    }
 
-	# Slim all listings
-	slimmed = [_slim(l) for l in listings if l is not None]
-	quicklist = build_quicklist(slimmed, make, model)
 
-	payload = { "listings": slimmed }
+def create_level1_file(
+    listings: list[dict], metadata: dict, args, timestamp: str
+) -> Path:
+    """
+    Builds 'level1_input_<Make>_<Model>_<Timestamp>.jsonc' next to your outputs.
+    Returns the file path.
+    Call this AFTER you've saved listings.json and closed the browser.
+    """
+    if not listings:
+        raise ValueError("No listings provided to create_level1_file().")
 
-	# Output pathing
-	out_dir = Path("output") / "level1"
-	out_dir.mkdir(parents=True, exist_ok=True)
-	out_path = out_dir / f"level1_input_{make}_{model}_{timestamp}.jsonc"
+    # Derive make/model from args when available; else from first listing/title.
+    make = getattr(args, "make", None) or listings[0].get("make") or "Unknown"
+    model = getattr(args, "model", None) or listings[0].get("model") or "Unknown"
 
-	# Helpful provenance comments to prepend
-	source_name = None
-	try:
-		source_name = metadata.get("runtime", {}).get("output_json") or metadata.get("runtime", {}).get("url")
-	except Exception:
-		pass
+    # Slim all listings
+    slimmed = [_slim(l) for l in listings if l is not None]
+    payload = {"listings": slimmed}
 
-	header = LEVEL_ONE_PROMPT.rstrip() + "\n" + quicklist + "\n"
-	if source_name:
-		header += f"// source: {source_name}\n"
+    # Output pathing
+    out_dir = Path("output") / "level1"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / f"level1_{make}_{model}_{timestamp}.json"
 
-	# Write header (comments) + JSON data
-	with out_path.open("w", encoding="utf-8") as f:
-		f.write(header)
-		json.dump(payload, f, ensure_ascii=False, indent=2)
-		f.write("\n")
+    # Write header (comments) + JSON data
+    with out_path.open("w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
 
-	return out_path
+    return out_path
