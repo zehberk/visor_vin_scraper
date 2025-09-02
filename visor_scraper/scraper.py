@@ -546,10 +546,10 @@ async def scrape(args):
             )
         timestamp = save_results(listings, metadata, args)  # pragma: no cover
         await browser.close()  # pragma: no cover
+    if args.save_docs:
+        await download_files(listings)
     if listings:
         level1_path = create_level1_file(listings, metadata, args, timestamp)
-    if listings and args.save_docs:
-        await download_files(listings)
 
 
 def save_preset_if_requested(args):
