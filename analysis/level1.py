@@ -2,16 +2,118 @@ from __future__ import annotations
 
 import json, re, time
 
+from collections import defaultdict
 from datetime import datetime, timedelta
 from jinja2 import Environment, FileSystemLoader
 from pathlib import Path
 from playwright.async_api import async_playwright
+from typing import Optional
 
 from analysis.models import CarListing, DealBin, TrimValuation
 from visor_scraper.utils import make_string_url_safe
 
 CACHE_FILE = Path("output") / "level1_fmv_cache.json"
 CACHE_TTL = timedelta(days=7)
+
+DEAL_ORDER = ["Great", "Good", "Fair", "Poor", "Bad"]
+COND_ORDER = ["New", "Certified", "Used"]
+
+
+def _deviation_pct(price: int | float, fmv: int | float | None) -> Optional[float]:
+    if fmv and fmv > 0 and isinstance(price, (int, float)):
+        return ((price - fmv) / fmv) * 100.0
+    return None
+
+
+def build_bins_and_crosstab(listings: list[CarListing]) -> tuple[list[DealBin], dict]:
+    """
+    Returns (deal_bins:list[DealBin], crosstab:dict)
+    - deal_bins includes avg_deviation_pct, condition_counts, percent_of_total
+    - crosstab is a nested dict: {bin: {condition: count}}
+    """
+    # totals
+    total = 0
+    for row in listings:
+        if row.deviation_pct is None:
+            row.deviation_pct = _deviation_pct(row.price, row.fmv)
+        total += 1
+
+    # group by bin
+    by_bin: dict[str, list[CarListing]] = {k: [] for k in DEAL_ORDER}
+    for row in listings:
+        if row.deal_rating in by_bin:
+            by_bin[row.deal_rating].append(row)
+
+    # cross-tab counts
+    crosstab: dict[str, dict[str, int]] = {
+        b: {c: 0 for c in COND_ORDER} for b in DEAL_ORDER
+    }
+    for row in listings:
+        if row.deal_rating in DEAL_ORDER and row.condition in COND_ORDER:
+            crosstab[row.deal_rating][row.condition] += 1
+
+    # build DealBin objects with summaries
+    deal_bins: list[DealBin] = []
+    for b in DEAL_ORDER:
+        items = by_bin[b]
+        count = len(items)
+
+        # avg deviation (only valid numbers)
+        sum_dev = 0.0
+        n_dev = 0
+        for r in items:
+            if isinstance(r.deviation_pct, (int, float)):
+                sum_dev += r.deviation_pct
+                n_dev += 1
+        avg_dev = (sum_dev / n_dev) if n_dev else None
+
+        # condition breakdown for this bin
+        cond_counts = {c: crosstab[b][c] for c in COND_ORDER}
+
+        deal_bins.append(
+            DealBin(
+                category=b,
+                listings=items,
+                count=count,
+                avg_deviation_pct=avg_dev,
+                condition_counts=cond_counts,
+                percent_of_total=(count / total * 100.0) if total else 0.0,
+            )
+        )
+
+    return deal_bins, crosstab
+
+
+def compute_condition_distribution_total(
+    all_listings: list[CarListing],
+    no_price_bin: DealBin | None = None,
+) -> dict[str, int]:
+    counts = {c: 0 for c in COND_ORDER}
+
+    def bump(c: str | None):
+        c = c if c in counts else "Used"  # keep matrix tidy
+        counts[c] += 1
+
+    for r in all_listings:
+        bump(getattr(r, "condition", None))
+
+    if no_price_bin:
+        for r in no_price_bin.listings:
+            bump(getattr(r, "condition", None))
+
+    return counts
+
+
+def to_level1_json(
+    make: str, model: str, sort: str, deal_bins: list[DealBin], crosstab: dict
+) -> dict:
+    return {
+        "make": make,
+        "model": model,
+        "sort": sort,  # e.g., "newest" | "cheapest" | "relevance"
+        "deal_bins": [b.to_dict() for b in deal_bins],
+        "deal_condition_matrix": crosstab,  # {bin:{condition:count}}
+    }
 
 
 async def render_pdf(
@@ -25,6 +127,8 @@ async def render_pdf(
     poor_bin: DealBin,
     bad_bin: DealBin,
     no_price_bin: DealBin,
+    analysis_json: dict,
+    crosstab: dict,
     out_file=None,
 ):
     env = Environment(loader=FileSystemLoader("templates"))
@@ -53,12 +157,14 @@ async def render_pdf(
         report_title=report_title,
         cache_entries=cache_entries,
         trim_valuations=[e.to_dict() for e in trim_valuations],
-        great_bin=great_bin.to_dict(),
-        good_bin=good_bin.to_dict(),
-        fair_bin=fair_bin.to_dict(),
-        poor_bin=poor_bin.to_dict(),
-        bad_bin=bad_bin.to_dict(),
-        no_price_bin=no_price_bin.to_dict(),
+        great_bin=great_bin,
+        good_bin=good_bin,
+        fair_bin=fair_bin,
+        poor_bin=poor_bin,
+        bad_bin=bad_bin,
+        no_price_bin=no_price_bin,
+        analysis=analysis_json,  # ← full payload
+        deal_condition_matrix=crosstab,  # ← handy shortcut if you want
         embedded_data=embedded_data,
     )
 
@@ -77,20 +183,6 @@ async def render_pdf(
         await browser.close()
 
     print(f"✅ PDF created at: {out_file.resolve()}")
-
-
-def load_latest_level1():
-    out_dir = Path("output") / "level1"
-    # Find all files that look like level1_<make>_<model>_<timestamp>.json
-    files = sorted(
-        out_dir.glob("level1_*.json"), key=lambda p: p.stat().st_mtime, reverse=True
-    )
-    if not files:
-        raise FileNotFoundError("No level1 JSON files found.")
-    latest = files[0]
-    with latest.open("r", encoding="utf-8") as f:
-        data = json.load(f)
-    return data["make"], data["model"], data["listings"]
 
 
 # region Cache Logic
@@ -492,6 +584,7 @@ def _slim(listing: dict) -> dict:
         "id": listing.get("id"),
         "vin": listing.get("vin"),
         "title": listing.get("title"),
+        "condition": listing.get("condition"),
         "price": _to_int(listing.get("price")),
         "mileage": _to_int(listing.get("mileage")),
         "days_on_market_delta": _days_on_market(listing),
@@ -502,9 +595,10 @@ def _slim(listing: dict) -> dict:
     }
 
 
-async def create_level1_file(metadata: dict):
+async def create_level1_file(listings: list[dict], metadata: dict):
     cache, slugs, trim_options, cache_entries = prepare_cache()
-    make, model, listings = load_latest_level1()
+    make = metadata["vehicle"]["make"]
+    model = metadata["vehicle"]["make"]
     vin = listings[0]["vin"]
     quicklist = build_quicklist(listings)
     years = extract_years(quicklist)
@@ -520,12 +614,9 @@ async def create_level1_file(metadata: dict):
             make, model, years, vin, trim_map, slugs, trim_options, cache_entries, cache
         )
 
-    great_bin = DealBin(category="Great", listings=[], count=0)
-    good_bin = DealBin(category="Good", listings=[], count=0)
-    fair_bin = DealBin(category="Fair", listings=[], count=0)
-    poor_bin = DealBin(category="Poor", listings=[], count=0)
-    bad_bin = DealBin(category="Bad", listings=[], count=0)
     no_price_bin = DealBin(category="No Price", listings=[], count=0)
+    all_listings: list[CarListing] = []
+    seen_ids: set[str] = set()  # guard if input has dupes
 
     for listing in listings:
         fmv = cache_entries[listing["title"]]["fmv"]
@@ -536,6 +627,7 @@ async def create_level1_file(metadata: dict):
             price = 0
             delta = 0
 
+        deal = rate_deal(price, delta, fmv)
         uncertainty = rate_uncertainty(listing)
         risk = rate_risk(listing, price, fmv)
 
@@ -543,32 +635,45 @@ async def create_level1_file(metadata: dict):
             id=listing["id"],
             vin=listing["vin"],
             title=listing["title"],
+            condition=listing["condition"],
             miles=listing["mileage"],
             price=price,
             price_delta=delta,
             uncertainty=uncertainty,
             risk=risk,
+            deal_rating=deal,
+            fmv=fmv,
+            deviation_pct=_deviation_pct(price, fmv),
         )
 
-        deal = rate_deal(price, delta, fmv)
-        if deal == "Great":
-            great_bin.listings.append(car_listing)
-            great_bin.count += 1
-        elif deal == "Good":
-            good_bin.listings.append(car_listing)
-            good_bin.count += 1
-        elif deal == "Fair":
-            fair_bin.listings.append(car_listing)
-            fair_bin.count += 1
-        elif deal == "Poor":
-            poor_bin.listings.append(car_listing)
-            poor_bin.count += 1
-        elif deal == "Bad":
-            bad_bin.listings.append(car_listing)
-            bad_bin.count += 1
-        else:
+        if deal == "No price":
             no_price_bin.listings.append(car_listing)
             no_price_bin.count += 1
+            continue
+
+        # single append, guarded
+        if car_listing.id not in seen_ids:
+            seen_ids.add(car_listing.id)
+            all_listings.append(car_listing)
+
+    deal_bins, crosstab = build_bins_and_crosstab(all_listings)
+    bin_map = {b.category: b for b in deal_bins}
+    great_bin = bin_map["Great"]
+    good_bin = bin_map["Good"]
+    fair_bin = bin_map["Fair"]
+    poor_bin = bin_map["Poor"]
+    bad_bin = bin_map["Bad"]
+
+    cond_dist_total = compute_condition_distribution_total(all_listings, no_price_bin)
+
+    analysis_json = to_level1_json(
+        make=make,
+        model=model,
+        sort=metadata["filters"]["sort"],  # already available in start_level1_analysis
+        deal_bins=deal_bins,
+        crosstab=crosstab,
+    )
+    analysis_json["condition_distribution"] = cond_dist_total
 
     await render_pdf(
         make,
@@ -581,12 +686,14 @@ async def create_level1_file(metadata: dict):
         poor_bin,
         bad_bin,
         no_price_bin,
+        analysis_json,
+        crosstab,
     )
 
 
 async def start_level1_analysis(
     listings: list[dict], metadata: dict, args, timestamp: str
-) -> Path:
+):
     """
     Builds 'level1_input_<Make>_<Model>_<Timestamp>.jsonc' next to your outputs.
     Returns the file path.
@@ -595,23 +702,7 @@ async def start_level1_analysis(
     if not listings:
         raise ValueError("No listings provided to create_level1_file().")
 
-    # Derive make/model from args when available; else from first listing/title.
-    make = getattr(args, "make", None) or listings[0].get("make") or "Unknown"
-    model = getattr(args, "model", None) or listings[0].get("model") or "Unknown"
-
     # Slim all listings
     slimmed = [_slim(l) for l in listings if l is not None]
-    payload = {"make": make, "model": model, "listings": slimmed}
 
-    # Output pathing
-    out_dir = Path("output") / "level1"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / f"level1_{make}_{model}_{timestamp}.json"
-
-    # Write header (comments) + JSON data
-    with out_path.open("w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False, indent=2)
-
-    await create_level1_file(metadata)
-
-    return out_path
+    await create_level1_file(slimmed, metadata)
