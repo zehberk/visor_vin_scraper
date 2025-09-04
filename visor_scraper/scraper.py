@@ -5,7 +5,7 @@ from playwright.async_api import async_playwright, TimeoutError
 from visor_scraper.constants import *
 from visor_scraper.download import download_files
 from visor_scraper.utils import *
-from analysis.level1 import create_level1_file
+from analysis.level1 import start_level1_analysis
 
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 
@@ -549,7 +549,7 @@ async def scrape(args):
     if args.save_docs:
         await download_files(listings)
     if listings:
-        level1_path = create_level1_file(listings, metadata, args, timestamp)
+        level1_path = await start_level1_analysis(listings, metadata, args, timestamp)
 
 
 def save_preset_if_requested(args):
