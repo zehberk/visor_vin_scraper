@@ -533,6 +533,9 @@ async def extract_listings(browser, page, metadata, max_listings=50):
         try:
             title = await safe_text(card, TITLE_ELEMENT, f"title #{index}", metadata)
             price = await safe_text(card, PRICE_ELEMENT, f"price #{index}", metadata)
+            condition = await safe_text(
+                card, CONDITION_ELEMENT, f"condition #{index}", metadata
+            )
             mileage = await safe_text(
                 card, MILEAGE_ELEMENT, f"mileage ${index}", metadata
             )
@@ -542,6 +545,7 @@ async def extract_listings(browser, page, metadata, max_listings=50):
                 "id": index,
                 "title": title,
                 "price": price,
+                "condition": condition,
                 "mileage": mileage,
                 "vin": vin,
             }

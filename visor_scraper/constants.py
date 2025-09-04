@@ -7,7 +7,7 @@ PRESET_PATH = Path(__file__).parent.parent / "presets" / "presets.json"
 BASE_URL = "https://visor.vin/search/listings"
 VIN_DETAILS_URL = BASE_URL + "/{vin}"
 
-CONDITIONS = {"New", "Used", "Certified"} # Vehicle conditions
+CONDITIONS = {"New", "Used", "Certified"}  # Vehicle conditions
 SORT_OPTIONS = {
     "Lowest Price": "cheapest",
     "Highest Price": "expensive",
@@ -16,12 +16,12 @@ SORT_OPTIONS = {
     "Lowest Mileage": "lowest_miles",
     "Highest Mileage": "highest_miles",
 }
-PARAM_NAME_OVERRIDES = {        # For user-friendly parameter names
+PARAM_NAME_OVERRIDES = {  # For user-friendly parameter names
     "condition": "car_type",
     "min_miles": "miles_min",
     "max_miles": "miles_max",
     "min_price": "price_min",
-    "max_price": "price_max"
+    "max_price": "price_max",
 }
 MAX_LISTINGS = 500  # Maximum listings to retrieve
 
@@ -30,6 +30,9 @@ NO_LISTINGS_FOUND_TEXT = "No listings to see"
 LISTING_CARD_SELECTOR = "a[href^='/search/listings/']"
 TITLE_ELEMENT = "h2"
 PRICE_ELEMENT = "div.absolute.bottom-2.left-2 > span"
+CONDITION_ELEMENT = (
+    "div.inline-flex.items-center.border.font-semibold.transition-colors.text-white"
+)
 MILEAGE_ELEMENT = "div.flex.flex-row.gap-x-2 > div.text-sm"
 SCROLL_CONTAINER_SELECTOR = "div.h-dvh.overflow-y-auto"
 
@@ -47,17 +50,17 @@ CARFAX_URL_ELEMENT = 'a[data-posthog-event="View Carfax Report"]'
 WINDOW_STICKER_URL_ELEMENT = 'a[data-posthog-event="View Window Sticker"]'
 # HTML element selectors for seller
 LISTING_URL_ELEMENT = 'a[data-posthog-event="View Listing"]'
-SELLER_BLOCK_ELEMENT = 'td.p-3.border-input.align-middle.space-y-1\\.5 div.space-y-2'
-SELLER_NAME_ELEMENT = 'div.order-2'
+SELLER_BLOCK_ELEMENT = "td.p-3.border-input.align-middle.space-y-1\\.5 div.space-y-2"
+SELLER_NAME_ELEMENT = "div.order-2"
 GOOGLE_MAP_ELEMENT = 'a[data-posthog-event="Google Maps"]'
 BUTTON_ELEMENTS = 'button[data-slot="tooltip-trigger"]'
-STOCK_NUM_ELEMENT = 'div > div'
-PHONE_NUM_ELEMENT = 'div'
+STOCK_NUM_ELEMENT = "div > div"
+PHONE_NUM_ELEMENT = "div"
 # HTML element selectors for market velocity
 VELOCITY_ELEMENTS = "div.space-y-4 div.grid.gap-4 div.bg-\\[\\#F6F6F6\\]"
 VELOCITY_SECTION_ELEMENTS = "div.space-y-4 div.grid.gap-4 div.bg-\\[\\#F6F6F6\\]"
 VEHICLE_SOLD_ELEMENT = "div.text-lg"
-DAYS_ON_MARKET_ELEMENT = 'div.flex div.text-sm.font-medium'
+DAYS_ON_MARKET_ELEMENT = "div.flex div.text-sm.font-medium"
 DEMAND_ELEMENT = "div.text-lg.font-medium"
 # HTML element selectors for vehicle specs
 SPEC_TABLE_ELEMENT = "tbody.w-full"
