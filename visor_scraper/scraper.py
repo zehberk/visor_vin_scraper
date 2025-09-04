@@ -1,13 +1,75 @@
 import argparse, asyncio, json, logging, os, sys
+from datetime import date
+from pathlib import Path
+from playwright.async_api import async_playwright, TimeoutError
 from tqdm import tqdm
 from urllib.parse import urlencode
-from playwright.async_api import async_playwright, TimeoutError
+
+from analysis.level1 import start_level1_analysis
 from visor_scraper.constants import *
 from visor_scraper.download import download_files
 from visor_scraper.utils import *
-from analysis.level1 import start_level1_analysis
 
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
+
+# region Cache Logic
+
+CACHE_FILE = Path("output/listings_cache.json")
+
+
+def load_cache() -> dict:
+    if CACHE_FILE.exists():
+        try:
+            return json.loads(CACHE_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+    return {}
+
+
+def save_cache(cache: dict) -> None:
+    CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    CACHE_FILE.write_text(
+        json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+
+def _today_key() -> str:
+    return date.today().isoformat()
+
+
+def _fingerprint(args) -> str:
+    parts = [
+        (args.make or "").lower().strip(),
+        (args.model or "").lower().strip(),
+        ",".join(sorted(args.trim)) if getattr(args, "trim", None) else "",
+        ",".join(args.year) if getattr(args, "year", None) else "",
+        args.sort,
+        str(args.max_listings),
+        ",".join(args.condition) if getattr(args, "condition", None) else "",
+        getattr(args, "price", "")
+        or f"{getattr(args,'min_price','')}-{getattr(args,'max_price','')}",
+        getattr(args, "miles", "")
+        or f"{getattr(args,'min_miles','')}-{getattr(args,'max_miles','')}",
+    ]
+    return "|".join(parts)
+
+
+def _cache_key(args) -> str:
+    return f"{_today_key()}|{_fingerprint(args)}"
+
+
+def try_get_cached_filename(args) -> str | None:
+    cache = load_cache()
+    return cache.get(_cache_key(args))
+
+
+def put_cached_filename(args, filename: str) -> None:
+    cache = load_cache()
+    cache[_cache_key(args)] = filename
+    save_cache(cache)
+
+
+# endregion
 
 
 async def fetch_page(page, url):
@@ -44,6 +106,9 @@ async def extract_numbers_from_sidebar(page, metadata):
             logging.info(
                 f"Total for sale nationwide: {metadata["site_info"]['total_for_sale']}"
             )
+
+
+# region Listing-specific functions and logic
 
 
 async def parse_warranty_coverage(coverage, index, metadata):
@@ -401,6 +466,53 @@ async def extract_full_listing_details(browser, listing, index, metadata):
         await detail_page.close()
 
 
+# endregion
+
+
+async def auto_scroll_to_load_all(page, metadata, max_listings, delay_ms=250):
+    previous_count = 0
+    i = 0
+    print(f"Starting auto-scroll to load up to {max_listings} listings...")
+
+    while True:
+        cards = await page.query_selector_all(LISTING_CARD_SELECTOR)
+        current_count = len(cards)
+
+        print(f"\tFound {current_count} listings...")
+
+        if current_count >= int(max_listings):
+            print(f"\tStopping at {max_listings} (cap reached).")
+            break
+
+        if current_count == previous_count:
+            print(f"\tScroll ended at {current_count} listings (no more found).")
+            break
+
+        previous_count = current_count
+        i += 1
+
+        await page.evaluate(
+            f"""
+			const container = document.querySelector('{SCROLL_CONTAINER_SELECTOR}');
+			if (container) container.scrollTop = container.scrollHeight;
+		"""
+        )
+
+        try:
+            await page.wait_for_selector(
+                f"{LISTING_CARD_SELECTOR} >> nth={previous_count}", timeout=5000
+            )
+        except:
+            logging.info("No new listings detected after scroll wait.")
+            break
+
+        await page.wait_for_timeout(
+            delay_ms
+        )  # Optional: wait a little extra for UI to settle
+
+    metadata["runtime"]["scrolls"] = i
+
+
 async def extract_listings(browser, page, metadata, max_listings=50):
     listings = []
     cards = await page.query_selector_all(LISTING_CARD_SELECTOR)
@@ -474,51 +586,21 @@ def save_results(listings, metadata, args, output_dir="output"):
     return ts
 
 
-async def auto_scroll_to_load_all(page, metadata, max_listings, delay_ms=250):
-    previous_count = 0
-    i = 0
-    print(f"Starting auto-scroll to load up to {max_listings} listings...")
-
-    while True:
-        cards = await page.query_selector_all(LISTING_CARD_SELECTOR)
-        current_count = len(cards)
-
-        print(f"\tFound {current_count} listings...")
-
-        if current_count >= int(max_listings):
-            print(f"\tStopping at {max_listings} (cap reached).")
-            break
-
-        if current_count == previous_count:
-            print(f"\tScroll ended at {current_count} listings (no more found).")
-            break
-
-        previous_count = current_count
-        i += 1
-
-        await page.evaluate(
-            f"""
-			const container = document.querySelector('{SCROLL_CONTAINER_SELECTOR}');
-			if (container) container.scrollTop = container.scrollHeight;
-		"""
-        )
-
-        try:
-            await page.wait_for_selector(
-                f"{LISTING_CARD_SELECTOR} >> nth={previous_count}", timeout=5000
-            )
-        except:
-            logging.info("No new listings detected after scroll wait.")
-            break
-
-        await page.wait_for_timeout(
-            delay_ms
-        )  # Optional: wait a little extra for UI to settle
-
-    metadata["runtime"]["scrolls"] = i
-
-
 async def scrape(args):
+    # Try cache before touching the browser
+    cached_file = try_get_cached_filename(args)
+    if cached_file and Path(cached_file).exists():
+        print(f"Using cached listings file for today: {cached_file}")
+        with open(cached_file, encoding="utf-8") as f:
+            payload = json.load(f)
+        listings, metadata = payload["listings"], payload["metadata"]
+
+        timestamp = Path(cached_file).stem.split("_")[-1]
+        if args.save_docs:
+            await download_files(listings)
+        await start_level1_analysis(listings, metadata, args, timestamp)
+        return
+
     metadata = build_metadata(args)
     query_params = build_query_params(args, metadata)
     url = f"{BASE_URL}?{urlencode(query_params)}"
@@ -545,11 +627,19 @@ async def scrape(args):
                 "No listings found. Please check your input and try again"
             )
         timestamp = save_results(listings, metadata, args)  # pragma: no cover
+        # register in cache
+        filename = f"output/{args.make}_{args.model}_listings_{timestamp}.json".replace(
+            " ", "_"
+        )
+        put_cached_filename(args, filename)
         await browser.close()  # pragma: no cover
     if args.save_docs:
         await download_files(listings)
     if listings:
-        level1_path = await start_level1_analysis(listings, metadata, args, timestamp)
+        await start_level1_analysis(listings, metadata, args, timestamp)
+
+
+# region Command-line logic
 
 
 def save_preset_if_requested(args):
@@ -627,6 +717,9 @@ def resolve_args(args):
         exit(1)
 
     return args
+
+
+# endregion
 
 
 # Entry point
