@@ -38,12 +38,13 @@ def _today_key() -> str:
 
 
 def _fingerprint(args) -> str:
+    sort_key = SORT_OPTIONS.get(args.sort, args.sort)  # normalize
     parts = [
         (args.make or "").lower().strip(),
         (args.model or "").lower().strip(),
         ",".join(sorted(args.trim)) if getattr(args, "trim", None) else "",
         ",".join(args.year) if getattr(args, "year", None) else "",
-        args.sort,
+        sort_key,
         str(args.max_listings),
         ",".join(args.condition) if getattr(args, "condition", None) else "",
         getattr(args, "price", "")
