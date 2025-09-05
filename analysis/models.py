@@ -62,10 +62,13 @@ class CarListing:
     price_delta: int
     uncertainty: str
     risk: str
+    msrp: int
+    fpp: int
+    fmv: int
+    compare_price: int
     deal_rating: Optional[str] = (
         None  # "Great" | "Good" | "Fair" | "Poor" | "Bad" | None if no price
     )
-    fmv: Optional[int] = None
     deviation_pct: Optional[float] = None  # signed; negative = under FMV
 
     def __repr__(self):
@@ -79,8 +82,11 @@ class CarListing:
             f"price_delta={self.price_delta!r}, "
             f"uncertainty={self.uncertainty!r}, "
             f"risk={self.risk!r}, "
-            f"deal_rating={self.deal_rating!r}, "
+            f"msrp={self.msrp!r}, "
+            f"fpp={self.fpp!r}, "
             f"fmv={self.fmv!r}, "
+            f"compare_price={self.compare_price!r}, "
+            f"deal_rating={self.deal_rating!r}, "
             f"deviation_pct={self.deviation_pct!r})"
         )
 
@@ -95,8 +101,11 @@ class CarListing:
             "price_delta": self.price_delta,
             "uncertainty": self.uncertainty,
             "risk": self.risk,
-            "deal_rating": self.deal_rating,
+            "msrp": self.msrp,
+            "fpp": self.fpp,
             "fmv": self.fmv,
+            "compare_price": self.compare_price,
+            "deal_rating": self.deal_rating,
             "deviation_pct": self.deviation_pct,
         }
 
@@ -112,8 +121,11 @@ class CarListing:
             price_delta=data["price_delta"],
             uncertainty=data["uncertainty"],
             risk=data["risk"],
-            deal_rating=data["deal_rating"],
+            msrp=data["msrp"],
+            fpp=data["fpp"],
             fmv=data["fmv"],
+            compare_price=data["compare_price"],
+            deal_rating=data["deal_rating"],
             deviation_pct=data["deviation_pct"],
         )
 

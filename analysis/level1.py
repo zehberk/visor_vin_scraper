@@ -18,9 +18,11 @@ DEAL_ORDER = ["Great", "Good", "Fair", "Poor", "Bad"]
 COND_ORDER = ["New", "Certified", "Used"]
 
 
-def _deviation_pct(price: int | float, fmv: int | float | None) -> Optional[float]:
-    if fmv and fmv > 0 and isinstance(price, (int, float)):
-        return ((price - fmv) / fmv) * 100.0
+def _deviation_pct(
+    price: int | float, compare_price: int | float | None
+) -> Optional[float]:
+    if compare_price and compare_price > 0 and isinstance(price, (int, float)):
+        return ((price - compare_price) / compare_price) * 100.0
     return None
 
 
@@ -560,17 +562,23 @@ def rate_uncertainty(listing) -> str:
         return "Low"
 
 
-def rate_deal(price, delta, fmv) -> str:
+def rate_deal(price, delta, compare_price) -> str:
     if price == 0:
         return "No price"
 
-    if delta <= -2000 or price <= fmv * 0.93:
+    if delta <= -2000 or price <= compare_price * 0.93:
         return "Great"
-    elif (-2000 < delta <= -1000) or (fmv * 0.93 < price <= fmv * 0.97):
+    elif (-2000 < delta <= -1000) or (
+        compare_price * 0.93 < price <= compare_price * 0.97
+    ):
         return "Good"
-    elif (-999 <= delta <= 999) or (fmv * 0.97 < price < fmv * 1.03):
+    elif (-999 <= delta <= 999) or (
+        compare_price * 0.97 < price < compare_price * 1.03
+    ):
         return "Fair"
-    elif (2000 > delta >= 1000) or (fmv * 1.03 <= price < fmv * 1.07):
+    elif (2000 > delta >= 1000) or (
+        compare_price * 1.03 <= price < compare_price * 1.07
+    ):
         return "Poor"
     else:
         return "Bad"
@@ -709,22 +717,33 @@ async def create_level1_file(listings: list[dict], metadata: dict):
     seen_ids: set[str] = set()  # guard if input has dupes
 
     for listing in listings:
-        fmv = cache_entries[listing["title"]]["fmv"]
-        if listing["price"] is not None:
+        listing_key = listing["title"]
+        fmv = cache_entries[listing_key]["fmv"]
+        fpp = cache_entries[listing_key]["fpp"]
+        if listing.get("price"):
             price = listing["price"]
-            delta = price - fmv
+            # New prices should be compared to fair purpose price, while Used and Certified
+            # should use fair market value
+            if listing["condition"] == "New":
+                delta = price - fpp
+                compare_price = fpp
+            else:
+                delta = price - fmv
+                compare_price = fmv
         else:
+            # Listings with no price can't be compared
             price = 0
             delta = 0
+            compare_price = 0
 
-        deal = rate_deal(price, delta, fmv)
+        deal = rate_deal(price, delta, compare_price)
         uncertainty = rate_uncertainty(listing)
         risk = rate_risk(listing, price, fmv)
 
         car_listing = CarListing(
             id=listing["id"],
             vin=listing["vin"],
-            title=listing["title"],
+            title=listing_key,
             condition=listing["condition"],
             miles=listing["mileage"],
             price=price,
@@ -732,6 +751,9 @@ async def create_level1_file(listings: list[dict], metadata: dict):
             uncertainty=uncertainty,
             risk=risk,
             deal_rating=deal,
+            compare_price=compare_price,
+            msrp=cache_entries[listing_key]["msrp"],
+            fpp=fpp,
             fmv=fmv,
             deviation_pct=_deviation_pct(price, fmv),
         )

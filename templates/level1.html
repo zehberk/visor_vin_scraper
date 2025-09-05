@@ -45,12 +45,29 @@
 
 			h3 {
 				font-size: 12pt;
-				font-weight: 500;
+				font-weight: 400;
 				margin-top: 1.5em;
 				margin-bottom: 0.6em;
 				color: #333;
 				page-break-after: avoid;
 				break-after: avoid-page;
+			}
+
+			main h3 {
+				font-size: 12pt;
+				font-weight: 500;
+				border-left: 3px solid #0066cc;
+				padding-left: 0.4em;
+				color: #222;
+			}
+
+			footer h3 {
+				font-size: 11pt;
+				font-weight: 600; /* stronger than body but not overpowering */
+				color: #444; /* darker than current #555 */
+				border-bottom: 1px solid #ddd;
+				padding-bottom: 0.2em;
+				margin-top: 1.2em;
 			}
 
 			/* keep the heading+table as a unit */
@@ -120,12 +137,20 @@
 				text-decoration: underline;
 			}
 
+			.bold-highlight {
+				font-weight: bold;
+				color: #222; /* darker than body text */
+			}
+
 			.timestamp {
 				font-size: 9pt;
 				font-style: italic;
 				color: #666;
 				margin-top: -0.5em;
 				margin-bottom: 1em;
+				font-weight: 400;
+				border-left: 0;
+				padding-left: 0;
 			}
 
 			.link-icon {
@@ -216,13 +241,14 @@
 
 		{% macro listing_row(listing, cache_entries) -%}
 			{# prefer model fields; fall back to cache FMV if needed #}
-			{% set fmv  = listing.fmv or cache_entries[listing.title].fmv %}
+			{% set compare_price  = listing.compare_price or cache_entries[listing.title].fmv %}
 			{% set diff = listing.price_delta if listing.price_delta is not none else (listing.price - fmv) %}
 			{% set p    = listing.deviation_pct if listing.deviation_pct is not none else ((diff / fmv) * 100) %}
 
 			<span class="listing-title">
-				#{{ listing.id }} • VIN: {{ listing.vin }} • {{ listing.title }} •
-				{{ listing.miles }} miles • {{ money(listing.price) }}
+				#{{ listing.id }} • VIN: {{ listing.vin }} • {{ listing.condition }}
+				{{ listing.title }}
+				• {{ listing.miles }} miles • {{ money(listing.price) }}
 			</span>
 			<span class="listing-details">
 				{% if diff < 0 %}
@@ -249,89 +275,107 @@
 
 		<!-- #endregion -->
 
+		<!-- #region Current Resale Values -->
 		<h1>{{ report_title }}</h1>
 		<h3 class="timestamp">Generated: {{ embedded_data["generated_at"] }}</h3>
-		<h2>Current Resale Values</h2>
-		<ul>
-			{% for visor_trim, trim_val in cache_entries.items() %}
-				<li>
-					<a class="trim-link" href="{{ trim_val.source }}">
-						{{ trim_val.kbb_trim }}
-						<span class="link-icon">🔗</span>
-					</a>
-					<span class="count"
-						>({{ count_for_trim(visor_trim, [great_bin, good_bin, fair_bin, poor_bin, bad_bin]) }}
-						listings)</span
-					>
-					<span class="fmv">– {{ "${:,.0f}".format(trim_val.fmv) }}</span>
-				</li>
-			{% endfor %}
-		</ul>
-		<h2>Analysis Highlights</h2>
-		<h3>Bin Distribution</h3>
-		<ul>
-			{% for b in analysis.deal_bins %}
-				<li>
-					<strong>{{ b.category }}</strong>: {{ b.count }}
-					({{ b.percent_of_total|round(0) }}%),
-					{% if b.avg_deviation_pct is not none %}
-						avg {{ (b.avg_deviation_pct|abs)|round(0) }}%
-						{% if b.avg_deviation_pct < 0 %}
-							below
-						{% else %}
-							above
-						{% endif %}
-						FMV
-					{% else %}
-						avg n/a
-					{% endif %}
-				</li>
-			{% endfor %}
+		<main>
+			<h2>
+				Current Resale Values (MSRP / Fair Purchase Price / Fair Market Value)
+			</h2>
+			<ul>
+				{% for visor_trim, trim_val in cache_entries.items() %}
+					<li>
+						<a class="trim-link" href="{{ trim_val.fmv_source }}">
+							{{ trim_val.kbb_trim }}
+							<span class="link-icon">🔗</span>
+						</a>
+						<span class="count"
+							>({{ count_for_trim(visor_trim, [great_bin, good_bin, fair_bin, poor_bin, bad_bin]) }}
+							listings)</span
+						>
+						<span class="fmv"
+							>– {{ "${:,.0f}".format(trim_val.msrp) }} /
+							{{ "${:,.0f}".format(trim_val.fpp) }} /
+							{{ "${:,.0f}".format(trim_val.fmv) }}
+						</span>
+					</li>
+				{% endfor %}
+			</ul>
+			<!-- #endregion -->
 
-			{% set rated_total = analysis.deal_bins | sum(attribute='count') %}
-			{% set grand_total = rated_total + no_price_bin.count %}
-			{% if no_price_bin.count > 0 %}
-				<li>
-					<strong>{{ no_price_bin.category }}</strong>: {{ no_price_bin.count }}
-					({{ (no_price_bin.count / (grand_total if grand_total else 1) * 100) | round(0) }}%),
-					avg n/a
-				</li>
-			{% endif %}
-		</ul>
-		<h3>Condition Distribution</h3>
-		{% set cd = analysis.condition_distribution %}
-		<ul>
-			<li><strong>New:</strong> {{ cd.New }}</li>
-			<li><strong>Certified:</strong> {{ cd.Certified }}</li>
-			<li><strong>Used:</strong> {{ cd.Used }}</li>
-		</ul>
-		<div class="table-block">
-			<h3>Deal × Condition Matrix</h3>
-			<table class="matrix">
-				<thead>
-					<tr>
-						<th>Bin</th>
-						<th>New</th>
-						<th>Certified</th>
-						<th>Used</th>
-					</tr>
-				</thead>
-				<tbody>
-					{% for bin, row in deal_condition_matrix.items() %}
+			<!-- #region Analysis Sections -->
+			<h2>Analysis Highlights</h2>
+
+			<!-- #region Bin Distribution -->
+			<h3>Bin Distribution</h3>
+			<ul>
+				{% for b in analysis.deal_bins %}
+					<li>
+						<span class="bold-highlight">{{ b.category }}</span>: {{ b.count }}
+						({{ b.percent_of_total|round(0) }}%),
+						{% if b.avg_deviation_pct is not none %}
+							avg {{ (b.avg_deviation_pct|abs)|round(0) }}%
+							{% if b.avg_deviation_pct < 0 %}
+								below
+							{% else %}
+								above
+							{% endif %}
+							comparison price (FPP/FMV)
+						{% else %}
+							n/a
+						{% endif %}
+					</li>
+				{% endfor %}
+
+				{% set rated_total = analysis.deal_bins | sum(attribute='count') %}
+				{% set grand_total = rated_total + no_price_bin.count %}
+				{% if no_price_bin.count > 0 %}
+					<li>
+						<span class="bold-highlight">{{ no_price_bin.category }}</span>:
+						{{ no_price_bin.count }}
+						({{ (no_price_bin.count / (grand_total if grand_total else 1) * 100) | round(0) }}%),
+						avg n/a
+					</li>
+				{% endif %}
+			</ul>
+			<!-- #endregion -->
+
+			<!-- #region Condition Distribution -->
+			{% set cd = analysis.condition_distribution %}
+			<div class="table-block">
+				<h3>Deal × Condition Matrix</h3>
+				<table class="matrix">
+					<thead>
 						<tr>
-							<td>{{ bin }}</td>
-							<td>{{ row.New }}</td>
-							<td>{{ row.Certified }}</td>
-							<td>{{ row.Used }}</td>
+							<th>Bin</th>
+							<th>New ({{ cd.New }})</th>
+							<th>Certified ({{ cd.Certified }})</th>
+							<th>Used ({{ cd.Used }})</th>
 						</tr>
-					{% endfor %}
-				</tbody>
-			</table>
-		</div>
-		<h3>Trim Comparisons</h3>
-		<h3>Risk & Uncertainty</h3>
-		<h3>Negotiable Fair</h3>
-		<h3>Anomalies</h3>
+					</thead>
+					<tbody>
+						{% for bin, row in deal_condition_matrix.items() %}
+							<tr>
+								<td>{{ bin }}</td>
+								<td>{{ row.New }}</td>
+								<td>{{ row.Certified }}</td>
+								<td>{{ row.Used }}</td>
+							</tr>
+						{% endfor %}
+					</tbody>
+				</table>
+			</div>
+			<!-- #endregion -->
+
+			<h3>Trim Comparisons</h3>
+			<h3>Risk & Uncertainty</h3>
+			<h3>Negotiable Fair</h3>
+			<h3>Anomalies</h3>
+		</main>
+		<!-- #endregion -->
+
+		<hr />
+
 		<!-- Deal Rating Sections -->
 		{%
 			set bins = [
@@ -343,7 +387,7 @@
 		{% for b in bins %}
 			{{ render_bin(b.emoji, b.title, b.bin, cache_entries) }}
 		{% endfor %}
-		<h3>Filtered out:</h3>
+		<h2>Filtered out:</h2>
 		<ul class="deal-bin">
 			<li>
 				🟠 {{ poor_bin.count }} Poor Deals, 🔴 {{ bad_bin.count }} Bad Deals, ❔
@@ -353,17 +397,60 @@
 	</body>
 	<footer>
 		<h2>Definitions and Explanations</h2>
+
+		<h3>Resale Value Definitions</h3>
+		<ul>
+			<li>
+				<span class="bold-highlight">
+					MSRP (Manufacturer Suggested Retail Price):
+				</span>
+				This is the recommended price a manufacturer suggests for a retailer to
+				sell its product.
+			</li>
+			<li>
+				<span class="bold-highlight"> Fair Purchase Price (FPP): </span>
+				KBB's estimate of what people are currently paying for a brand-new
+				vehicle, based on recent transaction data and regional trends.
+			</li>
+			<li>
+				<span class="bold-highlight"> Fair Markey Value (FMV): </span>
+				KBB's estimate of what a vehicle is worth on the resale/used market,
+				considering its age, mileage, condition, and demand.
+			</li>
+		</ul>
+		<p>
+			A way you can think of the difference is MSRP =
+			<i>what a company wants you to pay for a new car</i>, FPP =
+			<i>what buyers pay for a new car today</i>, and FMV =
+			<i>what that same car is worth used</i>.
+		</p>
+
 		<h3>Deal Rating</h3>
 		<p>
 			Car listings are grouped into Great, Good, Fair, Poor, or Bad deals (this
 			is called binning) based solely on price. We use a very basic formula:
 		</p>
 		<ul>
-			<li>Great: $2,000+ or 7%+ under market value, whichever is larger</li>
-			<li>Good: $1000–1999 or 3–7% under market value</li>
-			<li>Fair: within $1000 or 3% of market value</li>
-			<li>Poor: $1000–1999 or 3–7% over market value</li>
-			<li>Bad: $2,000+ or 7%+ over market value</li>
+			<li>
+				<span class="bold-highlight">🟢 Great: </span>$2,000+ or 7%+ under
+				market value, whichever is larger
+			</li>
+			<li>
+				<span class="bold-highlight">🔵 Good: </span>$1000–1999 or 3–7% under
+				market value
+			</li>
+			<li>
+				<span class="bold-highlight">🟡 Fair: </span>within $1000 or 3% of
+				market value
+			</li>
+			<li>
+				<span class="bold-highlight">🟠 Poor: </span>$1000–1999 or 3–7% over
+				market value
+			</li>
+			<li>
+				<span class="bold-highlight">🔴 Bad: </span>$2,000+ or 7%+ over market
+				value
+			</li>
 		</ul>
 		<p>
 			Listings that are considered Poor or Bad deals are rarely worth looking
@@ -385,12 +472,17 @@
 			Our formula for rating uncertainty is:
 		</p>
 		<ul>
-			<li>High: No documentation is available</li>
 			<li>
-				Some: A window sticker is present and the warranty is still active, but
-				there is no auto report to review
+				<span class="bold-highlight">High: </span>No documentation is available
 			</li>
-			<li>Low: There is an auto report that can be reviewed</li>
+			<li>
+				<span class="bold-highlight">Some: </span>A window sticker is present
+				and the warranty is still active, but there is no auto report to review
+			</li>
+			<li>
+				<span class="bold-highlight">Low: </span>There is an auto report that
+				can be reviewed
+			</li>
 		</ul>
 		<p>
 			<br />
@@ -422,15 +514,19 @@
 		</p>
 		<ul>
 			<li>
-				High: the vehicle's mileage is more than 35% of what is expected, OR it
-				is 20% over expected and the list price is 10%+ under current market
-				value
+				<span class="bold-highlight">High: </span>the vehicle's mileage is more
+				than 35% of what is expected, OR it is 20% over expected and the list
+				price is 10%+ under current market value
 			</li>
 			<li>
-				Some: the vehicle's mileage is more than 20% of what is expected OR the
-				list price is 10%+ under current market value
+				<span class="bold-highlight">Some: </span>the vehicle's mileage is more
+				than 20% of what is expected OR the list price is 10%+ under current
+				market value
 			</li>
-			<li>Low: price and mileage are within a normal range</li>
+			<li>
+				<span class="bold-highlight">Low: </span>price and mileage are within a
+				normal range
+			</li>
 		</ul>
 		<p>
 			Deeper levels of analysis will change this basic rating from a 3-level
