@@ -7,14 +7,22 @@ class TrimValuation:
     visor_trim: str
     kbb_trim: str
     fmv: int
-    source: str
+    fmv_source: str
+    msrp: int
+    msrp_source: str
+    fpp: int
+    fpp_source: str
 
     def __repr__(self):
         return (
             f"TrimValuation(visor_trim={self.visor_trim!r}, "
             f"kbb_trim={self.kbb_trim!r}, "
             f"fmv={self.fmv}, "
-            f"source={self.source!r})"
+            f"fmv_source={self.fmv_source!r})"
+            f"msrp={self.fmv}, "
+            f"msrp_source={self.msrp_source!r})"
+            f"fpp={self.fpp}, "
+            f"fpp_source={self.fpp_source!r})"
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -22,7 +30,11 @@ class TrimValuation:
             "visor_trim": self.visor_trim,
             "kbb_trim": self.kbb_trim,
             "fmv": self.fmv,
-            "source": self.source,
+            "fmv_source": self.fmv_source,
+            "msrp": self.msrp,
+            "msrp_source": self.msrp_source,
+            "fpp": self.fpp,
+            "fpp_source": self.fpp_source,
         }
 
     @classmethod
@@ -31,7 +43,11 @@ class TrimValuation:
             visor_trim=data["visor_trim"],
             kbb_trim=data["kbb_trim"],
             fmv=data["fmv"],
-            source=data["source"],
+            fmv_source=data["fmv_source"],
+            msrp=data["msrp"],
+            msrp_source=data["msrp_source"],
+            fpp=data["fpp"],
+            fpp_source=data["fpp_source"],
         )
 
 

@@ -1,18 +1,17 @@
 from __future__ import annotations
 
-import json, re, time
+import json, re
 
-from collections import defaultdict
 from datetime import datetime, timedelta
 from jinja2 import Environment, FileSystemLoader
 from pathlib import Path
-from playwright.async_api import async_playwright
+from playwright.async_api import async_playwright, Page
 from typing import Optional
 
 from analysis.models import CarListing, DealBin, TrimValuation
 from visor_scraper.utils import make_string_url_safe
 
-CACHE_FILE = Path("output") / "level1_fmv_cache.json"
+CACHE_FILE = Path("output") / "level1_pricing_cache.json"
 CACHE_TTL = timedelta(days=7)
 
 DEAL_ORDER = ["Great", "Good", "Fair", "Poor", "Bad"]
@@ -201,9 +200,22 @@ def save_cache(cache):
         json.dump(cache, f, indent=2)
 
 
-def is_fresh(entry):
+def is_fmv_fresh(entry):
+    if "timestamp" not in entry:
+        return False
     ts = datetime.fromisoformat(entry["timestamp"])
     return datetime.now() - ts < CACHE_TTL
+
+
+def is_pricing_fresh(entry: dict) -> bool:
+    ts = entry.get("pricing_timestamp")
+    if not ts:
+        return False
+    saved = datetime.fromisoformat(ts)
+    now = datetime.now()
+
+    # Fresh if we're still in the same month & year
+    return (saved.year == now.year) and (saved.month == now.month)
 
 
 def prepare_cache():
@@ -238,7 +250,7 @@ def cache_covers_all(
     for year, trims in trim_map.items():
         for trim in trims.keys():
             visor_trim = f"{year} {make} {model} {trim}"
-            if visor_trim not in cache_entries or not is_fresh(
+            if visor_trim not in cache_entries or not is_fmv_fresh(
                 cache_entries[visor_trim]
             ):
                 return False
@@ -279,7 +291,7 @@ def build_unique_trim_map(
 ) -> dict[str, dict[str, list[str]]]:
     trim_map: dict[str, dict[str, list[str]]] = {}
     for ymmt in quicklist:
-        # Replace the make and model in case they use multiple words multiple words (Aston Marton, Crown Victoria)
+        # Replace the make and model in case they use multiple words (Aston Marton, Crown Victoria)
         year_trim = ymmt.replace(make, "").replace(model, "")
         # The year will always be the firt four digits
         year = year_trim[:4]
@@ -294,16 +306,33 @@ def build_unique_trim_map(
     return trim_map
 
 
+def match_visor_key(kbb_name: str, visor_keys: list[str]) -> str | None:
+    k = kbb_name.strip()
+    for key in sorted(visor_keys, key=len, reverse=True):
+        if k.startswith(key):
+            return key
+    return None
+
+
+def money_to_int(s: str | None) -> int | None:
+    if not s:
+        return None
+    s = s.strip()
+    if "—" in s or "N/A" in s or s == "":
+        return None
+    num = "".join(ch for ch in s if ch.isdigit())
+    return int(num) if num else None
+
+
 async def get_trim_options_for_year(
     page, make, model_slug, year, trim_map, trim_options, make_model_key
 ):
     if make_model_key in trim_options and year in trim_options[make_model_key]:
         year_trims = trim_options[make_model_key][year]
         for kbb_trim in year_trims:
-            for key in sorted(trim_map[year].keys(), key=len, reverse=True):
-                if kbb_trim.startswith(key):
-                    trim_map[year][key].append(kbb_trim)
-                    break
+            match = match_visor_key(kbb_trim, list(trim_map[year].keys()))
+            if match:
+                trim_map[year][match].append(kbb_trim)
         return
 
     url = f"https://kbb.com/{make_string_url_safe(make)}/{model_slug}/{year}/styles/?intent=trade-in-sell&mileage=1"
@@ -328,27 +357,87 @@ async def get_trim_options_for_year(
     trim_options.setdefault(make_model_key, {})[year] = year_trims
 
 
+async def get_or_fetch_new_pricing_for_year(
+    page: Page,
+    make: str,
+    model: str,
+    model_slug: str,
+    year: str,
+    trim_map_for_year: dict[str, list[str]],
+    cache_entries,
+) -> None:
+    # pre-check before hitting the page
+    all_fresh = True
+    for visor_key in trim_map_for_year.keys():
+        visor_trim = f"{year} {make} {model} {visor_key}"
+        entry = cache_entries.get(visor_trim, {})
+        if not is_pricing_fresh(entry):
+            all_fresh = False
+            break
+
+    if all_fresh:
+        return  # nothing to do this year, skip webcall
+
+    url = f"https://kbb.com/{make_string_url_safe(make)}/{model_slug}/{year}"
+    await page.goto(url)
+    rows = await page.query_selector_all("table.css-lb65co tbody tr")
+    visor_keys = list(trim_map_for_year.keys())
+
+    for row in rows:
+        divs = await row.query_selector_all("div")
+        if len(divs) < 3:
+            continue
+
+        table_trim = (await divs[0].inner_text()).strip()
+        msrp = (await divs[1].inner_text()).strip()
+        fpp = (await divs[2].inner_text()).strip()
+
+        # Map KBB table label -> Visor trim key
+        visor_key = match_visor_key(table_trim, visor_keys)
+        if not visor_key:
+            continue  # couldn't map; log if you want
+
+        visor_trim = f"{year} {make} {model} {visor_key}"
+        entry = cache_entries.setdefault(visor_trim, {})
+
+        msrp_val = money_to_int(msrp)
+        fpp_val = money_to_int(fpp)
+
+        entry["visor_trim"] = visor_trim
+        if msrp_val is not None:
+            entry["msrp"] = msrp_val
+            entry["msrp_source"] = url
+        if fpp_val is not None:
+            entry["fpp"] = fpp_val
+            entry["fpp_source"] = url
+
+        entry["pricing_timestamp"] = datetime.now().isoformat()
+
+
 async def get_or_fetch_fmv(
-    page,
+    page: Page,
     year: str,
     make: str,
     model: str,
     model_slug: str,
     trim: str,
     style: str,
-    cache_entries,
+    cache_entries: dict[str, dict],
 ):
     visor_trim = f"{year} {make} {model} {trim}"
     kbb_trim = f"{year} {make} {model} {style}"
 
+    entry = cache_entries.setdefault(visor_trim, {})
+
     # Check cache first
-    if visor_trim in cache_entries and is_fresh(cache_entries[visor_trim]):
-        cached = cache_entries[visor_trim]
-        return TrimValuation(
-            visor_trim=visor_trim,
-            kbb_trim=kbb_trim,
-            fmv=cached["fmv"],
-            source=cached["source"],
+    if is_fmv_fresh(entry):
+        print(f"FMV fresh for {visor_trim}")
+        return TrimValuation.from_dict(
+            {
+                **entry,
+                "visor_trim": visor_trim,
+                "kbb_trim": entry.get("kbb_trim", kbb_trim),
+            }
         )
 
     fmv_url = f"https://kbb.com/{make_string_url_safe(make)}/{model_slug}/{year}/{make_string_url_safe(style)}/"
@@ -358,22 +447,16 @@ async def get_or_fetch_fmv(
     match = re.search(r"current resale value of \$([\d,]+)", div_text)
     if match:
         resale_value = int(match.group(1).replace(",", ""))
-        car_entry = TrimValuation(
-            visor_trim=visor_trim,
-            kbb_trim=kbb_trim,
-            fmv=resale_value,
-            source=fmv_url,
+        entry.update(
+            {
+                "kbb_trim": kbb_trim,
+                "fmv": resale_value,
+                "fmv_source": fmv_url,
+                "timestamp": datetime.now().isoformat(),
+            }
         )
 
-        # Save into cache
-        cache_entries[visor_trim] = {
-            "kbb_trim": kbb_trim,
-            "fmv": resale_value,
-            "source": fmv_url,
-            "timestamp": datetime.now().isoformat(),
-        }
-
-        return car_entry
+        return TrimValuation.from_dict(entry)
 
 
 def get_trim_valuations_from_cache(
@@ -389,7 +472,11 @@ def get_trim_valuations_from_cache(
                     visor_trim=visor_trim,
                     kbb_trim=cached["kbb_trim"],
                     fmv=cached["fmv"],
-                    source=cached["source"],
+                    fmv_source=cached["fmv_source"],
+                    msrp=cached["msrp"],
+                    msrp_source=cached["msrp_source"],
+                    fpp=cached["fpp"],
+                    fpp_source=cached["fpp_source"],
                 )
             )
     return trim_valuations
@@ -424,6 +511,9 @@ async def get_trim_valuations_from_scrape(
             for year in years:
                 await get_trim_options_for_year(
                     page, make, model_slug, year, trim_map, trim_options, make_model_key
+                )
+                await get_or_fetch_new_pricing_for_year(
+                    page, make, model, model_slug, year, trim_map[year], cache_entries
                 )
 
             # Fetch FMVs
@@ -598,7 +688,7 @@ def _slim(listing: dict) -> dict:
 async def create_level1_file(listings: list[dict], metadata: dict):
     cache, slugs, trim_options, cache_entries = prepare_cache()
     make = metadata["vehicle"]["make"]
-    model = metadata["vehicle"]["make"]
+    model = metadata["vehicle"]["model"]
     vin = listings[0]["vin"]
     quicklist = build_quicklist(listings)
     years = extract_years(quicklist)
