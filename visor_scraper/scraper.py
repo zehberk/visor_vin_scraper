@@ -658,7 +658,7 @@ def save_preset_if_requested(args):
             exit(1)
 
         # Exclude non-search-related flags
-        exclude = {"preset", "save_preset"}
+        exclude = {"preset", "save_preset", "save_docs"}
         preset_data = {
             k: v for k, v in vars(args).items() if k not in exclude and v is not None
         }
