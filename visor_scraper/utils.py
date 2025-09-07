@@ -178,10 +178,16 @@ def build_query_params(args, metadata):
         if args.min_miles or args.max_miles:
             logging.warning("--miles overrides --min_miles and --max_miles.")
         args.min_miles, args.max_miles = parse_range_arg("miles", args.miles)
+        del metadata["filters"]["miles"]
+        metadata["filters"]["min_miles"] = args.min_miles
+        metadata["filters"]["max_miles"] = args.max_miles
     if args.price:
         if args.min_price or args.max_price:
             logging.warning("--price overrides --min_price and --max_price.")
         args.min_price, args.max_price = parse_range_arg("price", args.price)
+        del metadata["filters"]["price"]
+        metadata["filters"]["min_price"] = args.min_price
+        metadata["filters"]["max_price"] = args.max_price
 
     # Default fallback for condition to suppress unnecessary warnings
     if not args.condition:
