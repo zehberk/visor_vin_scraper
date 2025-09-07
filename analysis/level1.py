@@ -111,10 +111,69 @@ def to_level1_json(
     return {
         "make": make,
         "model": model,
-        "sort": sort,  # e.g., "newest" | "cheapest" | "relevance"
+        "sort": sort,
         "deal_bins": [b.to_dict() for b in deal_bins],
         "deal_condition_matrix": crosstab,  # {bin:{condition:count}}
     }
+
+
+def create_report_parameter_summary(metadata: dict) -> str:
+    """
+    Creates a summary header for the level 1 analysis report that briefly goes over which parameters that were used in the search.
+    This include condition, price filters, mileage filters, and the sort method
+    """
+
+    summary = "This report reflects{condition_summary}listings retrieved using the {sort_method} sort option"
+    condition_summary = ""
+    price_summary = ""
+    miles_summary = ""
+    filters = metadata["filters"]
+    sort_method = filters["sort"]  # this will always exist
+    condition: list[str] = filters.get("condition")
+    min_price: int = filters.get("min_price")
+    max_price: int = filters.get("max_price")
+    min_miles: int = filters.get("min_miles")
+    max_miles: int = filters.get("max_miles")
+
+    if condition:
+        if len(condition) == 1:
+            condition_summary = f" {condition[0]} "
+        elif len(condition) == 2:
+            sort_cond = sorted(condition)
+            condition_summary = f" {sort_cond[0]} and {sort_cond[1]} "
+        else:
+            condition_summary = " New, Used, and Certified "
+
+    # Add clause for detecting filters
+    if min_miles or max_miles or min_price or max_price:
+        summary += ", filtered to vehicles "
+    else:
+        summary += " with no additional price or mileage filters applied."
+
+    if min_price or max_price:
+        if min_price and max_price:
+            price_summary = f"priced between ${min_price:,} and ${max_price:,}"
+        elif min_price:
+            price_summary = f"priced over ${min_price:,}"
+        elif max_price:
+            price_summary = f"priced below ${max_price:,}"
+
+    if min_miles or max_miles:
+        if min_miles and max_miles:
+            miles_summary = f"with between {min_miles:,} and {max_miles:,} miles"
+        elif min_miles:
+            miles_summary = f"with more than {min_miles:,} miles"
+        elif max_miles:
+            miles_summary = f"with fewer than {max_miles:, } miles"
+
+    if price_summary and miles_summary:
+        summary += price_summary + " and " + miles_summary + "."
+    elif price_summary:
+        summary += price_summary + "."
+    elif miles_summary:
+        summary += miles_summary + "."
+
+    return summary.format(condition_summary=condition_summary, sort_method=sort_method)
 
 
 async def render_pdf(
@@ -130,6 +189,7 @@ async def render_pdf(
     no_price_bin: DealBin,
     analysis_json: dict,
     crosstab: dict,
+    metadata: dict,
     out_file=None,
 ):
     env = Environment(loader=FileSystemLoader("templates"))
@@ -138,11 +198,14 @@ async def render_pdf(
     report_title = f"Level 1 Market Analysis Report – {make} {model}"  # utils.format_years(metadata["years"])
     generated_at = datetime.now().strftime("%B %d, %Y %I:%M %p")
 
+    summary = create_report_parameter_summary(metadata)
+
     # Build embedded JSON object
     embedded_data = {
         "make": make,
         "model": model,
         "generated_at": generated_at,
+        "summary": summary,
         "entries": cache_entries,
         "bins": {
             "great": great_bin.to_dict(),
@@ -156,6 +219,7 @@ async def render_pdf(
 
     html_out = template.render(
         report_title=report_title,
+        summary=summary,
         cache_entries=cache_entries,
         trim_valuations=[e.to_dict() for e in trim_valuations],
         great_bin=great_bin,
@@ -326,6 +390,45 @@ def money_to_int(s: str | None) -> int | None:
     return int(num) if num else None
 
 
+def pick_base_by_common_tokens(body_styles: list[dict]) -> str | None:
+    # Collect KBB trim names per body style; usually you’ll hit the right one (e.g., “Wagon 4D”)
+    for bs in body_styles:
+        names = [t["name"] for t in bs.get("trims", [])]
+        print(names)
+        if not names:
+            continue
+
+        # Normalize/tokenize
+        def toks(s: str) -> list[str]:
+            return [w.lower() for w in re.findall(r"[A-Za-z0-9]+", s)]
+
+        token_lists = [toks(n) for n in names]
+        common = set(token_lists[0])
+        for tl in token_lists[1:]:
+            common &= set(tl)
+        if not common:
+            continue  # no obvious common suffix/prefix; try next body style
+
+        # Trim with zero residual tokens after removing common = “Base”
+        best = None
+        best_res = []
+        for n, tl in zip(names, token_lists):
+            res = [w for w in tl if w not in common]
+            if not res:
+                return n  # perfect match: only common words (e.g., "Wagon 4D")
+            if (
+                best is None
+                or len(res) < len(best_res)
+                or (len(res) == len(best_res) and len(n) < len(best))
+            ):
+                best, best_res = n, res
+
+        # Fallback: shortest residual wins
+        if best:
+            return best
+    return None
+
+
 async def get_trim_options_for_year(
     page, make, model_slug, year, trim_map, trim_options, make_model_key
 ):
@@ -335,6 +438,15 @@ async def get_trim_options_for_year(
             match = match_visor_key(kbb_trim, list(trim_map[year].keys()))
             if match:
                 trim_map[year][match].append(kbb_trim)
+
+        # Add 'Base' fallback even in cached path
+        base_key = next((k for k in trim_map[year] if k.lower() == "base"), None)
+        if base_key and not trim_map[year][base_key]:
+            # Synthesize a single "body_style" from cached names so the picker works
+            bs = [{"trims": [{"name": n} for n in year_trims]}]
+            picked = pick_base_by_common_tokens(bs)
+            if picked:
+                trim_map[year][base_key].append(picked)
         return
 
     url = f"https://kbb.com/{make_string_url_safe(make)}/{model_slug}/{year}/styles/?intent=trade-in-sell&mileage=1"
@@ -355,6 +467,13 @@ async def get_trim_options_for_year(
                 if kbb_trim.startswith(key):
                     trim_map[year][key].append(kbb_trim)
                     break
+
+    base_key = next((k for k in trim_map[year] if k.lower() == "base"), None)
+    if base_key and not trim_map[year][base_key]:
+        picked = pick_base_by_common_tokens(body_styles)
+        if picked:
+            trim_map[year][base_key].append(picked)
+            # optional: logger.info("Base fallback mapped to %s", picked)
 
     trim_options.setdefault(make_model_key, {})[year] = year_trims
 
@@ -397,6 +516,14 @@ async def get_or_fetch_new_pricing_for_year(
         # Map KBB table label -> Visor trim key
         visor_key = match_visor_key(table_trim, visor_keys)
         if not visor_key:
+            # If "Base" exists and our earlier styles-mapping attached a style (e.g., "Wagon 4D"),
+            # honor that here when the table label equals that style.
+            if "Base" in trim_map_for_year and table_trim in set(
+                trim_map_for_year["Base"]
+            ):
+                visor_key = "Base"
+        if not visor_key:
+            print("Unable to find a matching trim: ", visor_key)
             continue  # couldn't map; log if you want
 
         visor_trim = f"{year} {make} {model} {visor_key}"
@@ -433,7 +560,6 @@ async def get_or_fetch_fmv(
 
     # Check cache first
     if is_fmv_fresh(entry):
-        print(f"FMV fresh for {visor_trim}")
         return TrimValuation.from_dict(
             {
                 **entry,
@@ -787,10 +913,13 @@ async def create_level1_file(listings: list[dict], metadata: dict):
     )
     analysis_json["condition_distribution"] = cond_dist_total
 
+    # Only pass along the entries from the quicklist, not the entire cache
+    visible_entries = {k: cache_entries[k] for k in quicklist if k in cache_entries}
+
     await render_pdf(
         make,
         model,
-        cache_entries,
+        visible_entries,
         trim_valuations,
         great_bin,
         good_bin,
@@ -800,6 +929,7 @@ async def create_level1_file(listings: list[dict], metadata: dict):
         no_price_bin,
         analysis_json,
         crosstab,
+        metadata,
     )
 
 
