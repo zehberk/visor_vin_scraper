@@ -217,6 +217,14 @@
 			.note {
 				font-weight: 500;
 			}
+
+			.attribution {
+				font-size: 0.85em; /* slightly smaller than body text */
+				color: #555; /* muted gray tone */
+				font-style: italic; /* makes it feel like a disclaimer */
+				margin-top: 1.5em; /* spacing above */
+				text-align: center; /* centered at bottom */
+			}
 		</style>
 		<!--#endregion CSS -->
 	</head>
@@ -533,6 +541,12 @@
 			Deeper levels of analysis will change this basic rating from a 3-level
 			scale to a numerical scale for more fine-tuned grading.
 		</p>
+		<p class="attribution">
+			Data for this report was retrieved from visor.vin and Kelley Blue Book
+			(KBB). Automated analysis and summarization were performed with the
+			assistance of ChatGPT (OpenAI).
+		</p>
+
 		<!-- Embedded data that can be referenced later if necessary -->
 		<!-- prettier-ignore -->
 		<script type="application/json+jinja" id="raw-data">
