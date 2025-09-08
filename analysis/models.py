@@ -55,7 +55,10 @@ class TrimValuation:
 class CarListing:
     id: str
     vin: str
-    title: str
+    year: int
+    make: str
+    model: str
+    trim: str
     condition: str  # "New" | "Used" | "Certified"
     miles: int
     price: int
@@ -71,10 +74,18 @@ class CarListing:
     )
     deviation_pct: Optional[float] = None  # signed; negative = under FMV
 
+    @property
+    def title(self) -> str:
+        return f"{self.year} {self.make} {self.model} {self.trim}"
+
     def __repr__(self):
         return (
             f"CarListing(id={self.id!r}, "
             f"vin={self.vin!r}, "
+            f"year={self.year}, "
+            f"make={self.make}, "
+            f"model={self.model}, "
+            f"trim={self.trim}, "
             f"title={self.title}, "
             f"condition={self.condition}, "
             f"miles={self.miles!r}, "
@@ -94,6 +105,10 @@ class CarListing:
         return {
             "id": self.id,
             "vin": self.vin,
+            "year": self.year,
+            "make": self.make,
+            "model": self.model,
+            "trim": self.trim,
             "title": self.title,
             "condition": self.condition,
             "miles": self.miles,
@@ -114,7 +129,10 @@ class CarListing:
         return cls(
             id=data["id"],
             vin=data["vin"],
-            title=data["title"],
+            year=data["year"],
+            make=data["make"],
+            model=data["model"],
+            trim=data["trim"],
             condition=data["condition"],
             miles=data["miles"],
             price=data["price"],

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json, re
 
+from collections import Counter, defaultdict
 from datetime import datetime, timedelta
 from jinja2 import Environment, FileSystemLoader
 from pathlib import Path
@@ -23,6 +24,39 @@ DROP = 2000  # ≥ $2,000 price whiplash
 LOW_PCTL = 0.15
 HIGH_PCTL = 0.85
 EXAMPLE_LIMIT = 3
+
+
+# def build_trim_tables(listings: list[CarListing]) -> dict[str, dict]:
+#     tables = defaultdict(lambda: {"total": 0, "rows": []})
+
+#     # group by year/make/model (string key for Jinja)
+#     for l in listings:
+#         key = f"{l.year} {l.make} {l.model}"  # e.g., "2022 Subaru Outback"
+#         tables[key]["total"] += 1
+#         tables[key].setdefault("counts", Counter())
+#         tables[key]["counts"][
+#             l.title.split()[2]
+#         ] += 1  # crude trim pick; replace with your own
+
+#     # build rows with share + thin data
+#     for key, info in tables.items():
+#         total = info["total"]
+#         rows = []
+#         for trim, count in info["counts"].most_common():
+#             share = round(count / total * 100)
+#             thin = count < 3
+#             rows.append(
+#                 {
+#                     "trim": trim,
+#                     "count": count,
+#                     "share": f"{share}%",
+#                     "thin": thin,
+#                 }
+#             )
+#         info["rows"] = rows
+#         del info["counts"]
+
+#     return tables
 
 
 def _deviation_pct(
@@ -1042,10 +1076,18 @@ async def create_level1_file(listings: list[dict], metadata: dict):
         uncertainty = rate_uncertainty(listing)
         risk = rate_risk(listing, price, fmv)
 
+        year = listing_key[:4]
+        trim = (
+            listing_key.replace(year, "").replace(make, "").replace(model, "").strip()
+        )
+
         car_listing = CarListing(
             id=listing["id"],
             vin=listing["vin"],
-            title=listing_key,
+            year=int(year),
+            make=make,
+            model=model,
+            trim=trim,
             condition=listing["condition"],
             miles=listing["mileage"],
             price=price,
