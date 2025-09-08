@@ -139,6 +139,30 @@ class DealBin:
     condition_counts: Dict[str, int] = field(default_factory=dict)  # {"New": 2, ...}
     percent_of_total: Optional[float] = None  # 0..100
 
+    @property
+    def new_listings_count(self) -> int:
+        return sum(1 for l in self.listings if l.condition == "New")
+
+    @property
+    def new_listings_pct(self) -> float:
+        return self.new_listings_count / len(self.listings)
+
+    @property
+    def certified_listings_count(self) -> int:
+        return sum(1 for l in self.listings if l.condition == "Certified")
+
+    @property
+    def certified_listings_pct(self) -> float:
+        return self.certified_listings_count / len(self.listings)
+
+    @property
+    def used_listings_count(self) -> int:
+        return sum(1 for l in self.listings if l.condition == "Used")
+
+    @property
+    def used_listings_pct(self) -> float:
+        return self.used_listings_count / len(self.listings)
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "category": self.category,
