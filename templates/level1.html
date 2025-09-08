@@ -223,9 +223,10 @@
 
 		{% macro listing_row(listing, cache_entries) -%}
 			{# prefer model fields; fall back to cache FMV if needed #}
-			{% set compare_price  = listing.compare_price or cache_entries[listing.title].fmv %}
-			{% set diff = listing.price_delta if listing.price_delta is not none else (listing.price - fmv) %}
-			{% set p    = listing.deviation_pct if listing.deviation_pct is not none else ((diff / fmv)) %}
+			{% set fallback_price = cache_entries[listing.title].fmv or cache_entries[listing.title].fpp %}
+			{% set compare_price  = listing.compare_price or fallback_price %}
+			{% set diff = listing.price_delta if listing.price_delta is not none else (listing.price - compare_price) %}
+			{% set p    = listing.deviation_pct if listing.deviation_pct is not none else ((diff / compare_price)) %}
 
 			<span class="listing-title">
 				#{{ listing.id }} • VIN: {{ listing.vin }} • {{ listing.condition }}
@@ -268,7 +269,10 @@
 			<ul>
 				{% for visor_trim, trim_val in cache_entries.items() %}
 					<li>
-						<a class="trim-link" href="{{ trim_val.fmv_source }}">
+						<a
+							class="trim-link"
+							href="{{ trim_val.fmv_source or trim_val.fpp_source }}"
+						>
 							{{ trim_val.kbb_trim }}
 							<span class="link-icon">🔗</span>
 						</a>
@@ -279,7 +283,12 @@
 						<span class="fmv"
 							>– {{ "${:,.0f}".format(trim_val.msrp) }} /
 							{{ "${:,.0f}".format(trim_val.fpp) }} /
-							{{ "${:,.0f}".format(trim_val.fmv) }}
+							{% if trim_val.fmv %}
+								{{ "${:,.0f}".format(trim_val.fmv) }}
+							{% else %}
+								{{ "${:,.0f}".format(trim_val.fpp) }}
+								(fallback)
+							{% endif %}
 						</span>
 					</li>
 				{% endfor %}

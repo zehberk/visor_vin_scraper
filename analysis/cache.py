@@ -8,7 +8,7 @@ CACHE_FILE = Path("output") / "level1_pricing_cache.json"
 CACHE_TTL = timedelta(days=7)
 
 
-def load_cache():
+def load_cache() -> dict[str, dict]:
     if CACHE_FILE.exists():
         with CACHE_FILE.open("r", encoding="utf-8") as f:
             return json.load(f)
@@ -23,8 +23,8 @@ def save_cache(cache):
 
 def prepare_cache():
     cache = load_cache()
-    slugs = cache.setdefault("model_slugs", {})
-    trim_options = cache.setdefault("trim_options", {})
+    slugs: dict[str, str] = cache.setdefault("model_slugs", {})
+    trim_options: dict[str, dict[str, list[str]]] = cache.setdefault("trim_options", {})
     cache_entries = cache.setdefault("entries", {})
     return cache, slugs, trim_options, cache_entries
 

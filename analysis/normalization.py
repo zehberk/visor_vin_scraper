@@ -32,7 +32,7 @@ def find_visor_key(norm_trim: str, visor_keys: list[str]) -> str | None:
             return visor_norm_map[candidate]
 
     # 3. Nothing matched
-    print(f"\tSkipping unmapped trim '{norm_trim}' (visor keys: {visor_keys})")
+    # print(f"\tSkipping unmapped trim '{norm_trim}' (visor keys: {visor_keys})")
     return None
 
 
@@ -76,3 +76,36 @@ def normalize_trim(raw: str) -> str:
 
 def strip_engine_tokens(tokens: list[str]) -> list[str]:
     return [t for t in tokens if t.lower() not in ENGINE_MARKERS]
+
+
+def resolve_cache_key(raw_title: str, cache_entries: dict[str, dict]) -> str:
+    raw_title = raw_title.strip()
+    year, make, model, *trim_parts = raw_title.split(maxsplit=3)
+    raw_trim = trim_parts[0] if trim_parts else ""
+    norm_trim = normalize_trim(raw_trim)
+
+    # find any cache key with same year/make/model and normalized trim match
+    for k in cache_entries.keys():
+        if k.startswith(f"{year} {make} {model}"):
+            cache_trim = k.replace(f"{year} {make} {model}", "").strip()
+            if normalize_trim(cache_trim) == norm_trim:
+                return k
+
+    # fallback: case-insensitive whole string match
+    for k in cache_entries.keys():
+        if k.lower() == raw_title.lower():
+            return k
+
+    # if nothing matched, return the raw_title so the caller can handle KeyError
+    return raw_title
+
+
+def canonicalize_trim(raw_trim: str) -> str:
+    """
+    Normalize and apply consistent Title Case for trims across cache + listings.
+    Removes body styles/displacements via normalize_trim first.
+    """
+    norm_trim = normalize_trim(raw_trim)
+    if not norm_trim:
+        return norm_trim
+    return " ".join(p.title() for p in norm_trim.split())

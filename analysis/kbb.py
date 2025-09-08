@@ -139,14 +139,10 @@ async def get_or_fetch_new_pricing_for_year(
         visor_key = find_visor_key(norm_trim, visor_keys)
 
         if not visor_key:
-            print(
-                f"Unable to map KBB trim '{table_trim}' (normalized '{norm_trim}') to visor keys: {visor_keys}"
-            )
-            continue
-            # raise RuntimeError(
-            #     f"Unable to map KBB trim '{table_trim}' (normalized '{norm_trim}') "
-            #     f"to visor keys: {visor_keys}"
+            # print(
+            #     f"{year}: Unable to map KBB trim '{table_trim}' (normalized '{norm_trim}') to visor keys: {visor_keys}"
             # )
+            continue
 
         visor_trim = f"{year} {make} {model} {visor_key}"
         entry = cache_entries.setdefault(visor_trim, {})
@@ -180,10 +176,6 @@ async def get_or_fetch_fmv(
     visor_key = find_visor_key(norm_style, [trim])
     if not visor_key:
         return
-        # raise RuntimeError(
-        #     f"Unable to map FMV style '{style}' (normalized '{norm_style}') "
-        #     f"to visor trim '{trim}'"
-        # )
 
     visor_trim = f"{year} {make} {model} {visor_key}"
     kbb_trim = f"{year} {make} {model} {style}"
@@ -217,6 +209,18 @@ async def get_or_fetch_fmv(
             }
         )
         return TrimValuation.from_dict(entry)
+    else:
+        # ✅ fallback when FMV is missing
+        entry.update(
+            {
+                "visor_trim": visor_trim,
+                "kbb_trim": kbb_trim,
+                "fmv": None,
+                "fmv_source": None,
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
+        return TrimValuation.from_dict(entry)
 
 
 def get_trim_valuations_from_cache(
@@ -227,6 +231,15 @@ def get_trim_valuations_from_cache(
         for trim in trims.keys():
             visor_trim = f"{year} {make} {model} {trim}"
             cached = cache_entries[visor_trim]
+
+            # ensure keys always exist
+            cached.setdefault("fmv", None)
+            cached.setdefault("fmv_source", None)
+            cached.setdefault("msrp", None)
+            cached.setdefault("msrp_source", None)
+            cached.setdefault("fpp", None)
+            cached.setdefault("fpp_source", None)
+
             trim_valuations.append(
                 TrimValuation(
                     visor_trim=visor_trim,
@@ -283,6 +296,22 @@ async def get_trim_valuations_from_scrape(
                 await get_or_fetch_new_pricing_for_year(
                     page, make, model, model_slug, year, trim_map[year], cache_entries
                 )
+
+                # 🔧 Patch: ensure all trims from pricing table are in trim_map
+                for visor_trim, entry in cache_entries.items():
+                    if not visor_trim.startswith(f"{year} {make} {model}"):
+                        continue
+                    kbb_trim = entry.get("kbb_trim")
+                    if not kbb_trim:
+                        continue
+                    # visor_key is just the last piece (e.g., "Premium")
+                    raw_key = visor_trim.replace(f"{year} {make} {model}", "").strip()
+                    visor_key = raw_key if raw_key else "Base"
+                    # make sure trim_map has this key and style
+                    if visor_key not in trim_map[year]:
+                        trim_map[year][visor_key] = []
+                    if kbb_trim not in trim_map[year][visor_key]:
+                        trim_map[year][visor_key].append(kbb_trim)
 
             # Fetch FMVs
             for year, trims in trim_map.items():

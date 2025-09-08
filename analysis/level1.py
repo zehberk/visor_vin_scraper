@@ -5,7 +5,7 @@ import re
 from analysis.cache import *
 from analysis.kbb import get_trim_valuations_from_cache, get_trim_valuations_from_scrape
 from analysis.models import CarListing, DealBin, TrimValuation
-from analysis.normalization import normalize_trim
+from analysis.normalization import canonicalize_trim, normalize_trim, resolve_cache_key
 from analysis.outliers import summarize_outliers
 from analysis.reporting import to_level1_json, render_pdf
 from analysis.scoring import (
@@ -32,21 +32,8 @@ def build_unique_trim_map(
 
         # Raw trim without the year
         raw_trim = year_trim.replace(year, "").strip()
-
-        # Normalize (drop body style, displacement, etc.)
-        norm_trim = normalize_trim(raw_trim)
-
-        # Standardize casing: keep "S" uppercase, numbers untouched, others Title Case
-        parts = norm_trim.split()
-        cased = (
-            " ".join(
-                p.upper() if p.upper() == "S" else p
-                for p in [parts[0]] + [w.title() for w in parts[1:]]
-            )
-            if parts
-            else norm_trim
-        )
-
+        # Normalize + canonicalize casing
+        cased = canonicalize_trim(raw_trim)
         if cased not in trim_map[year]:
             trim_map[year][cased] = []
     return trim_map
@@ -164,14 +151,22 @@ async def create_level1_file(listings: list[dict], metadata: dict):
     seen_ids: set[str] = set()  # guard if input has dupes
 
     for listing in listings:
-        listing_key = listing["title"]
-        fmv = cache_entries[listing_key]["fmv"]
-        fpp = cache_entries[listing_key]["fpp"]
+        raw_title = listing["title"].strip()
+        year = raw_title[:4]
+        raw_trim = (
+            raw_title.replace(year, "").replace(make, "").replace(model, "").strip()
+        )
+        cased_trim = canonicalize_trim(raw_trim)
+        listing_key = f"{year} {make} {model} {cased_trim}"
+        print(raw_title, listing_key)
+        print(cache_entries)
+        fmv = cache_entries[listing_key].get("fmv", None)
+        fpp = cache_entries[listing_key].get("fpp")
         if listing.get("price"):
             price = listing["price"]
             # New prices should be compared to fair purpose price, while Used and Certified
-            # should use fair market value
-            if listing["condition"] == "New":
+            # should use fair market value. If there is no FMV, then we default to FPP
+            if listing["condition"] == "New" or fmv is None:
                 delta = price - fpp
                 compare_price = fpp
             else:
@@ -185,12 +180,10 @@ async def create_level1_file(listings: list[dict], metadata: dict):
 
         deal = rate_deal(price, delta, compare_price)
         uncertainty = rate_uncertainty(listing)
-        risk = rate_risk(listing, price, fmv)
+        risk = rate_risk(listing, price, compare_price)
 
         year = listing_key[:4]
-        trim = (
-            listing_key.replace(year, "").replace(make, "").replace(model, "").strip()
-        )
+        trim = cased_trim
 
         car_listing = CarListing(
             id=listing["id"],
