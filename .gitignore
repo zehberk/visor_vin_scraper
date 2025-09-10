@@ -4,6 +4,10 @@
 # VS Code settings
 .vscode/
 
+# Prettier code formatting
+node_modules/
+.prettierrc
+
 # Python cache files
 __pycache__/
 *.pyc
@@ -21,7 +25,9 @@ presets/presets.json
 
 # Output listing files
 *.json
+*.jsonc
 *.pdf
+*.txt
 !output/example_output.json
 !presets/presets.example.json
 
