@@ -79,7 +79,7 @@ def build_bins_and_crosstab(listings: list[CarListing]) -> tuple[list[DealBin], 
     total = 0
     for row in listings:
         if row.deviation_pct is None:
-            row.deviation_pct = deviation_pct(row.price, row.fmv)
+            row.deviation_pct = deviation_pct(row.price, row.compare_price)
         total += 1
 
     # group by bin

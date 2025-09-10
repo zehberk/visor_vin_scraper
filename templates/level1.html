@@ -106,7 +106,6 @@
 				padding: 0.2em 0.4em;
 				border-radius: 4px;
 				transition: background 0.2s ease;
-				page-break-inside: avoid;
 			}
 			li:hover {
 				background: #f5f5f5;
@@ -158,28 +157,35 @@
 				list-style-type: none;
 				padding-left: 1em;
 				margin: 0 0 1em 0;
+				page-break-inside: auto; /* allow breaks inside the bin */
+				break-inside: auto;
 			}
+
+			.deal-bin li {
+				display: block; /* keep each li self-contained */
+				width: 100%; /* still full width */
+				page-break-inside: avoid; /* don’t split a listing in half */
+				break-inside: avoid;
+				margin: 0.3em 0;
+				padding: 0.2em 0.4em;
+				line-height: 1.3;
+				vertical-align: top; /* helps with inline-block rendering */
+			}
+
 			.listing-title {
 				display: block;
 				font-size: 11pt;
-				/* a touch bigger than body text */
 				font-weight: 600;
-				/* semi-bold to stand out */
-				margin-bottom: 0.1em;
-				/* tighter gap to details */
+				margin-bottom: 0;
 				color: #1a1a1a;
-				/* darker than normal text */
 			}
 			.listing-details {
-				display: block;
 				font-size: 10pt;
-				/* just a fraction smaller */
 				color: #555;
-				/* softer gray */
-				margin-left: 1.5em;
-				/* indent to show hierarchy */
 				line-height: 1.4;
-				/* balanced spacing */
+				margin-top: 0;
+				margin-left: 1em;
+				display: inline-block;
 			}
 			footer {
 				border-top: 2px solid #e5e5e5;
@@ -258,11 +264,11 @@
 
 		<!-- #endregion -->
 
-		<!-- #region Current Resale Values -->
 		<h1>{{ report_title }}</h1>
 		<h3 class="timestamp">Generated: {{ embedded_data["generated_at"] }}</h3>
 		<p>{{ summary }}</p>
 		<main>
+			<!-- #region Current Resale Values -->
 			<h2>
 				Current Resale Values (MSRP / Fair Purchase Price / Fair Market Value)
 			</h2>
@@ -273,13 +279,13 @@
 							class="trim-link"
 							href="{{ trim_val.fmv_source or trim_val.fpp_source }}"
 						>
-							{{ trim_val.kbb_trim }}
+							{{ trim_val.visor_trim }}
 							<span class="link-icon">🔗</span>
 						</a>
-						<span class="count"
-							>({{ count_for_trim(visor_trim, [great_bin, good_bin, fair_bin, poor_bin, bad_bin]) }}
-							listings)</span
-						>
+						<span class="count">
+							({{ count_for_trim(visor_trim, [great_bin, good_bin, fair_bin, poor_bin, bad_bin, no_price_bin]) }}
+							listings)
+						</span>
 						<span class="fmv"
 							>– {{ "${:,.0f}".format(trim_val.msrp) }} /
 							{{ "${:,.0f}".format(trim_val.fpp) }} /
@@ -293,6 +299,12 @@
 					</li>
 				{% endfor %}
 			</ul>
+			<p>
+				<i>
+					{{ analysis.skipped_count }} listings were skipped due to unmapped
+					trims.
+				</i>
+			</p>
 			<!-- #endregion -->
 
 			<!-- #region Analysis Sections -->
@@ -301,16 +313,18 @@
 			<!-- #region Deal Distribution -->
 			<h3>Deal Distribution</h3>
 			<ul>
-				{% for b in analysis.deal_bins %}
+				{% for b in deal_bins %}
 					<li>
 						<span class="bold-highlight">{{ b.category }}</span>: {{ b.count }}
 						({{ b.percent_of_total|round(0) }}%),
 						{% if b.avg_deviation_pct is not none %}
-							avg {{ (b.avg_deviation_pct|abs)|round(0) }}%
+							avg {{ pct(b.avg_deviation_pct) }}
 							{% if b.avg_deviation_pct < 0 %}
 								below
-							{% else %}
+							{% elif b.avg_deviation_pct > 0 %}
 								above
+							{% else %}
+								at
 							{% endif %}
 							comparison price (FPP/FMV)
 						{% else %}
@@ -414,7 +428,8 @@
 					<span class="bold-highlight">Risk</span> → {{ risk_count("High") }}
 					High ({{ risk_pct("High") }}), {{ risk_count("Some") }} Some
 					({{ risk_pct("Some") }}), {{ risk_count("Low") }} Low
-					({{ risk_pct("Low") }})
+					({{ risk_pct("Low") }}), {{ risk_count("Unknown") }} Unknown
+					({{ risk_pct("Unknown") }})
 				</li>
 				<li>
 					<span class="bold-highlight">Uncertainty</span> →
@@ -508,7 +523,7 @@
 
 		<hr />
 
-		<!-- Deal Rating Sections -->
+		<!-- #region Deal Ratings -->
 		{%
 			set bins = [
 			  {"emoji":"🟢","title":"Great","bin":great_bin},
@@ -526,6 +541,8 @@
 				{{ no_price_bin.count }} No List Price
 			</li>
 		</ul>
+
+		<!-- #endregion -->
 	</body>
 	<footer>
 		<!-- #region Definitions & Explanations -->

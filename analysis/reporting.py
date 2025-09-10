@@ -7,7 +7,12 @@ from analysis.models import CarListing, DealBin, TrimValuation
 
 
 def to_level1_json(
-    make: str, model: str, sort: str, deal_bins: list[DealBin], crosstab: dict
+    make: str,
+    model: str,
+    sort: str,
+    deal_bins: list[DealBin],
+    crosstab: dict,
+    skipped_listings: list,
 ) -> dict:
 
     all_listing_count = sum(b.count for b in deal_bins)
@@ -27,6 +32,8 @@ def to_level1_json(
         "fair_pct": f_count / all_listing_count * 100,
         "poor_bad_count": pb_count,
         "poor_bad_pct": pb_count / all_listing_count * 100,
+        "skipped_listings": [l for l in skipped_listings],
+        "skipped_count": len(skipped_listings),
     }
 
 
@@ -156,7 +163,7 @@ async def render_pdf(
     if out_file is None:
         out_dir = Path("output") / "level1"
         out_dir.mkdir(parents=True, exist_ok=True)
-        out_file = out_dir / "level1_analysis_report.pdf"
+        out_file = out_dir / f"{make}_{model}_level1_analysis_report.pdf"
 
     # Render PDF with Playwright
     async with async_playwright() as p:

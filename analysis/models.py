@@ -59,6 +59,7 @@ class CarListing:
     make: str
     model: str
     trim: str
+    title: str
     condition: str  # "New" | "Used" | "Certified"
     miles: int
     price: int
@@ -73,10 +74,6 @@ class CarListing:
         None  # "Great" | "Good" | "Fair" | "Poor" | "Bad" | None if no price
     )
     deviation_pct: Optional[float] = None  # signed; negative = under FMV
-
-    @property
-    def title(self) -> str:
-        return f"{self.year} {self.make} {self.model} {self.trim}"
 
     def __repr__(self):
         return (
@@ -133,6 +130,7 @@ class CarListing:
             make=data["make"],
             model=data["model"],
             trim=data["trim"],
+            title=data["title"],
             condition=data["condition"],
             miles=data["miles"],
             price=data["price"],
@@ -163,6 +161,8 @@ class DealBin:
 
     @property
     def new_listings_pct(self) -> float:
+        if len(self.listings) == 0:
+            return 0.0
         return self.new_listings_count / len(self.listings)
 
     @property
@@ -171,6 +171,8 @@ class DealBin:
 
     @property
     def certified_listings_pct(self) -> float:
+        if len(self.listings) == 0:
+            return 0.0
         return self.certified_listings_count / len(self.listings)
 
     @property
@@ -179,6 +181,8 @@ class DealBin:
 
     @property
     def used_listings_pct(self) -> float:
+        if len(self.listings) == 0:
+            return 0.0
         return self.used_listings_count / len(self.listings)
 
     def to_dict(self) -> dict[str, Any]:

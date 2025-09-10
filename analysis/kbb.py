@@ -1,6 +1,6 @@
 import json, re
 
-from collections import Counter, defaultdict
+from collections import defaultdict
 from datetime import datetime
 from playwright.async_api import async_playwright, Page, TimeoutError
 
@@ -42,39 +42,51 @@ async def get_model_slug_from_vins(page, vins: list[str]) -> str:
 
 
 async def get_trim_options_for_year(
-    page, make, model_slug, year, trim_map, trim_options, make_model_key
-):
+    page,
+    make: str,
+    model: str,
+    model_slug: str,
+    year: str,
+    trim_map_for_year: dict[str, list[str]],
+    trim_options: dict[str, dict[str, list[str]]],
+    make_model_key: str,
+) -> None:
     if make_model_key in trim_options and year in trim_options[make_model_key]:
         year_trims = trim_options[make_model_key][year]
-        check_trim_collisions(year, year_trims, list(trim_map[year].keys()))
+        check_trim_collisions(year, year_trims, list(trim_map_for_year.keys()), model)
 
         for kbb_trim in year_trims:
             norm_trim = normalize_trim(kbb_trim)
-            visor_key = find_visor_key(norm_trim, list(trim_map[year].keys()))
+            visor_key = find_visor_key(norm_trim, list(trim_map_for_year.keys()), model)
             if visor_key:
-                trim_map[year][visor_key].append(kbb_trim)
+                trim_map_for_year[visor_key].append(kbb_trim)
             else:
                 continue
 
         # Add 'Base' fallback even in cached path
-        base_key = next((k for k in trim_map[year] if k.lower() == "base"), None)
-        if base_key and not trim_map[year][base_key]:
+        base_key = next((k for k in trim_map_for_year if k.lower() == "base"), None)
+        if base_key and not trim_map_for_year[base_key]:
             # Synthesize a single "body_style" from cached names so the picker works
             bs = [{"trims": [{"name": n} for n in year_trims]}]
             picked = pick_base_by_common_tokens(bs)
             if picked:
-                trim_map[year][base_key].append(picked)
+                trim_map_for_year[base_key].append(picked)
         return
 
     url = f"https://kbb.com/{make_string_url_safe(make)}/{model_slug}/{year}/styles/?intent=trade-in-sell&mileage=1"
     await page.goto(url)
     raw = await page.inner_text("script#__NEXT_DATA__")
     data = json.loads(raw)
-    apollo = data["props"]["apolloState"]["_INITIAL_QUERY"]
-    key = next(k for k in apollo if k.startswith("stylesPageQuery"))
-    body_styles = apollo[key]["result"]["ymm"]["bodyStyles"]
+    apollo = data.get("props", {}).get("apolloState", {})
 
-    keys = sorted(trim_map[year].keys(), key=len, reverse=True)
+    styles = find_styles_data(apollo)
+    if not styles:
+        print(f"⚠️ No styles query found for {make} {model_slug} {year}")
+        trim_options.setdefault(make_model_key, {}).setdefault(year, [])
+        return
+    else:
+        body_styles = styles["result"]["ymm"]["bodyStyles"]
+
     year_trims = []
     for bs in body_styles:
         for t in bs["trims"]:
@@ -82,18 +94,19 @@ async def get_trim_options_for_year(
             year_trims.append(kbb_trim)
 
             norm_trim = normalize_trim(kbb_trim)
-            visor_key = find_visor_key(norm_trim, list(trim_map[year].keys()))
+            visor_key = find_visor_key(norm_trim, list(trim_map_for_year.keys()), model)
 
             if visor_key:
-                trim_map[year][visor_key].append(kbb_trim)
+                trim_map_for_year[visor_key].append(kbb_trim)
             else:
                 continue
+    # print("DEBUG year_trims:", year_trims)
 
-    base_key = next((k for k in trim_map[year] if k.lower() == "base"), None)
-    if base_key and not trim_map[year][base_key]:
+    base_key = next((k for k in trim_map_for_year if k.lower() == "base"), None)
+    if base_key and not trim_map_for_year[base_key]:
         picked = pick_base_by_common_tokens(body_styles)
         if picked:
-            trim_map[year][base_key].append(picked)
+            trim_map_for_year[base_key].append(picked)
             # optional: logger.info("Base fallback mapped to %s", picked)
 
     trim_options.setdefault(make_model_key, {})[year] = year_trims
@@ -136,7 +149,7 @@ async def get_or_fetch_new_pricing_for_year(
 
         # Normalize KBB label and map to visor key
         norm_trim = normalize_trim(table_trim)
-        visor_key = find_visor_key(norm_trim, visor_keys)
+        visor_key = find_visor_key(norm_trim, visor_keys, model)
 
         if not visor_key:
             # print(
@@ -146,6 +159,8 @@ async def get_or_fetch_new_pricing_for_year(
 
         visor_trim = f"{year} {make} {model} {visor_key}"
         entry = cache_entries.setdefault(visor_trim, {})
+        entry.setdefault("fmv", None)
+        entry.setdefault("fmv_source", None)
 
         msrp_val = money_to_int(msrp)
         fpp_val = money_to_int(fpp)
@@ -173,7 +188,7 @@ async def get_or_fetch_fmv(
 ):
     # Always normalize the KBB style and map it back to visor trim key
     norm_style = normalize_trim(style)
-    visor_key = find_visor_key(norm_style, [trim])
+    visor_key = find_visor_key(norm_style, [trim], model)
     if not visor_key:
         return
 
@@ -194,7 +209,11 @@ async def get_or_fetch_fmv(
 
     fmv_url = f"https://kbb.com/{make_string_url_safe(make)}/{model_slug}/{year}/{make_string_url_safe(style)}/"
     await page.goto(fmv_url)
-    div_text = await page.inner_text("div.css-fbyg3h")
+    try:
+        div_text = await page.inner_text("div.css-fbyg3h")
+    except TimeoutError:
+        print(fmv_url)
+        return
 
     match = re.search(r"current resale value of \$([\d,]+)", div_text)
     if match:
@@ -291,7 +310,14 @@ async def get_trim_valuations_from_scrape(
             # Fill trim_map with styles
             for year in years:
                 await get_trim_options_for_year(
-                    page, make, model_slug, year, trim_map, trim_options, make_model_key
+                    page,
+                    make,
+                    model,
+                    model_slug,
+                    year,
+                    trim_map[year],
+                    trim_options,
+                    make_model_key,
                 )
                 await get_or_fetch_new_pricing_for_year(
                     page, make, model, model_slug, year, trim_map[year], cache_entries
@@ -377,18 +403,42 @@ def pick_base_by_common_tokens(body_styles: list[dict]) -> str | None:
     return None
 
 
-def check_trim_collisions(year: str, kbb_trims: list[str], visor_keys: list[str]):
+def check_trim_collisions(
+    year: str, kbb_trims: list[str], visor_keys: list[str], model: str
+):
     grouped = defaultdict(list)
     for raw in kbb_trims:
         norm = normalize_trim(raw)
-        match = find_visor_key(norm, visor_keys)  # use the new staged logic
+        match = find_visor_key(norm, visor_keys, model)  # use the new staged logic
         if match:
             grouped[match].append(raw)
 
     collisions = {k: v for k, v in grouped.items() if len(v) > 1}
     if collisions:
         msg_lines = [f"⚠️ Trim mapping collision for {year}:"]
-        for visor_key, raws in collisions.items():
-            msg_lines.append(f"  Visor key '{visor_key}' maps to: {', '.join(raws)}")
-        # print warning instead of raising
-        print("\n".join(msg_lines))
+        # for visor_key, raws in collisions.items():
+        #     msg_lines.append(f"  Visor key '{visor_key}' maps to: {', '.join(raws)}")
+        # # print warning instead of raising
+        # print("\n".join(msg_lines))
+
+
+def find_styles_data(apollo: dict) -> dict | None:
+    """
+    Recursively search for a value containing 'result.ymm.bodyStyles'.
+    Returns the full object if found, else None.
+    """
+    if isinstance(apollo, dict):
+        for k, v in apollo.items():
+            if isinstance(k, str) and (
+                k.startswith("stylesPageQuery") or k.startswith("stylesQuery")
+            ):
+                return v  # return the nested value, not the key
+            found = find_styles_data(v)
+            if found:
+                return found
+    elif isinstance(apollo, list):
+        for item in apollo:
+            found = find_styles_data(item)
+            if found:
+                return found
+    return None

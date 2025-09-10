@@ -19,8 +19,11 @@ def stopwatch(label="Elapsed"):  # pragma: no cover
     print(f"{label}: {end - start:.2f} seconds")
 
 
-def make_string_url_safe(text: str) -> str:
-    return text.lower().replace(" ", "-")
+def make_string_url_safe(s: str) -> str:
+    s = s.lower().strip()
+    s = s.replace("/", "-")  # ✅ replace fractions like 1/2
+    s = re.sub(r"[^a-z0-9]+", "-", s)
+    return s.strip("-")
 
 
 def format_years(metadata_years: list[str]) -> str:

@@ -5,7 +5,7 @@ import re
 from analysis.cache import *
 from analysis.kbb import get_trim_valuations_from_cache, get_trim_valuations_from_scrape
 from analysis.models import CarListing, DealBin, TrimValuation
-from analysis.normalization import canonicalize_trim, normalize_trim, resolve_cache_key
+from analysis.normalization import canonicalize_trim, resolve_cache_key
 from analysis.outliers import summarize_outliers
 from analysis.reporting import to_level1_json, render_pdf
 from analysis.scoring import (
@@ -33,7 +33,7 @@ def build_unique_trim_map(
         # Raw trim without the year
         raw_trim = year_trim.replace(year, "").strip()
         # Normalize + canonicalize casing
-        cased = canonicalize_trim(raw_trim)
+        cased = canonicalize_trim(raw_trim, model)
         if cased not in trim_map[year]:
             trim_map[year][cased] = []
     return trim_map
@@ -70,12 +70,23 @@ def extract_years(quicklist: list[str]) -> list[str]:
     return sorted(years)
 
 
-def build_quicklist(slimmed: list[dict]) -> list[str]:
+def build_quicklist(slimmed: list[dict], make: str, model: str) -> list[str]:
     def _year_key(t: str) -> int:
         m = re.match(r"^\s*(\d{4})\b", t)
         return int(m.group(1)) if m else 9999
 
-    titles = [str(l.get("title", "")) for l in slimmed if l.get("title")]
+    titles = []
+    for l in slimmed:
+        raw_title = str(l.get("title", "")).strip()
+        if not raw_title:
+            continue
+        year = raw_title[:4]
+        raw_trim = (
+            raw_title.replace(year, "").replace(make, "").replace(model, "").strip()
+        )
+        cased_trim = canonicalize_trim(raw_trim, model)
+        titles.append(f"{year} {make} {model} {cased_trim}")
+
     unique = sorted(set(titles), key=lambda t: (_year_key(t), t.lower()))
     return unique
 
@@ -123,10 +134,12 @@ async def create_level1_file(listings: list[dict], metadata: dict):
     cache, slugs, trim_options, cache_entries = prepare_cache()
     make = metadata["vehicle"]["make"]
     model = metadata["vehicle"]["model"]
-    quicklist = build_quicklist(listings)
+    quicklist = build_quicklist(listings, make, model)
     years = extract_years(quicklist)
     trim_map = build_unique_trim_map(quicklist, make, model)
-    vins = [l["vin"] for l in listings[:3]]
+    # Sort listings by mileage first to hopefully get valid VINs first (KBB may not have info for newer vehicles)
+    vin_data = sorted(listings, key=lambda x: x["mileage"])
+    vins = [entry["vin"] for entry in vin_data]
 
     trim_valuations: list[TrimValuation]
     if cache_covers_all(make, model, years, trim_map, cache):
@@ -149,6 +162,7 @@ async def create_level1_file(listings: list[dict], metadata: dict):
     no_price_bin = DealBin(category="No Price", listings=[], count=0)
     all_listings: list[CarListing] = []
     seen_ids: set[str] = set()  # guard if input has dupes
+    skipped_listings = []
 
     for listing in listings:
         raw_title = listing["title"].strip()
@@ -156,12 +170,20 @@ async def create_level1_file(listings: list[dict], metadata: dict):
         raw_trim = (
             raw_title.replace(year, "").replace(make, "").replace(model, "").strip()
         )
-        cased_trim = canonicalize_trim(raw_trim)
-        listing_key = f"{year} {make} {model} {cased_trim}"
-        print(raw_title, listing_key)
-        print(cache_entries)
-        fmv = cache_entries[listing_key].get("fmv", None)
-        fpp = cache_entries[listing_key].get("fpp")
+        cased_trim = canonicalize_trim(raw_trim, model)
+        prefix = f"{year} {make} {model}"
+        listing_key = f"{prefix} {cased_trim}".strip()
+        cache_key = resolve_cache_key(listing_key, cache_entries)
+        # related_keys = [k for k in cache_entries.keys() if k.startswith(prefix)]
+        # print("DEBUG listing_key:", listing_key)
+        # print("DEBUG related cache keys:", related_keys)
+        if cache_key not in cache_entries:
+            # No valid mapping — skip this listing entirely
+            skipped_listings.append(listing)
+            print(f"⚠️ Skipping listing with unmapped trim: {listing_key}")
+            continue
+        fmv = cache_entries[cache_key].get("fmv", None)
+        fpp = cache_entries[cache_key].get("fpp")
         if listing.get("price"):
             price = listing["price"]
             # New prices should be compared to fair purpose price, while Used and Certified
@@ -182,7 +204,7 @@ async def create_level1_file(listings: list[dict], metadata: dict):
         uncertainty = rate_uncertainty(listing)
         risk = rate_risk(listing, price, compare_price)
 
-        year = listing_key[:4]
+        year = cache_key[:4]
         trim = cased_trim
 
         car_listing = CarListing(
@@ -192,6 +214,7 @@ async def create_level1_file(listings: list[dict], metadata: dict):
             make=make,
             model=model,
             trim=trim,
+            title=cache_key,
             condition=listing["condition"],
             miles=listing["mileage"],
             price=price,
@@ -200,7 +223,7 @@ async def create_level1_file(listings: list[dict], metadata: dict):
             risk=risk,
             deal_rating=deal,
             compare_price=compare_price,
-            msrp=cache_entries[listing_key]["msrp"],
+            msrp=cache_entries[cache_key]["msrp"],
             fpp=fpp,
             fmv=fmv,
             deviation_pct=deviation_pct(price, fmv),
@@ -209,6 +232,7 @@ async def create_level1_file(listings: list[dict], metadata: dict):
         if deal == "No price":
             no_price_bin.listings.append(car_listing)
             no_price_bin.count += 1
+            all_listings.append(car_listing)
             continue
 
         # single append, guarded
@@ -224,7 +248,7 @@ async def create_level1_file(listings: list[dict], metadata: dict):
     poor_bin = bin_map["Poor"]
     bad_bin = bin_map["Bad"]
 
-    cond_dist_total = compute_condition_distribution_total(all_listings, no_price_bin)
+    cond_dist_total = compute_condition_distribution_total(all_listings)
 
     analysis_json = to_level1_json(
         make=make,
@@ -232,6 +256,7 @@ async def create_level1_file(listings: list[dict], metadata: dict):
         sort=metadata["filters"]["sort"],  # already available in start_level1_analysis
         deal_bins=deal_bins,
         crosstab=crosstab,
+        skipped_listings=skipped_listings,
     )
     analysis_json["condition_distribution"] = cond_dist_total
 

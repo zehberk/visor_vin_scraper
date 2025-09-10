@@ -1,47 +1,82 @@
 import re
 
+from visor_scraper.constants import BASE_SUFFIXES
+
 ENGINE_MARKERS = {"s", "turbo", "hybrid", "phev", "plug-in"}
+DRIVETRAINS = {"4x4", "4wd", "2wd", "4xe"}
 BODY_STYLE_PAT = re.compile(
-    r"\s+(Sedan|Coupe|Hatchback|Sport Utility|Crew Cab|Extended Cab|Van|Wagon|Pickup)\s+4D(\s+\d+(\s*/\s*\d+)?\s*ft)?$",
+    r"\s+(Sedan|Coupe|Hatchback|Sport Utility|SUV|Crew Cab|Extended Cab|Van|Wagon|Pickup)"
+    r"\s+4D(\s+(\d+(\s+\d+/\d+)?)(\s*ft))?$",
     re.IGNORECASE,
 )
 DISPLACEMENT_PAT = re.compile(r"^\d+(\.\d+)?[LS]?$", re.IGNORECASE)
 
 
-def find_visor_key(norm_trim: str, visor_keys: list[str]) -> str | None:
+def find_visor_key(norm_trim: str, visor_keys: list[str], model: str) -> str | None:
     """
-    Match a normalized KBB trim to visor keys with controlled fuzziness:
-    1. Exact match against visor keys (ideal).
-    2. If no match, progressively strip leading tokens from the KBB trim
-       and only accept if the remainder matches a visor key exactly.
-    3. If nothing matches, skip with a warning.
+    Map a normalized KBB trim string to one of the visor keys.
+    Handles:
+      - Empty normalized trims (zero tokens) => 'Base'
+      - Exact matches
+      - Leading-token drop fallback
     """
-    norm_trim_clean = norm_trim.lower().strip()
-    visor_norm_map = {normalize_trim(vk).lower().strip(): vk for vk in visor_keys}
+    # Tokenize once
+    toks = norm_trim.split()
 
-    # 1. Exact match
-    if norm_trim_clean in visor_norm_map:
-        return visor_norm_map[norm_trim_clean]
+    # 1. Special case: no tokens left after normalization
+    if not toks and "Base" in visor_keys:
+        return "Base"
 
-    # 2. Progressive prefix stripping
-    tokens = norm_trim_clean.split()
-    while len(tokens) > 1:
-        tokens = tokens[1:]  # drop the first token
-        candidate = " ".join(tokens)
-        if candidate in visor_norm_map:
-            return visor_norm_map[candidate]
+        # special case: trim equals model name → Base
+    if model and norm_trim.lower() == model.lower() and "Base" in visor_keys:
+        return "Base"
 
-    # 3. Nothing matched
-    # print(f"\tSkipping unmapped trim '{norm_trim}' (visor keys: {visor_keys})")
+    # 2. Exact match (case-insensitive)
+    for vk in visor_keys:
+        if norm_trim.lower() == vk.lower():
+            return vk
+
+    # 3. Leading-token drop fallback
+    def tokenize(s: str) -> list[str]:
+        return s.lower().split()
+
+    norm_tokens = toks
+    key_tokens = {vk: tokenize(vk) for vk in visor_keys}
+
+    for vk, toks_vk in key_tokens.items():
+        if len(norm_tokens) > 1 and norm_tokens[1:] == toks_vk:
+            return vk
+        if len(toks_vk) > 1 and toks_vk[1:] == norm_tokens:
+            return vk
+
     return None
 
 
 def normalize_trim(raw: str) -> str:
+    name = raw.strip()
+    # if the whole thing is just a body style suffix → Base
+    if any(name.lower() == s.lower() for s in BASE_SUFFIXES):
+        return ""
+
     # 1. strip body style
-    name = BODY_STYLE_PAT.sub("", raw).strip()
+    name = BODY_STYLE_PAT.sub("", name).strip()
+    # print(f"Raw name: {raw}, Stripped: {name}")
 
     # 2. tokenize
     tokens = name.split()
+
+    # ✅ strip marketing prefixes like "All New" / "The All-New"
+    if len(tokens) >= 2 and tokens[0].lower() == "all" and tokens[1].lower() == "new":
+        tokens = tokens[2:]
+    elif tokens and tokens[0].lower() == "all-new":
+        tokens = tokens[1:]
+    elif (
+        len(tokens) >= 3
+        and tokens[0].lower() == "the"
+        and tokens[1].lower() == "all"
+        and tokens[2].lower() == "new"
+    ):
+        tokens = tokens[3:]
 
     # 3. remove displacement if first
     if tokens and DISPLACEMENT_PAT.match(tokens[0]):
@@ -65,7 +100,11 @@ def normalize_trim(raw: str) -> str:
         tokens = tokens[1:]
 
     # 6. add rest back
-    result_tokens.extend([t.title() for t in tokens])
+    result_tokens.extend([smart_title(t) for t in tokens])
+
+    # remove marketing suffixes like 'Edition'
+    if result_tokens and result_tokens[-1].lower() == "edition":
+        result_tokens = result_tokens[:-1]
 
     # 7. prepend engine markers if any
     if engine_markers:
@@ -80,12 +119,19 @@ def strip_engine_tokens(tokens: list[str]) -> list[str]:
 
 def resolve_cache_key(raw_title: str, cache_entries: dict[str, dict]) -> str:
     raw_title = raw_title.strip()
+    # print("DEBUG resolve_cache_key: raw_title =", raw_title)
+
     year, make, model, *trim_parts = raw_title.split(maxsplit=3)
     raw_trim = trim_parts[0] if trim_parts else ""
     norm_trim = normalize_trim(raw_trim)
 
     # find any cache key with same year/make/model and normalized trim match
-    for k in cache_entries.keys():
+    related_keys = [
+        k for k in cache_entries.keys() if k.startswith(f"{year} {make} {model}")
+    ]
+    for k in related_keys:
+        # print("DEBUG compare:", k, "vs", norm_trim)
+
         if k.startswith(f"{year} {make} {model}"):
             cache_trim = k.replace(f"{year} {make} {model}", "").strip()
             if normalize_trim(cache_trim) == norm_trim:
@@ -100,12 +146,27 @@ def resolve_cache_key(raw_title: str, cache_entries: dict[str, dict]) -> str:
     return raw_title
 
 
-def canonicalize_trim(raw_trim: str) -> str:
+def canonicalize_trim(raw_trim: str, model: str) -> str:
     """
     Normalize and apply consistent Title Case for trims across cache + listings.
     Removes body styles/displacements via normalize_trim first.
     """
     norm_trim = normalize_trim(raw_trim)
     if not norm_trim:
-        return norm_trim
-    return " ".join(p.title() for p in norm_trim.split())
+        return "Base"
+        # if KBB trim is just the model name (e.g. "Forester"), map to Base
+    if model and norm_trim.lower() == model.lower():
+        return "Base"
+    return " ".join(smart_title(p) for p in norm_trim.split())
+
+
+def smart_title(token: str) -> str:
+    # preserve all-caps for 3-letter codes or anything with a hyphen
+    if len(token) <= 3 and token.isalpha():
+        return token.upper()
+    # Preserve casing for drivetrain / alphanumeric codes like 4x4, 4WD, etc.
+    if token.lower() in DRIVETRAINS:
+        return token
+    if "-" in token:
+        return token.upper()
+    return token.title()

@@ -77,3 +77,13 @@ ADDON_REGEX = re.compile(r"^(.*?)[\u00a0 ]*\(\$(\d[\d,]*)\)")
 PRICE_CHANGE_REGEX = re.compile(r"(-?\$[\d,]+)")
 PRICE_MATCH_REGEX = re.compile(r"\$([\d,]+)")
 MILES_MATCH_REGEX = re.compile(r"([\d,]+)")
+
+BASE_SUFFIXES = [
+    "Sport Utility 4D",
+    "SUV 4D",
+    "Sedan 4D",
+    "Coupe 2D",
+    "Hatchback 4D",
+    "Pickup 4D",
+    "Truck 4D",
+]
