@@ -44,7 +44,7 @@ def create_report_parameter_summary(metadata: dict) -> str:
     """
 
     summary = "This report reflects{condition_summary}listings retrieved using the {sort_method} sort option"
-    condition_summary = ""
+    condition_summary = " "
     price_summary = ""
     miles_summary = ""
     filters = metadata["filters"]
