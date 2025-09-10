@@ -180,7 +180,7 @@ async def create_level1_file(listings: list[dict], metadata: dict):
         if cache_key not in cache_entries:
             # No valid mapping — skip this listing entirely
             skipped_listings.append(listing)
-            print(f"⚠️ Skipping listing with unmapped trim: {listing_key}")
+            print(f"⚠️  Skipping listing with unmapped trim: {listing_key}")
             continue
         fmv = cache_entries[cache_key].get("fmv", None)
         fpp = cache_entries[cache_key].get("fpp")

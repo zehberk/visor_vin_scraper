@@ -81,7 +81,7 @@ async def get_trim_options_for_year(
 
     styles = find_styles_data(apollo)
     if not styles:
-        print(f"⚠️ No styles query found for {make} {model_slug} {year}")
+        print(f"⚠️  No styles query found for {make} {model_slug} {year}")
         trim_options.setdefault(make_model_key, {}).setdefault(year, [])
         return
     else:
@@ -415,7 +415,7 @@ def check_trim_collisions(
 
     collisions = {k: v for k, v in grouped.items() if len(v) > 1}
     if collisions:
-        msg_lines = [f"⚠️ Trim mapping collision for {year}:"]
+        msg_lines = [f"⚠️  Trim mapping collision for {year}:"]
         # for visor_key, raws in collisions.items():
         #     msg_lines.append(f"  Visor key '{visor_key}' maps to: {', '.join(raws)}")
         # # print warning instead of raising

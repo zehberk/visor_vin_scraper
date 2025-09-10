@@ -1,3 +1,5 @@
+import sys
+
 from datetime import datetime
 from jinja2 import Environment, FileSystemLoader
 from pathlib import Path
@@ -16,6 +18,11 @@ def to_level1_json(
 ) -> dict:
 
     all_listing_count = sum(b.count for b in deal_bins)
+    if all_listing_count == 0:
+        print(
+            f"🚨 Unable to generate report: 0 listings have been ranked. {len(skipped_listings)} listings have been skipped."
+        )
+        sys.exit(0)
     gg_count = sum(b.count for b in deal_bins if b.category in ("Great", "Good"))
     f_count = sum(b.count for b in deal_bins if b.category == "Fair")
     pb_count = sum(b.count for b in deal_bins if b.category in ("Poor", "Bad"))
