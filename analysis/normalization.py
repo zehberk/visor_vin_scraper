@@ -102,10 +102,6 @@ def normalize_trim(raw: str) -> str:
     # 6. add rest back
     result_tokens.extend([smart_title(t) for t in tokens])
 
-    # remove marketing suffixes like 'Edition'
-    if result_tokens and result_tokens[-1].lower() == "edition":
-        result_tokens = result_tokens[:-1]
-
     # 7. prepend engine markers if any
     if engine_markers:
         result_tokens = engine_markers + result_tokens
