@@ -24,18 +24,13 @@ def build_unique_trim_map(
 ) -> dict[str, dict[str, list[str]]]:
     trim_map: dict[str, dict[str, list[str]]] = {}
     for ymmt in quicklist:
-        # Remove make/model, extract year
-        year_trim = ymmt.replace(make, "").replace(model, "").strip()
-        year = year_trim[:4]
+        year = ymmt[:4]
         if year not in trim_map:
             trim_map[year] = {}
 
-        # Raw trim without the year
-        raw_trim = year_trim.replace(year, "").strip()
-        # Normalize + canonicalize casing
-        cased = canonicalize_trim(raw_trim, model)
-        if cased not in trim_map[year]:
-            trim_map[year][cased] = []
+        trim = ymmt.replace(year, "").replace(make, "").replace(model, "").strip()
+        if trim not in trim_map[year]:
+            trim_map[year][trim] = []
     return trim_map
 
 
@@ -65,14 +60,8 @@ def build_quicklist(slimmed: list[dict], make: str, model: str) -> list[str]:
 
     titles = []
     for l in slimmed:
-        raw_title = str(l.get("title", "")).strip()
-        if not raw_title:
-            continue
-        year = raw_title[:4]
-        raw_trim = (
-            raw_title.replace(year, "").replace(make, "").replace(model, "").strip()
-        )
-        cased_trim = canonicalize_trim(raw_trim, model)
+        year = l["title"][:4]
+        cased_trim = canonicalize_trim(l["trim"], model)
         titles.append(f"{year} {make} {model} {cased_trim}")
 
     unique = sorted(set(titles), key=lambda t: (_year_key(t), t.lower()))
@@ -156,16 +145,10 @@ async def create_level1_file(listings: list[dict], metadata: dict):
     for listing in listings:
         raw_title = listing["title"].strip()
         year = raw_title[:4]
-        raw_trim = (
-            raw_title.replace(year, "").replace(make, "").replace(model, "").strip()
-        )
-        cased_trim = canonicalize_trim(raw_trim, model)
-        prefix = f"{year} {make} {model}"
-        listing_key = f"{prefix} {cased_trim}".strip()
+        cased_trim = canonicalize_trim(listing["trim"], model)
+        listing_key = f"{year} {make} {model} {cased_trim}"
         cache_key = resolve_cache_key(listing_key, cache_entries)
-        # related_keys = [k for k in cache_entries.keys() if k.startswith(prefix)]
-        # print("DEBUG listing_key:", listing_key)
-        # print("DEBUG related cache keys:", related_keys)
+
         if cache_key not in cache_entries:
             # No valid mapping — skip this listing entirely
             skipped_listings.append(listing)
@@ -193,16 +176,13 @@ async def create_level1_file(listings: list[dict], metadata: dict):
         uncertainty = rate_uncertainty(listing)
         risk = rate_risk(listing, price, compare_price)
 
-        year = cache_key[:4]
-        trim = cased_trim
-
         car_listing = CarListing(
             id=listing["id"],
             vin=listing["vin"],
             year=int(year),
             make=make,
             model=model,
-            trim=trim,
+            trim=cased_trim,
             trim_version=listing["trim_version"],
             title=cache_key,
             condition=listing["condition"],
