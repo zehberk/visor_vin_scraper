@@ -52,18 +52,6 @@ def _price_history_lowest(price_history: list[dict] | None) -> bool:
     return False
 
 
-def _days_on_market(listing: dict) -> int | None:
-    """Pull DOM from common locations."""
-    # Preferred: nested velocity block
-    try:
-        dom = listing.get("market_velocity", {}).get("this_vehicle_days")
-        avg = listing.get("market_velocity", {}).get("avg_days_on_market")
-        return int(dom) - int(avg) if dom is not None and avg is not None else None
-    except Exception:
-        pass
-    return None
-
-
 def extract_years(quicklist: list[str]) -> list[str]:
     """Extract unique 4-digit years from quicklist entries, sorted ascending."""
     years = {ymmt[:4] for ymmt in quicklist if ymmt[:4].isdigit()}
@@ -119,10 +107,11 @@ def slim(listing: dict) -> dict:
         "id": listing.get("id"),
         "vin": listing.get("vin"),
         "title": listing.get("title"),
+        "trim": listing.get("trim"),
+        "trim_version": listing["specs"].get("Trim Version"),
         "condition": listing.get("condition"),
         "price": _to_int(listing.get("price")),
         "mileage": _to_int(listing.get("mileage")),
-        "days_on_market_delta": _days_on_market(listing),
         "price_history_lowest": _price_history_lowest(listing.get("price_history")),
         "report_present": carfax_present or autocheck_present,
         "window_sticker_present": sticker_present,
@@ -214,6 +203,7 @@ async def create_level1_file(listings: list[dict], metadata: dict):
             make=make,
             model=model,
             trim=trim,
+            trim_version=listing["trim_version"],
             title=cache_key,
             condition=listing["condition"],
             miles=listing["mileage"],
@@ -288,11 +278,6 @@ async def create_level1_file(listings: list[dict], metadata: dict):
 async def start_level1_analysis(
     listings: list[dict], metadata: dict, args, timestamp: str
 ):
-    """
-    Builds 'level1_input_<Make>_<Model>_<Timestamp>.jsonc' next to your outputs.
-    Returns the file path.
-    Call this AFTER you've saved listings.json and closed the browser.
-    """
     if not listings:
         raise ValueError("No listings provided to create_level1_file().")
 
