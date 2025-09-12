@@ -214,6 +214,9 @@ def build_query_params(args, metadata):
         "save_preset",
         "save_docs",
         "force",
+        "level1",
+        "level2",
+        "level3",
     }
     VALID_ARGS = {"make", "model", "trim", "year", "sort"}
     VALID_KEYS = set(VALID_ARGS) | set(PARAM_NAME_OVERRIDES.keys())
