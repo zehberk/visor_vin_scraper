@@ -20,11 +20,11 @@ def percentile(values: list[int], p: float) -> float:
     return s[lo] * (1 - frac) + s[hi] * frac
 
 
-def money_to_int(s: str | None) -> int | None:
-    if not s:
+# Price/mileage may be strings like "$32,500" or "52,025 mi"
+def to_int(val):
+    if val is None:
         return None
-    s = s.strip()
-    if "—" in s or "N/A" in s or s == "":
-        return None
-    num = "".join(ch for ch in s if ch.isdigit())
-    return int(num) if num else None
+    if isinstance(val, (int, float)):
+        return int(val)
+    chars = "".join(ch for ch in str(val) if ch.isdigit())
+    return int(chars) if chars else None

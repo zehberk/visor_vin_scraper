@@ -7,7 +7,7 @@ from playwright.async_api import async_playwright, Page, TimeoutError
 from analysis.cache import is_fmv_fresh, is_pricing_fresh, save_cache
 from analysis.models import TrimValuation
 from analysis.normalization import find_visor_key, normalize_trim
-from analysis.utils import money_to_int
+from analysis.utils import to_int
 from visor_scraper.utils import make_string_url_safe
 
 
@@ -165,8 +165,10 @@ async def get_or_fetch_new_pricing_for_year(
         entry.setdefault("fmv", None)
         entry.setdefault("fmv_source", None)
 
-        msrp_val = money_to_int(msrp)
-        fpp_val = money_to_int(fpp)
+        fpp_val = None
+        if fpp and fpp.upper() != "TBD":
+            fpp_val = to_int(fpp)
+        msrp_val = to_int(msrp)
 
         entry["visor_trim"] = visor_trim
         if msrp_val is not None:
@@ -175,6 +177,10 @@ async def get_or_fetch_new_pricing_for_year(
         if fpp_val is not None:
             entry["fpp"] = fpp_val
             entry["fpp_source"] = url
+        else:
+            entry["skip_reason"] = (
+                f"There is currently no pricing data for this trim: {norm_trim}"
+            )
 
         entry["pricing_timestamp"] = datetime.now().isoformat()
 

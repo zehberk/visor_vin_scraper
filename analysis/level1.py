@@ -16,7 +16,7 @@ from analysis.scoring import (
     rate_risk,
     rate_uncertainty,
 )
-from analysis.utils import bool_from_url
+from analysis.utils import bool_from_url, to_int
 
 
 def build_unique_trim_map(
@@ -72,15 +72,6 @@ def build_quicklist(slimmed: list[dict], make: str, model: str) -> list[str]:
 def slim(listing: dict) -> dict:
     """Convert a raw listing into the minimal Level-1 schema."""
 
-    # Price/mileage may be strings like "$32,500" or "52,025 mi"
-    def _to_int(val):
-        if val is None:
-            return None
-        if isinstance(val, (int, float)):
-            return int(val)
-        chars = "".join(ch for ch in str(val) if ch.isdigit())
-        return int(chars) if chars else None
-
     addl = listing.get("additional_docs", {}) or {}
     carfax_present = bool_from_url(addl.get("carfax_url"))
     autocheck_present = bool_from_url(addl.get("autocheck_url"))
@@ -100,8 +91,8 @@ def slim(listing: dict) -> dict:
         "trim": listing.get("trim"),
         "trim_version": listing["specs"].get("Trim Version"),
         "condition": listing.get("condition"),
-        "price": _to_int(listing.get("price")),
-        "mileage": _to_int(listing.get("mileage")),
+        "price": to_int(listing.get("price")),
+        "mileage": to_int(listing.get("mileage")),
         "price_history_lowest": _price_history_lowest(listing.get("price_history")),
         "report_present": carfax_present or autocheck_present,
         "window_sticker_present": sticker_present,
@@ -156,11 +147,16 @@ async def create_level1_file(listings: list[dict], metadata: dict):
         listing_key = f"{year} {make} {model} {cased_trim}"
         cache_key = resolve_cache_key(listing_key, cache_entries)
 
-        if cache_key not in cache_entries:
-            # No valid mapping — skip this listing entirely
+        if cache_key not in cache_entries or cache_entries[cache_key].get(
+            "skip_reason"
+        ):
             skipped_listings.append(listing)
-            print(f"⚠️  Skipping listing with unmapped trim: {listing_key}")
+            reason = cache_entries.get(cache_key, {}).get(
+                "skip_reason", "unmapped trim"
+            )
+            print(f"⚠️  Skipping listing {listing_key}: {reason}")
             continue
+
         fmv = cache_entries[cache_key].get("fmv", None)
         fpp = cache_entries[cache_key].get("fpp")
         if listing.get("price"):
