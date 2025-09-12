@@ -603,7 +603,7 @@ def save_results(listings, metadata, args, output_dir="output"):
 async def scrape(args):
     # Try cache before touching the browser
     cached_file = try_get_cached_filename(args)
-    if cached_file and Path(cached_file).exists():
+    if not args.force and cached_file and Path(cached_file).exists():
         print(f"Using cached listings file for today: {cached_file}")
         with open(cached_file, encoding="utf-8") as f:
             payload = json.load(f)
@@ -772,6 +772,9 @@ def main():  # pragma: no cover
         type=capped_max_listings,
         default=50,
         help="Maximum number of listings to retrieve (default: 50, max: 500)",
+    )
+    behavior.add_argument(
+        "--force", action="store_true", help="Overrides the cache for this search"
     )
 
     filters.add_argument(
