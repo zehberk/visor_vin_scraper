@@ -59,6 +59,7 @@ class CarListing:
     make: str
     model: str
     trim: str
+    trim_version: str
     title: str
     condition: str  # "New" | "Used" | "Certified"
     miles: int
@@ -83,6 +84,7 @@ class CarListing:
             f"make={self.make}, "
             f"model={self.model}, "
             f"trim={self.trim}, "
+            f"trim_version={self.trim_version}, "
             f"title={self.title}, "
             f"condition={self.condition}, "
             f"miles={self.miles!r}, "
@@ -106,6 +108,7 @@ class CarListing:
             "make": self.make,
             "model": self.model,
             "trim": self.trim,
+            "trim_version": self.trim_version,
             "title": self.title,
             "condition": self.condition,
             "miles": self.miles,
@@ -130,6 +133,7 @@ class CarListing:
             make=data["make"],
             model=data["model"],
             trim=data["trim"],
+            trim_version=data["trim_version"],
             title=data["title"],
             condition=data["condition"],
             miles=data["miles"],

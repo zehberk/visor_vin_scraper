@@ -261,7 +261,9 @@ async def extract_market_velocity(page, listing, index, metadata):
             sold_el = await sections[0].query_selector(VEHICLE_SOLD_ELEMENT)
             if sold_el:
                 text = await sold_el.inner_text()
-                market_velocity["vehicles_sold_14d"] = int(text.strip())
+                market_velocity["vehicles_sold_14d"] = int(
+                    text.replace(",", "").strip()
+                )
 
         if len(sections) >= 2:
             labels = await sections[1].query_selector_all(DAYS_ON_MARKET_ELEMENT)
@@ -541,9 +543,16 @@ async def extract_listings(browser, page, metadata, max_listings=50):
             )
             vin = await safe_vin(card, index, metadata)
 
+            year = title[:4]
+            make = metadata["vehicle"]["make"]
+            model = metadata["vehicle"]["model"]
             listing = {
                 "id": index,
                 "title": title,
+                "trim": title.replace(year, "", 1)
+                .replace(make, "", 1)
+                .replace(model, "", 1)
+                .strip(),
                 "price": price,
                 "condition": condition,
                 "mileage": mileage,

@@ -24,18 +24,13 @@ def build_unique_trim_map(
 ) -> dict[str, dict[str, list[str]]]:
     trim_map: dict[str, dict[str, list[str]]] = {}
     for ymmt in quicklist:
-        # Remove make/model, extract year
-        year_trim = ymmt.replace(make, "").replace(model, "").strip()
-        year = year_trim[:4]
+        year = ymmt[:4]
         if year not in trim_map:
             trim_map[year] = {}
 
-        # Raw trim without the year
-        raw_trim = year_trim.replace(year, "").strip()
-        # Normalize + canonicalize casing
-        cased = canonicalize_trim(raw_trim, model)
-        if cased not in trim_map[year]:
-            trim_map[year][cased] = []
+        trim = ymmt.replace(year, "").replace(make, "").replace(model, "").strip()
+        if trim not in trim_map[year]:
+            trim_map[year][trim] = []
     return trim_map
 
 
@@ -52,18 +47,6 @@ def _price_history_lowest(price_history: list[dict] | None) -> bool:
     return False
 
 
-def _days_on_market(listing: dict) -> int | None:
-    """Pull DOM from common locations."""
-    # Preferred: nested velocity block
-    try:
-        dom = listing.get("market_velocity", {}).get("this_vehicle_days")
-        avg = listing.get("market_velocity", {}).get("avg_days_on_market")
-        return int(dom) - int(avg) if dom is not None and avg is not None else None
-    except Exception:
-        pass
-    return None
-
-
 def extract_years(quicklist: list[str]) -> list[str]:
     """Extract unique 4-digit years from quicklist entries, sorted ascending."""
     years = {ymmt[:4] for ymmt in quicklist if ymmt[:4].isdigit()}
@@ -77,14 +60,9 @@ def build_quicklist(slimmed: list[dict], make: str, model: str) -> list[str]:
 
     titles = []
     for l in slimmed:
-        raw_title = str(l.get("title", "")).strip()
-        if not raw_title:
-            continue
-        year = raw_title[:4]
-        raw_trim = (
-            raw_title.replace(year, "").replace(make, "").replace(model, "").strip()
-        )
-        cased_trim = canonicalize_trim(raw_trim, model)
+        year = l["title"][:4]
+        base_trim = l["trim_version"] or l["trim"]
+        cased_trim = canonicalize_trim(base_trim, model)
         titles.append(f"{year} {make} {model} {cased_trim}")
 
     unique = sorted(set(titles), key=lambda t: (_year_key(t), t.lower()))
@@ -119,10 +97,11 @@ def slim(listing: dict) -> dict:
         "id": listing.get("id"),
         "vin": listing.get("vin"),
         "title": listing.get("title"),
+        "trim": listing.get("trim"),
+        "trim_version": listing["specs"].get("Trim Version"),
         "condition": listing.get("condition"),
         "price": _to_int(listing.get("price")),
         "mileage": _to_int(listing.get("mileage")),
-        "days_on_market_delta": _days_on_market(listing),
         "price_history_lowest": _price_history_lowest(listing.get("price_history")),
         "report_present": carfax_present or autocheck_present,
         "window_sticker_present": sticker_present,
@@ -167,16 +146,11 @@ async def create_level1_file(listings: list[dict], metadata: dict):
     for listing in listings:
         raw_title = listing["title"].strip()
         year = raw_title[:4]
-        raw_trim = (
-            raw_title.replace(year, "").replace(make, "").replace(model, "").strip()
-        )
-        cased_trim = canonicalize_trim(raw_trim, model)
-        prefix = f"{year} {make} {model}"
-        listing_key = f"{prefix} {cased_trim}".strip()
+        base_trim = listing["trim_version"] or listing["trim"]
+        cased_trim = canonicalize_trim(base_trim, model)
+        listing_key = f"{year} {make} {model} {cased_trim}"
         cache_key = resolve_cache_key(listing_key, cache_entries)
-        # related_keys = [k for k in cache_entries.keys() if k.startswith(prefix)]
-        # print("DEBUG listing_key:", listing_key)
-        # print("DEBUG related cache keys:", related_keys)
+
         if cache_key not in cache_entries:
             # No valid mapping — skip this listing entirely
             skipped_listings.append(listing)
@@ -204,16 +178,14 @@ async def create_level1_file(listings: list[dict], metadata: dict):
         uncertainty = rate_uncertainty(listing)
         risk = rate_risk(listing, price, compare_price)
 
-        year = cache_key[:4]
-        trim = cased_trim
-
         car_listing = CarListing(
             id=listing["id"],
             vin=listing["vin"],
             year=int(year),
             make=make,
             model=model,
-            trim=trim,
+            trim=cased_trim,
+            trim_version=listing["trim_version"],
             title=cache_key,
             condition=listing["condition"],
             miles=listing["mileage"],
@@ -288,11 +260,6 @@ async def create_level1_file(listings: list[dict], metadata: dict):
 async def start_level1_analysis(
     listings: list[dict], metadata: dict, args, timestamp: str
 ):
-    """
-    Builds 'level1_input_<Make>_<Model>_<Timestamp>.jsonc' next to your outputs.
-    Returns the file path.
-    Call this AFTER you've saved listings.json and closed the browser.
-    """
     if not listings:
         raise ValueError("No listings provided to create_level1_file().")
 

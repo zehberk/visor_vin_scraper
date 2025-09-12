@@ -100,7 +100,6 @@ async def get_trim_options_for_year(
                 trim_map_for_year[visor_key].append(kbb_trim)
             else:
                 continue
-    # print("DEBUG year_trims:", year_trims)
 
     base_key = next((k for k in trim_map_for_year if k.lower() == "base"), None)
     if base_key and not trim_map_for_year[base_key]:
@@ -152,9 +151,9 @@ async def get_or_fetch_new_pricing_for_year(
         visor_key = find_visor_key(norm_trim, visor_keys, model)
 
         if not visor_key:
-            # print(
-            #     f"{year}: Unable to map KBB trim '{table_trim}' (normalized '{norm_trim}') to visor keys: {visor_keys}"
-            # )
+            print(
+                f"{year}: Unable to map KBB trim '{table_trim}' (normalized '{norm_trim}') to visor keys: {visor_keys}"
+            )
             continue
 
         visor_trim = f"{year} {make} {model} {visor_key}"

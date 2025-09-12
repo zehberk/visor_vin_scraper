@@ -60,7 +60,6 @@ def normalize_trim(raw: str) -> str:
 
     # 1. strip body style
     name = BODY_STYLE_PAT.sub("", name).strip()
-    # print(f"Raw name: {raw}, Stripped: {name}")
 
     # 2. tokenize
     tokens = name.split()
@@ -115,21 +114,16 @@ def strip_engine_tokens(tokens: list[str]) -> list[str]:
 
 def resolve_cache_key(raw_title: str, cache_entries: dict[str, dict]) -> str:
     raw_title = raw_title.strip()
-    # print("DEBUG resolve_cache_key: raw_title =", raw_title)
-
     year, make, model, *trim_parts = raw_title.split(maxsplit=3)
     raw_trim = trim_parts[0] if trim_parts else ""
     norm_trim = normalize_trim(raw_trim)
 
     # find any cache key with same year/make/model and normalized trim match
-    related_keys = [
-        k for k in cache_entries.keys() if k.startswith(f"{year} {make} {model}")
-    ]
+    ymm = f"{year} {make} {model}"
+    related_keys = [k for k in cache_entries.keys() if k.startswith(ymm)]
     for k in related_keys:
-        # print("DEBUG compare:", k, "vs", norm_trim)
-
-        if k.startswith(f"{year} {make} {model}"):
-            cache_trim = k.replace(f"{year} {make} {model}", "").strip()
+        if k.startswith(ymm):
+            cache_trim = k.replace(ymm, "").strip()
             if normalize_trim(cache_trim) == norm_trim:
                 return k
 
