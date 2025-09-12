@@ -600,6 +600,16 @@ def save_results(listings, metadata, args, output_dir="output"):
     return ts
 
 
+async def run_analysis(listings: list, metadata: dict, args, timestamp: str):
+    if listings:
+        if args.level1:
+            await start_level1_analysis(listings, metadata, args, timestamp)
+        elif args.level2:
+            print("Level 2")
+        elif args.level3:
+            print("Level 3")
+
+
 async def scrape(args):
     # Try cache before touching the browser
     cached_file = try_get_cached_filename(args)
@@ -612,7 +622,7 @@ async def scrape(args):
         timestamp = Path(cached_file).stem.split("_")[-1]
         if args.save_docs:
             await download_files(listings)
-        await start_level1_analysis(listings, metadata, args, timestamp)
+        await run_analysis(listings, metadata, args, timestamp)
         return
 
     metadata = build_metadata(args)
@@ -649,8 +659,7 @@ async def scrape(args):
         await browser.close()  # pragma: no cover
     if args.save_docs:
         await download_files(listings)
-    if listings:
-        await start_level1_analysis(listings, metadata, args, timestamp)
+    await run_analysis(listings, metadata, args, timestamp)
 
 
 # region Command-line logic
@@ -729,7 +738,6 @@ def resolve_args(args):
     if not args.make or not args.model:
         logging.error("You must provide either a --preset OR both --make and --model.")
         exit(1)
-
     return args
 
 
@@ -750,6 +758,7 @@ def main():  # pragma: no cover
     behavior = parser.add_argument_group("Scraper behavior")
     filters = parser.add_argument_group("Search filters")
     sorting = parser.add_argument_group("Sorting options")
+    analysis = parser.add_mutually_exclusive_group()
 
     presets.add_argument(
         "--preset", type=str, help="Optional preset name from presets.json"
@@ -808,6 +817,16 @@ def main():  # pragma: no cover
         choices=SORT_OPTIONS.keys(),
         default="Newest",
         help="Sort order for results",
+    )
+
+    analysis.add_argument(
+        "--level1", action="store_true", help="Creates a level 1 analysis report"
+    )
+    analysis.add_argument(
+        "--level2", action="store_true", help="Creates a level 2 analysis report"
+    )
+    analysis.add_argument(
+        "--level3", action="store_true", help="Creates a level 3 analysis report"
     )
 
     args = resolve_args(parser.parse_args())
