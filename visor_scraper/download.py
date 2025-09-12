@@ -1,8 +1,7 @@
 # tabs only; Python 3.13
-import os, json, base64, time, subprocess
+import base64, json, os, requests, shutil, subprocess, time
 from pathlib import Path
 from typing import Iterable
-import requests
 from urllib.parse import urlparse
 from websocket import create_connection
 from playwright.async_api import async_playwright
@@ -302,6 +301,19 @@ def _collect_report_jobs(listings: Iterable[dict]):
 
 
 def download_report_pdfs(listings: Iterable[dict]) -> None:
+
+    def _is_chrome_installed():
+        return (
+            shutil.which("google-chrome")
+            or shutil.which("chrome")
+            or shutil.which("chromium")
+            or shutil.which("msedge")  # optional, if you want Edge as fallback
+        ) is not None
+
+    if not _is_chrome_installed():
+        print("Chrome not installed, cannot save documents")
+        return
+
     jobs = _collect_report_jobs(listings)
     if not jobs:
         return
