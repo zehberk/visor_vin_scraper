@@ -61,7 +61,8 @@ def build_quicklist(slimmed: list[dict], make: str, model: str) -> list[str]:
     titles = []
     for l in slimmed:
         year = l["title"][:4]
-        cased_trim = canonicalize_trim(l["trim"], model)
+        base_trim = l["trim_version"] or l["trim"]
+        cased_trim = canonicalize_trim(base_trim, model)
         titles.append(f"{year} {make} {model} {cased_trim}")
 
     unique = sorted(set(titles), key=lambda t: (_year_key(t), t.lower()))
@@ -145,7 +146,8 @@ async def create_level1_file(listings: list[dict], metadata: dict):
     for listing in listings:
         raw_title = listing["title"].strip()
         year = raw_title[:4]
-        cased_trim = canonicalize_trim(listing["trim"], model)
+        base_trim = listing["trim_version"] or listing["trim"]
+        cased_trim = canonicalize_trim(base_trim, model)
         listing_key = f"{year} {make} {model} {cased_trim}"
         cache_key = resolve_cache_key(listing_key, cache_entries)
 
