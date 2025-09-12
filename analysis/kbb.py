@@ -1,4 +1,4 @@
-import json, re
+import json, re, sys
 
 from collections import defaultdict
 from datetime import datetime
@@ -38,7 +38,11 @@ async def get_model_slug_from_vins(page, vins: list[str]) -> str:
             return make_string_url_safe(model_slug)
         except TimeoutError:
             print(f"Could not model slug from VIN: {vin}")
-    raise Exception(f"No model slugs could be retrieved from provided VINs: {vins}")
+
+    print(
+        "No models could be mapped from the provided listings. This vehicle's information does not appear on KBB."
+    )
+    sys.exit(1)
 
 
 async def get_trim_options_for_year(
