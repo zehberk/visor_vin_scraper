@@ -1,5 +1,5 @@
 # tabs only; Python 3.13
-import base64, json, os, requests, shutil, subprocess, time
+import base64, json, os, platform, requests, shutil, subprocess, time
 from pathlib import Path
 from typing import Iterable
 from urllib.parse import urlparse
@@ -303,12 +303,41 @@ def _collect_report_jobs(listings: Iterable[dict]):
 def download_report_pdfs(listings: Iterable[dict]) -> None:
 
     def _is_chrome_installed():
-        return (
-            shutil.which("google-chrome")
-            or shutil.which("chrome")
-            or shutil.which("chromium")
-            or shutil.which("msedge")  # optional, if you want Edge as fallback
-        ) is not None
+        # First check PATH names
+        candidates = [
+            "google-chrome",
+            "google-chrome-stable",
+            "chrome",
+            "chrome.exe",
+            "chromium",
+            "chromium-browser",
+        ]
+        for name in candidates:
+            path = shutil.which(name)
+            if path:
+                return path
+
+        # OS-specific checks
+        system = platform.system()
+        if system == "Darwin":  # macOS
+            path = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+            if os.path.exists(path):
+                return path
+        elif system == "Windows":
+            # common install locations
+            program_files = os.environ.get("PROGRAMFILES", r"C:\Program Files")
+            program_files_x86 = os.environ.get(
+                "PROGRAMFILES(X86)", r"C:\Program Files (x86)"
+            )
+            paths = [
+                os.path.join(program_files, "Google/Chrome/Application/chrome.exe"),
+                os.path.join(program_files_x86, "Google/Chrome/Application/chrome.exe"),
+            ]
+            for path in paths:
+                if os.path.exists(path):
+                    return path
+
+        return None
 
     if not _is_chrome_installed():
         print("Chrome not installed, cannot save documents")
@@ -316,6 +345,7 @@ def download_report_pdfs(listings: Iterable[dict]) -> None:
 
     jobs = _collect_report_jobs(listings)
     if not jobs:
+        print("No documents to save")
         return
     Path(OUTPUT_ROOT).mkdir(parents=True, exist_ok=True)
     _bootstrap_profile(USER_DATA_DIR)
