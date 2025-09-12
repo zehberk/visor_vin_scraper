@@ -116,9 +116,14 @@ async def create_level1_file(listings: list[dict], metadata: dict):
     quicklist = build_quicklist(listings, make, model)
     years = extract_years(quicklist)
     trim_map = build_unique_trim_map(quicklist, make, model)
+
     # Sort listings by mileage first to hopefully get valid VINs first (KBB may not have info for newer vehicles)
-    vin_data = sorted(listings, key=lambda x: x["mileage"])
-    vins = [entry["vin"] for entry in vin_data]
+    def _sort_key(listing: dict):
+        condition_rank = 0 if listing["condition"].lower() == "used" else 1
+        return (condition_rank, listing["mileage"])
+
+    vin_data = sorted(listings, key=_sort_key)
+    vins = [listing["vin"] for listing in vin_data[: min(10, len(listings))]]
 
     trim_valuations: list[TrimValuation]
     if cache_covers_all(make, model, years, trim_map, cache):
