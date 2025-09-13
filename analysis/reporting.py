@@ -125,7 +125,7 @@ async def render_pdf(
     env = Environment(loader=FileSystemLoader("templates"))
     template = env.get_template("level1.html")
 
-    report_title = f"Level 1 Market Analysis Report – {make} {model}"  # utils.format_years(metadata["years"])
+    report_title = f"{make} {model} Market Overview — Level 1"  # utils.format_years(metadata["years"])
     generated_at = datetime.now().strftime("%B %d, %Y %I:%M %p")
 
     summary = create_report_parameter_summary(metadata)
