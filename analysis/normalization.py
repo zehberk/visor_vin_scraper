@@ -58,13 +58,13 @@ def normalize_trim(raw: str) -> str:
     if any(name.lower() == s.lower() for s in BASE_SUFFIXES):
         return ""
 
-    # 1. strip body style
+    # Strip body style
     name = BODY_STYLE_PAT.sub("", name).strip()
 
-    # 2. tokenize
+    # Tokenize
     tokens = name.split()
 
-    # ✅ strip marketing prefixes like "All New" / "The All-New"
+    # Strip marketing prefixes like "All New" / "The All-New"
     if len(tokens) >= 2 and tokens[0].lower() == "all" and tokens[1].lower() == "new":
         tokens = tokens[2:]
     elif tokens and tokens[0].lower() == "all-new":
@@ -77,11 +77,11 @@ def normalize_trim(raw: str) -> str:
     ):
         tokens = tokens[3:]
 
-    # 3. remove displacement if first
+    # Remove displacement if first
     if tokens and DISPLACEMENT_PAT.match(tokens[0]):
         tokens = tokens[1:]
 
-    # 4. keep engine markers separate (Turbo, Hybrid, PHEV, etc.)
+    # Keep engine markers separate (Turbo, Hybrid, PHEV, etc.)
     engine_markers = []
     while tokens and tokens[0].lower() in {"turbo", "hybrid", "phev", "plug-in"}:
         marker = tokens.pop(0).lower()
@@ -92,16 +92,16 @@ def normalize_trim(raw: str) -> str:
         else:
             engine_markers.append(marker.title())
 
-    # 5. special handling for "S"
+    # Special handling for "S"
     result_tokens = []
     if tokens and tokens[0].upper() == "S":
         result_tokens.append("S")
         tokens = tokens[1:]
 
-    # 6. add rest back
+    # Add rest back
     result_tokens.extend([smart_title(t) for t in tokens])
 
-    # 7. prepend engine markers if any
+    # Prepend engine markers if any
     if engine_markers:
         result_tokens = engine_markers + result_tokens
 

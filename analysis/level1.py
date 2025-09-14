@@ -142,7 +142,11 @@ async def create_level1_file(listings: list[dict], metadata: dict):
     for listing in listings:
         raw_title = listing["title"].strip()
         year = raw_title[:4]
-        base_trim = listing["trim_version"] or listing["trim"]
+        base_trim = (
+            listing["trim_version"]
+            if listing["trim_version"] and listing["trim_version"] != "Not specified"
+            else listing["trim"]
+        )
         cased_trim = canonicalize_trim(base_trim, model)
         listing_key = f"{year} {make} {model} {cased_trim}"
         cache_key = resolve_cache_key(listing_key, cache_entries)
@@ -154,7 +158,9 @@ async def create_level1_file(listings: list[dict], metadata: dict):
             reason = cache_entries.get(cache_key, {}).get(
                 "skip_reason", "unmapped trim"
             )
-            print(f"⚠️  Skipping listing {listing_key}: {reason}")
+            print(
+                f"⚠️  Skipping listing #{listing["id"]} {listing_key} (Base Trim: {base_trim}): {reason}"
+            )
             continue
 
         fmv = cache_entries[cache_key].get("fmv", None)

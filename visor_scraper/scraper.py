@@ -1,7 +1,7 @@
 import argparse, asyncio, json, logging, os, sys
 from datetime import date
 from pathlib import Path
-from playwright.async_api import async_playwright, TimeoutError
+from playwright.async_api import async_playwright, Browser, Page, TimeoutError
 from tqdm import tqdm
 from urllib.parse import urlencode
 
@@ -334,7 +334,13 @@ async def extract_install_options(page, listing, index, metadata):
         )
 
 
-async def extract_spec_details(page, listing, index, metadata):
+async def extract_spec_details(
+    page: Page,
+    listing: dict,
+    index: int,
+    metadata: dict,
+    trim_mapping: dict[int, dict[str, list[str]]],
+):
     listing.setdefault("specs", {})
     specs = {}
     SKIP_LABELS = {
@@ -372,9 +378,23 @@ async def extract_spec_details(page, listing, index, metadata):
                     await extract_additional_documents(page, listing, index, metadata)
                 elif label == "Seller":
                     await extract_seller_info(page, listing, index, metadata)
+
         # Store specs in listing after loop
         if specs:
             listing["specs"] = specs
+
+            trim_version = specs.get("Trim Version", None)
+            trim: str = listing["trim"]
+            year: int = listing["year"]
+            if trim_version and trim_version != "Not specified":
+                if year not in trim_mapping:
+                    trim_mapping[year] = {}
+                # now check if it's new for this trim
+                if trim not in trim_mapping[year]:
+                    trim_mapping[year][trim] = []
+                if trim_version not in trim_mapping[year][trim]:
+                    trim_mapping[year][trim].append(trim_version)
+
     except TimeoutError as t:
         metadata["warnings"].append(
             f"Could not extract spec details for listing #{index}: {t}"
@@ -440,7 +460,13 @@ async def extract_price_history(page, listing, index, metadata):
     listing["price_history"] = price_history
 
 
-async def extract_full_listing_details(browser, listing, index, metadata):
+async def extract_full_listing_details(
+    browser: Browser,
+    listing: dict,
+    index: int,
+    metadata: dict,
+    trim_mapping: dict[int, dict[str, list[str]]],
+):
     context = await browser.new_context()
     await context.add_cookies(
         convert_browser_cookies_to_playwright(".session/cookies.json")
@@ -459,7 +485,7 @@ async def extract_full_listing_details(browser, listing, index, metadata):
             metadata["warnings"].append(f"Failed to get listing URL for #{index}")
             listing_url = "None"
         listing["listing_url"] = listing_url
-        await extract_spec_details(detail_page, listing, index, metadata)
+        await extract_spec_details(detail_page, listing, index, metadata, trim_mapping)
         await extract_warranty_info(detail_page, listing, index, metadata)
         await extract_market_velocity(detail_page, listing, index, metadata)
         await extract_price_history(detail_page, listing, index, metadata)
@@ -516,7 +542,13 @@ async def auto_scroll_to_load_all(page, metadata, max_listings, delay_ms=250):
     metadata["runtime"]["scrolls"] = i
 
 
-async def extract_listings(browser, page, metadata, max_listings=50):
+async def extract_listings(
+    browser: Browser,
+    page: Page,
+    metadata: dict,
+    trim_mapping: dict[int, dict[str, list[str]]],
+    max_listings=50,
+):
     listings = []
     cards = await page.query_selector_all(LISTING_CARD_SELECTOR)
 
@@ -549,6 +581,7 @@ async def extract_listings(browser, page, metadata, max_listings=50):
             listing = {
                 "id": index,
                 "title": title,
+                "year": int(year),
                 "trim": title.replace(year, "", 1)
                 .replace(make, "", 1)
                 .replace(model, "", 1)
@@ -561,7 +594,7 @@ async def extract_listings(browser, page, metadata, max_listings=50):
 
             try:
                 await extract_full_listing_details(
-                    browser, listing, index, metadata
+                    browser, listing, index, metadata, trim_mapping
                 )  # Fetch full details in background
             except:
                 msg = f"Failed to extract the full details on listing #{index}"
@@ -643,9 +676,62 @@ async def scrape(args):
             await auto_scroll_to_load_all(page, metadata, args.max_listings)
         else:
             metadata["runtime"]["scrolls"] = 0
+
+        trim_mapping: dict[int, dict[str, list[str]]] = {}
         listings = await extract_listings(
-            browser, page, metadata, args.max_listings
+            browser, page, metadata, trim_mapping, args.max_listings
         )  # pragma: no cover
+
+        # Set trim versions through mapping
+        print("Trim mappings:")
+        print(json.dumps(trim_mapping, indent=2))
+
+        for listing in listings:
+            trim: str = listing["trim"]
+            year: int = listing["year"]
+            trim_version = listing["specs"].get("Trim Verson", None)
+            if not trim_version or trim_version == "Not specified":
+                if (
+                    year in trim_mapping.keys()
+                    and trim in trim_mapping[year].keys()
+                    and len(trim_mapping[year][trim]) > 0
+                ):
+                    if len(trim_mapping[year][trim]) > 1:
+                        print(f"Multiple trims for {listing["id"]} - {trim}")
+
+                        url_stripped = (
+                            re.sub(r"[^0-9A-Za-z]+", " ", listing["listing_url"])
+                            .lower()
+                            .strip()
+                        )
+                        engine = listing["specs"]["Engine"].lower().strip()
+                        print(f"  URL: {url_stripped}")
+                        print(f"  Engine: {engine}")
+
+                        matched = False
+                        # We need to decide which trim to pull. To do this, we search the listing for
+                        # the other phrases. For example, if the trim has "Turbo", we can search the
+                        # listing url and engine for a matching string
+                        for match in sorted(trim_mapping[year][trim]):
+                            strip_engine = re.sub(
+                                r"\s*\d+\.\d+[A-Z]\b", "", match, flags=re.IGNORECASE
+                            )
+                            print("    Engine Stripped: ", strip_engine)
+                            trimmed = strip_engine.replace(trim, "").lower().strip()
+                            print("    Trimmed: ", trimmed)
+                            # exact match, best case scenario
+                            if trimmed in url_stripped or trimmed in engine:
+                                print("Matched! ", match)
+                                matched = True
+                                listing["specs"]["Trim Version"] = match
+                                break
+                        if not matched:
+                            print("   No good matches: ", trim)
+                            print(json.dumps(trim_mapping[year][trim], indent=2))
+                        print("")
+                    else:
+                        listing["specs"]["Trim Version"] = trim_mapping[year][trim][0]
+
         if len(listings) == 0:
             metadata["warnings"].append(
                 "No listings found. Please check your input and try again"
