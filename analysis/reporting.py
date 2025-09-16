@@ -125,7 +125,7 @@ async def render_pdf(
     env = Environment(loader=FileSystemLoader("templates"))
     template = env.get_template("level1.html")
 
-    report_title = f"{make} {model} Market Overview — Level 1"  # utils.format_years(metadata["years"])
+    report_title = f"{make} {model} Market Overview — Level 1"
     generated_at = datetime.now().strftime("%B %d, %Y %I:%M %p")
 
     summary = create_report_parameter_summary(metadata)
@@ -170,7 +170,9 @@ async def render_pdf(
     if out_file is None:
         out_dir = Path("output") / "level1"
         out_dir.mkdir(parents=True, exist_ok=True)
-        out_file = out_dir / f"{make}_{model}_level1_analysis_report.pdf"
+        out_file = out_dir / f"{make}_{model}_level1_analysis_report.pdf".replace(
+            " ", "_"
+        )
 
     # Render PDF with Playwright
     async with async_playwright() as p:
