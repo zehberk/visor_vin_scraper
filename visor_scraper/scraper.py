@@ -1,7 +1,7 @@
 import argparse, asyncio, json, logging, os, sys
 from datetime import date
 from pathlib import Path
-from playwright.async_api import async_playwright, TimeoutError
+from playwright.async_api import async_playwright, Browser, Page, TimeoutError
 from tqdm import tqdm
 from urllib.parse import urlencode
 
@@ -334,7 +334,9 @@ async def extract_install_options(page, listing, index, metadata):
         )
 
 
-async def extract_spec_details(page, listing, index, metadata):
+async def extract_spec_details(
+    page: Page, listing: dict, index: int, metadata: dict, cookies_valid: bool
+) -> bool:
     listing.setdefault("specs", {})
     specs = {}
     SKIP_LABELS = {
@@ -366,9 +368,9 @@ async def extract_spec_details(page, listing, index, metadata):
             # 2-column row: special handling
             elif len(cells) == 2:
                 label = (await cells[0].inner_text()).strip().rstrip(":")
-                if label == "Installed Options":
+                if cookies_valid and label == "Installed Options":
                     await extract_install_options(page, listing, index, metadata)
-                elif label == "Additional Documentation":
+                elif cookies_valid and label == "Additional Documentation":
                     await extract_additional_documents(page, listing, index, metadata)
                 elif label == "Seller":
                     await extract_seller_info(page, listing, index, metadata)
@@ -380,10 +382,12 @@ async def extract_spec_details(page, listing, index, metadata):
         metadata["warnings"].append(
             f"Could not extract spec details for listing #{index}: {t}"
         )
+        return False
     except Exception as e:
         metadata["warnings"].append(
             f"Could not extract spec details for listing #{index}: {e}"
         )
+    return True
 
 
 async def extract_price_history(page, listing, index, metadata):
@@ -441,12 +445,40 @@ async def extract_price_history(page, listing, index, metadata):
     listing["price_history"] = price_history
 
 
-async def extract_full_listing_details(browser, listing, index, metadata):
+async def extract_full_listing_details(
+    browser: Browser,
+    listing: dict,
+    index: int,
+    metadata: dict,
+    cookies_valid: bool | None = None,
+) -> bool:
+    if cookies_valid is None:
+        if cookies_file_is_empty(".session/cookies.json"):
+            cookies_valid = False
+            metadata["warnings"].append(
+                "Cookies file is empty, skipping subscription fields"
+            )
+        else:
+            context = await browser.new_context()
+            await context.add_cookies(
+                convert_browser_cookies_to_playwright(".session/cookies.json")
+            )
+            print("AM I HERE?")
+            page = await context.new_page()
+            cookies_valid = await cookies_are_valid(page)
+            await page.close()
+            await context.close()
+            if not cookies_valid:
+                metadata["warnings"].append(
+                    "Cookies invalid, skipping subscription fields"
+                )
+
     context = await browser.new_context()
     await context.add_cookies(
         convert_browser_cookies_to_playwright(".session/cookies.json")
     )
     detail_page = await context.new_page()
+
     try:
         vin = listing.get("vin")
         url = VIN_DETAILS_URL.format(vin=vin)
@@ -459,8 +491,9 @@ async def extract_full_listing_details(browser, listing, index, metadata):
         except TimeoutError:
             metadata["warnings"].append(f"Failed to get listing URL for #{index}")
             listing_url = "None"
+
         listing["listing_url"] = listing_url
-        await extract_spec_details(detail_page, listing, index, metadata)
+        await extract_spec_details(detail_page, listing, index, metadata, cookies_valid)
         await extract_warranty_info(detail_page, listing, index, metadata)
         await extract_market_velocity(detail_page, listing, index, metadata)
         await extract_price_history(detail_page, listing, index, metadata)
@@ -468,6 +501,7 @@ async def extract_full_listing_details(browser, listing, index, metadata):
         listing["error"] = f"Failed to fetch full details: {e}"
     finally:
         await detail_page.close()
+        return cookies_valid
 
 
 # endregion
@@ -531,6 +565,8 @@ async def extract_listings(browser, page, metadata, max_listings=50):
         )
         cards = cards[:max_listings]
 
+    cookies_valid = None
+
     for idx, card in enumerate(tqdm(cards, desc="Extracting listings", unit="car")):
         index = idx + 1
         try:
@@ -562,8 +598,8 @@ async def extract_listings(browser, page, metadata, max_listings=50):
             }
 
             try:
-                await extract_full_listing_details(
-                    browser, listing, index, metadata
+                cookies_valid = await extract_full_listing_details(
+                    browser, listing, index, metadata, cookies_valid=cookies_valid
                 )  # Fetch full details in background
             except:
                 msg = f"Failed to extract the full details on listing #{index}"

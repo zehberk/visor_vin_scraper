@@ -1,14 +1,11 @@
 # utils.py
-import argparse
-import json
-import logging
-import math
-import os
-import re
-import time
-from visor_scraper.constants import *
+import argparse, json, logging, math, os, re, time
+
 from contextlib import contextmanager
 from datetime import datetime
+from playwright.async_api import Page
+
+from visor_scraper.constants import *
 
 
 @contextmanager
@@ -261,26 +258,70 @@ def build_query_params(args, metadata):
 
 
 def convert_browser_cookies_to_playwright(path):
+    # If file missing, just return empty
+    if not os.path.exists(path):
+        return []
+
     with open(path, "r") as f:
-        raw_cookies = json.load(f)
+        content = f.read().strip()
+        if not content:  # empty file
+            return []
+
+    try:
+        raw_cookies = json.loads(content)
+    except Exception:
+        # Invalid JSON
+        return []
+
+    if not isinstance(raw_cookies, list) or not raw_cookies:
+        return []
 
     playwright_cookies = []
     for c in raw_cookies:
-        playwright_cookie = {
-            "name": c["name"],
-            "value": c["value"],
-            "domain": c["domain"],
-            "path": c.get("path", "/"),
-            "secure": c.get("secure", False),
-            "httpOnly": c.get("httpOnly", False),
-            "sameSite": c.get("sameSite", "Lax").capitalize(),
-        }
-        if "expirationDate" in c:
-            # expirationDate is a float (Chrome), expires must be int (Playwright)
-            playwright_cookie["expires"] = int(math.floor(c["expirationDate"]))
-        playwright_cookies.append(playwright_cookie)
+        try:
+            playwright_cookie = {
+                "name": c["name"],
+                "value": c["value"],
+                "domain": c["domain"],
+                "path": c.get("path", "/"),
+                "secure": c.get("secure", False),
+                "httpOnly": c.get("httpOnly", False),
+                "sameSite": c.get("sameSite", "Lax").capitalize(),
+            }
+            if "expirationDate" in c:
+                # expirationDate is a float (Chrome), expires must be int (Playwright)
+                playwright_cookie["expires"] = int(math.floor(c["expirationDate"]))
+            playwright_cookies.append(playwright_cookie)
+        except KeyError:
+            continue
 
     return playwright_cookies
+
+
+def cookies_file_is_empty(path: str = ".session/cookies.json") -> bool:
+    """Quick check: return True if no cookies are stored or file is invalid."""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return not bool(data)
+    except Exception:
+        return True
+
+
+async def cookies_are_valid(page: Page) -> bool:
+    """
+    Confirm that cookies are still valid by checking for elements that require a subscription.
+    Returns False if cookies are missing/expired.
+    """
+    try:
+        await page.goto(
+            "https://visor.vin/search/listings?make=Mazda&model=Miata&agnostic=false",
+            timeout=3000,
+        )
+        await page.wait_for_selector("div.blur-xs", timeout=3000)
+        return False
+    except Exception:
+        return True
 
 
 async def get_url(page, selector, index, metadata):
