@@ -28,6 +28,7 @@ presets/presets.json
 *.jsonc
 *.pdf
 *.txt
+!output/*/*prompt.txt
 !output/example_output.json
 !presets/presets.example.json
 
