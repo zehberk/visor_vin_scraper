@@ -40,3 +40,4 @@ visor_scraper/test_script.py
 presets/presets.json
 playwright-profile/*
 evalutation_instructions.md
+test.bat

@@ -104,9 +104,9 @@ def create_report_parameter_summary(metadata: dict) -> str:
 
 
 async def render_pdf(
-    make,
-    model,
-    cache_entries,
+    make: str,
+    model: str,
+    cache_entries: dict[str, TrimValuation],
     all_listings: list[CarListing],
     trim_valuations: list[TrimValuation],
     deal_bins: list[DealBin],
@@ -125,30 +125,14 @@ async def render_pdf(
     env = Environment(loader=FileSystemLoader("templates"))
     template = env.get_template("level1.html")
 
-    report_title = f"{make} {model} Market Overview — Level 1"  # utils.format_years(metadata["years"])
+    report_title = f"{make} {model} Market Overview — Level 1"
     generated_at = datetime.now().strftime("%B %d, %Y %I:%M %p")
 
     summary = create_report_parameter_summary(metadata)
 
-    # Build embedded JSON object
-    embedded_data = {
-        "make": make,
-        "model": model,
-        "generated_at": generated_at,
-        "summary": summary,
-        "entries": cache_entries,
-        "bins": {
-            "great": great_bin.to_dict(),
-            "good": good_bin.to_dict(),
-            "fair": fair_bin.to_dict(),
-            "poor": poor_bin.to_dict(),
-            "bad": bad_bin.to_dict(),
-            "no_price": no_price_bin.to_dict(),
-        },
-    }
-
     html_out = template.render(
         report_title=report_title,
+        generated_at=generated_at,
         summary=summary,
         cache_entries=cache_entries,
         all_listings=all_listings,
@@ -163,14 +147,15 @@ async def render_pdf(
         analysis=analysis_json,
         outliers=outliers_json,
         deal_condition_matrix=crosstab,
-        embedded_data=embedded_data,
     )
 
     # Default save location
     if out_file is None:
         out_dir = Path("output") / "level1"
         out_dir.mkdir(parents=True, exist_ok=True)
-        out_file = out_dir / f"{make}_{model}_level1_analysis_report.pdf"
+        out_file = out_dir / f"{make}_{model}_level1_analysis_report.pdf".replace(
+            " ", "_"
+        )
 
     # Render PDF with Playwright
     async with async_playwright() as p:

@@ -1,5 +1,8 @@
+BAD_STRINGS = {"", "unavailable", "n/a", "none", "null"}
+
+
 def bool_from_url(val: str | None) -> bool:
-    """True iff a usable URL string appears present (not 'Unavailable'/empty/None)."""
+    """True if a usable URL string appears present (not 'Unavailable'/empty/None)."""
     if not val:
         return False
     s = str(val).strip().lower()
@@ -28,3 +31,16 @@ def to_int(val):
         return int(val)
     chars = "".join(ch for ch in str(val) if ch.isdigit())
     return int(chars) if chars else None
+
+
+def get_relevant_entries(
+    cache: dict, make: str, model: str, year=""
+) -> dict[str, dict]:
+    model_key = f"{year} {make} {model}" if year else f"{make} {model}"
+    return {k: v for k, v in cache.items() if model_key in k}
+
+
+def is_trim_version_valid(trim_version: str) -> bool:
+    if not trim_version or trim_version.strip().lower() in BAD_STRINGS:
+        return False
+    return any(c.isalnum() for c in trim_version)

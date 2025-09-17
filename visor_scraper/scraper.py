@@ -375,6 +375,7 @@ async def extract_spec_details(page, listing, index, metadata):
         # Store specs in listing after loop
         if specs:
             listing["specs"] = specs
+
     except TimeoutError as t:
         metadata["warnings"].append(
             f"Could not extract spec details for listing #{index}: {t}"
@@ -549,6 +550,7 @@ async def extract_listings(browser, page, metadata, max_listings=50):
             listing = {
                 "id": index,
                 "title": title,
+                "year": int(year),
                 "trim": title.replace(year, "", 1)
                 .replace(make, "", 1)
                 .replace(model, "", 1)

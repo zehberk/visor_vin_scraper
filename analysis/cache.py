@@ -3,6 +3,8 @@ import json
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from analysis.utils import get_relevant_entries
+
 
 CACHE_FILE = Path("output") / "level1_pricing_cache.json"
 CACHE_TTL = timedelta(days=7)
@@ -25,12 +27,12 @@ def prepare_cache():
     cache = load_cache()
     slugs: dict[str, str] = cache.setdefault("model_slugs", {})
     trim_options: dict[str, dict[str, list[str]]] = cache.setdefault("trim_options", {})
-    cache_entries = cache.setdefault("entries", {})
+    cache_entries: dict = cache.setdefault("entries", {})
     return cache, slugs, trim_options, cache_entries
 
 
 def is_fmv_fresh(entry):
-    if "timestamp" not in entry:
+    if "timestamp" not in entry or not entry.get("timestamp"):
         return False
     ts = datetime.fromisoformat(entry["timestamp"])
     return datetime.now() - ts < CACHE_TTL
@@ -47,9 +49,7 @@ def is_pricing_fresh(entry: dict) -> bool:
     return (saved.year == now.year) and (saved.month == now.month)
 
 
-def cache_covers_all(
-    make: str, model: str, years: list[str], trim_map: dict, cache: dict
-) -> bool:
+def cache_covers_all(make: str, model: str, years: list[str], cache: dict) -> bool:
     slugs = cache.get("model_slugs", {})
     trim_options = cache.get("trim_options", {})
     cache_entries = cache.get("entries", {})
@@ -67,13 +67,11 @@ def cache_covers_all(
     ):
         return False
 
-    # Check FMVs for every visor_trim
-    for year, trims in trim_map.items():
-        for trim in trims.keys():
-            visor_trim = f"{year} {make} {model} {trim}"
-            if visor_trim not in cache_entries or not is_fmv_fresh(
-                cache_entries[visor_trim]
-            ):
-                return False
+    if len(cache_entries) == 0:
+        return False
+
+    for entry in get_relevant_entries(cache_entries, make, model):
+        if not is_fmv_fresh(entry):
+            return False
 
     return True

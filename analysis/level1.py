@@ -5,7 +5,10 @@ import re
 from analysis.cache import *
 from analysis.kbb import get_trim_valuations_from_cache, get_trim_valuations_from_scrape
 from analysis.models import CarListing, DealBin, TrimValuation
-from analysis.normalization import canonicalize_trim, resolve_cache_key
+from analysis.normalization import (
+    canonicalize_trim,
+    match_listing_to_kbb_trim,
+)
 from analysis.outliers import summarize_outliers
 from analysis.reporting import to_level1_json, render_pdf
 from analysis.scoring import (
@@ -16,57 +19,18 @@ from analysis.scoring import (
     rate_risk,
     rate_uncertainty,
 )
-from analysis.utils import bool_from_url, to_int
+from analysis.utils import (
+    bool_from_url,
+    get_relevant_entries,
+    is_trim_version_valid,
+    to_int,
+)
 
 
-def build_unique_trim_map(
-    quicklist: list[str], make: str, model: str
-) -> dict[str, dict[str, list[str]]]:
-    trim_map: dict[str, dict[str, list[str]]] = {}
-    for ymmt in quicklist:
-        year = ymmt[:4]
-        if year not in trim_map:
-            trim_map[year] = {}
-
-        trim = ymmt.replace(year, "").replace(make, "").replace(model, "").strip()
-        if trim not in trim_map[year]:
-            trim_map[year][trim] = []
-    return trim_map
-
-
-def _price_history_lowest(price_history: list[dict] | None) -> bool:
-    """True if any entry marks lowest=True."""
-    if not price_history:
-        return False
-    for p in price_history:
-        try:
-            if bool(p.get("lowest")):
-                return True
-        except Exception:
-            pass
-    return False
-
-
-def extract_years(quicklist: list[str]) -> list[str]:
+def extract_years(slimmed: list[dict]) -> list[str]:
     """Extract unique 4-digit years from quicklist entries, sorted ascending."""
-    years = {ymmt[:4] for ymmt in quicklist if ymmt[:4].isdigit()}
+    years = {str(l["year"]) for l in slimmed if l.get("year")}
     return sorted(years)
-
-
-def build_quicklist(slimmed: list[dict], make: str, model: str) -> list[str]:
-    def _year_key(t: str) -> int:
-        m = re.match(r"^\s*(\d{4})\b", t)
-        return int(m.group(1)) if m else 9999
-
-    titles = []
-    for l in slimmed:
-        year = l["title"][:4]
-        base_trim = l["trim_version"] or l["trim"]
-        cased_trim = canonicalize_trim(base_trim, model)
-        titles.append(f"{year} {make} {model} {cased_trim}")
-
-    unique = sorted(set(titles), key=lambda t: (_year_key(t), t.lower()))
-    return unique
 
 
 def slim(listing: dict) -> dict:
@@ -88,12 +52,12 @@ def slim(listing: dict) -> dict:
         "id": listing.get("id"),
         "vin": listing.get("vin"),
         "title": listing.get("title"),
+        "year": listing.get("year"),
         "trim": listing.get("trim"),
         "trim_version": listing["specs"].get("Trim Version"),
         "condition": listing.get("condition"),
         "price": to_int(listing.get("price")),
         "mileage": to_int(listing.get("mileage")),
-        "price_history_lowest": _price_history_lowest(listing.get("price_history")),
         "report_present": carfax_present or autocheck_present,
         "window_sticker_present": sticker_present,
         "warranty_info_present": warranty_present,
@@ -104,9 +68,7 @@ async def create_level1_file(listings: list[dict], metadata: dict):
     cache, slugs, trim_options, cache_entries = prepare_cache()
     make = metadata["vehicle"]["make"]
     model = metadata["vehicle"]["model"]
-    quicklist = build_quicklist(listings, make, model)
-    years = extract_years(quicklist)
-    trim_map = build_unique_trim_map(quicklist, make, model)
+    years = extract_years(listings)
 
     # Sort listings by mileage first to hopefully get valid VINs first (KBB may not have info for newer vehicles)
     def _sort_key(listing: dict):
@@ -117,17 +79,14 @@ async def create_level1_file(listings: list[dict], metadata: dict):
     vins = [listing["vin"] for listing in vin_data[: min(10, len(listings))]]
 
     trim_valuations: list[TrimValuation]
-    if cache_covers_all(make, model, years, trim_map, cache):
-        trim_valuations = get_trim_valuations_from_cache(
-            make, model, trim_map, cache_entries
-        )
+    if cache_covers_all(make, model, years, cache):
+        trim_valuations = get_trim_valuations_from_cache(make, model, cache_entries)
     else:
         trim_valuations = await get_trim_valuations_from_scrape(
             make,
             model,
             years,
             vins,
-            trim_map,
             slugs,
             trim_options,
             cache_entries,
@@ -140,21 +99,30 @@ async def create_level1_file(listings: list[dict], metadata: dict):
     skipped_listings = []
 
     for listing in listings:
-        raw_title = listing["title"].strip()
-        year = raw_title[:4]
-        base_trim = listing["trim_version"] or listing["trim"]
+        year = listing["year"]
+        base_trim = (
+            listing["trim_version"]
+            if is_trim_version_valid(listing["trim_version"])
+            else listing["trim"]
+        )
         cased_trim = canonicalize_trim(base_trim, model)
-        listing_key = f"{year} {make} {model} {cased_trim}"
-        cache_key = resolve_cache_key(listing_key, cache_entries)
+        entries = get_relevant_entries(cache_entries, make, model, year)
+        keys = [v.get("kbb_trim_option", k) for k, v in entries.items()]
+        cache_key = match_listing_to_kbb_trim(
+            year, make, model, cased_trim, base_trim, keys
+        )
 
-        if cache_key not in cache_entries or cache_entries[cache_key].get(
-            "skip_reason"
+        if not cache_key and (
+            cache_key not in cache_entries
+            or cache_entries[cache_key].get("skip_reason")
         ):
             skipped_listings.append(listing)
             reason = cache_entries.get(cache_key, {}).get(
-                "skip_reason", "unmapped trim"
+                "skip_reason", "Could not map KBB trim to Visor Trim"
             )
-            print(f"⚠️  Skipping listing {listing_key}: {reason}")
+            print(
+                f"⚠️  Skipping listing #{listing["id"]} {listing["title"]} (Base Trim: {base_trim}): {reason}"
+            )
             continue
 
         fmv = cache_entries[cache_key].get("fmv", None)
@@ -187,7 +155,8 @@ async def create_level1_file(listings: list[dict], metadata: dict):
             model=model,
             trim=cased_trim,
             trim_version=listing["trim_version"],
-            title=cache_key,
+            title=listing["title"],
+            cache_key=cache_key,
             condition=listing["condition"],
             miles=listing["mileage"],
             price=price,
@@ -236,7 +205,10 @@ async def create_level1_file(listings: list[dict], metadata: dict):
     outliers_json = summarize_outliers(all_listings)
 
     # Only pass along the entries from the quicklist, not the entire cache
-    visible_entries = {k: cache_entries[k] for k in quicklist if k in cache_entries}
+    visible_entries = {
+        k: TrimValuation.from_dict({**v, "kbb_trim": k})
+        for k, v in get_relevant_entries(cache_entries, make, model).items()
+    }
 
     await render_pdf(
         make,

@@ -1,10 +1,11 @@
 import re
 
+from difflib import SequenceMatcher
 from visor_scraper.constants import BASE_SUFFIXES
 
 ENGINE_MARKERS = {"s", "turbo", "hybrid", "phev", "plug-in"}
-DRIVETRAINS = {"4x4", "4wd", "2wd", "4xe"}
-BODY_STYLE_PAT = re.compile(
+DRIVETRAINS = {"4x4", "4wd", "2wd", "4xe", "awd", "rwd"}
+BODY_STYLE_PATTERN = re.compile(
     r"\s+(Sedan|Coupe|Hatchback|Sport Utility|SUV|Crew Cab|Extended Cab|Van|Wagon|Pickup)"
     r"\s+4D(\s+(\d+(\s+\d+/\d+)?)(\s*ft))?$",
     re.IGNORECASE,
@@ -12,59 +13,76 @@ BODY_STYLE_PAT = re.compile(
 DISPLACEMENT_PAT = re.compile(r"^\d+(\.\d+)?[LS]?$", re.IGNORECASE)
 
 
-def find_visor_key(norm_trim: str, visor_keys: list[str], model: str) -> str | None:
+def best_kbb_match(visor_trim: str, kbb_trims: list[str]) -> str | None:
     """
-    Map a normalized KBB trim string to one of the visor keys.
-    Handles:
-      - Empty normalized trims (zero tokens) => 'Base'
-      - Exact matches
-      - Leading-token drop fallback
+    Pick the best KBB trim match for a given Visor trim using fuzzy similarity.
+    Falls back to the first item in case of tie (KBB orders trims by price).
+    Returns None if no KBB trims are given.
     """
-    # Tokenize once
-    toks = norm_trim.split()
+    if not kbb_trims:
+        return None
 
-    # 1. Special case: no tokens left after normalization
-    if not toks and "Base" in visor_keys:
-        return "Base"
+    visor_norm = visor_trim.strip().lower()
+    best_trim = None
+    best_score = -1.0
 
-        # special case: trim equals model name → Base
-    if model and norm_trim.lower() == model.lower() and "Base" in visor_keys:
-        return "Base"
+    for kbb_trim in kbb_trims:
+        score = SequenceMatcher(None, visor_norm, kbb_trim.lower()).ratio()
+        if score > best_score:
+            best_trim = kbb_trim
+            best_score = score
+        # if score == best_score, we *don’t* update best_trim
+        # so the first occurrence stays selected (cheapest trim)
 
-    # 2. Exact match (case-insensitive)
-    for vk in visor_keys:
-        if norm_trim.lower() == vk.lower():
-            return vk
+    return best_trim
 
-    # 3. Leading-token drop fallback
-    def tokenize(s: str) -> list[str]:
-        return s.lower().split()
 
-    norm_tokens = toks
-    key_tokens = {vk: tokenize(vk) for vk in visor_keys}
+def match_listing_to_kbb_trim(
+    year, make, model, cased_trim, raw_trim, kbb_candidates
+) -> str:
+    # 1. Exact match on trim_version (raw_trim)
+    for k in kbb_candidates:
+        if k.endswith(raw_trim):
+            return k
 
-    for vk, toks_vk in key_tokens.items():
-        if len(norm_tokens) > 1 and norm_tokens[1:] == toks_vk:
-            return vk
-        if len(toks_vk) > 1 and toks_vk[1:] == norm_tokens:
-            return vk
+    # 2. Exact match on canonicalized trim
+    for k in kbb_candidates:
+        if k.endswith(cased_trim):
+            return k
 
-    return None
+    # 3. Strip body style + try again
+    for k in kbb_candidates:
+        k_suffix = k.replace(f"{year} {make} {model}", "").strip()
+        stripped = normalize_trim(k_suffix) or "Base"
+        if stripped.lower() == cased_trim.lower():
+            return k
+
+    # 4. Fuzzy fallback
+    suffixes = [k.replace(f"{year} {make} {model}", "").strip() for k in kbb_candidates]
+    best_suffix = best_kbb_match(cased_trim, suffixes)
+    if best_suffix:
+        for k in kbb_candidates:
+            if k.endswith(best_suffix):
+                return k
+
+    return ""
 
 
 def normalize_trim(raw: str) -> str:
+    """
+    Simplified trim normalization:
+    - Remove body style suffixes (e.g. "Sport Utility 4D")
+    - Strip marketing fluff ("All-New", "The All New")
+    - Collapse displacement-only trims (e.g. "2.5L") to empty
+    Everything else is left intact for fuzzy matching.
+    """
     name = raw.strip()
-    # if the whole thing is just a body style suffix → Base
-    if any(name.lower() == s.lower() for s in BASE_SUFFIXES):
-        return ""
 
-    # 1. strip body style
-    name = BODY_STYLE_PAT.sub("", name).strip()
-
-    # 2. tokenize
+    # Remove body style suffixes
+    name = BODY_STYLE_PATTERN.sub("", name).strip()
     tokens = name.split()
 
-    # ✅ strip marketing prefixes like "All New" / "The All-New"
+    # Remove "All-New" / "The All New"
     if len(tokens) >= 2 and tokens[0].lower() == "all" and tokens[1].lower() == "new":
         tokens = tokens[2:]
     elif tokens and tokens[0].lower() == "all-new":
@@ -77,39 +95,11 @@ def normalize_trim(raw: str) -> str:
     ):
         tokens = tokens[3:]
 
-    # 3. remove displacement if first
-    if tokens and DISPLACEMENT_PAT.match(tokens[0]):
-        tokens = tokens[1:]
+    # If the whole thing is just a displacement (e.g. "2.5L"), treat as empty
+    if len(tokens) == 1 and DISPLACEMENT_PAT.match(tokens[0]):
+        return ""
 
-    # 4. keep engine markers separate (Turbo, Hybrid, PHEV, etc.)
-    engine_markers = []
-    while tokens and tokens[0].lower() in {"turbo", "hybrid", "phev", "plug-in"}:
-        marker = tokens.pop(0).lower()
-        if marker == "phev":
-            engine_markers.append("PHEV")
-        elif marker == "plug-in":
-            engine_markers.append("Plug-In")
-        else:
-            engine_markers.append(marker.title())
-
-    # 5. special handling for "S"
-    result_tokens = []
-    if tokens and tokens[0].upper() == "S":
-        result_tokens.append("S")
-        tokens = tokens[1:]
-
-    # 6. add rest back
-    result_tokens.extend([smart_title(t) for t in tokens])
-
-    # 7. prepend engine markers if any
-    if engine_markers:
-        result_tokens = engine_markers + result_tokens
-
-    return " ".join(result_tokens)
-
-
-def strip_engine_tokens(tokens: list[str]) -> list[str]:
-    return [t for t in tokens if t.lower() not in ENGINE_MARKERS]
+    return " ".join(tokens)
 
 
 def resolve_cache_key(raw_title: str, cache_entries: dict[str, dict]) -> str:

@@ -6,8 +6,8 @@ from playwright.async_api import async_playwright, Page, TimeoutError
 
 from analysis.cache import is_fmv_fresh, is_pricing_fresh, save_cache
 from analysis.models import TrimValuation
-from analysis.normalization import find_visor_key, normalize_trim
-from analysis.utils import to_int
+from analysis.normalization import best_kbb_match, normalize_trim
+from analysis.utils import get_relevant_entries, to_int
 from visor_scraper.utils import make_string_url_safe
 
 
@@ -48,33 +48,17 @@ async def get_model_slug_from_vins(page, vins: list[str]) -> str:
 async def get_trim_options_for_year(
     page,
     make: str,
-    model: str,
     model_slug: str,
     year: str,
-    trim_map_for_year: dict[str, list[str]],
     trim_options: dict[str, dict[str, list[str]]],
     make_model_key: str,
 ) -> None:
+    """
+    Fetch available trims for a given year directly from KBB.
+    Returns a list of raw KBB trim names (no visor mapping).
+    """
+    # If we already have cached trims for this year, we don't need another lookup
     if make_model_key in trim_options and year in trim_options[make_model_key]:
-        year_trims = trim_options[make_model_key][year]
-        check_trim_collisions(year, year_trims, list(trim_map_for_year.keys()), model)
-
-        for kbb_trim in year_trims:
-            norm_trim = normalize_trim(kbb_trim)
-            visor_key = find_visor_key(norm_trim, list(trim_map_for_year.keys()), model)
-            if visor_key:
-                trim_map_for_year[visor_key].append(kbb_trim)
-            else:
-                continue
-
-        # Add 'Base' fallback even in cached path
-        base_key = next((k for k in trim_map_for_year if k.lower() == "base"), None)
-        if base_key and not trim_map_for_year[base_key]:
-            # Synthesize a single "body_style" from cached names so the picker works
-            bs = [{"trims": [{"name": n} for n in year_trims]}]
-            picked = pick_base_by_common_tokens(bs)
-            if picked:
-                trim_map_for_year[base_key].append(picked)
         return
 
     url = f"https://kbb.com/{make_string_url_safe(make)}/{model_slug}/{year}/styles/?intent=trade-in-sell&mileage=1"
@@ -85,32 +69,19 @@ async def get_trim_options_for_year(
 
     styles = find_styles_data(apollo)
     if not styles:
-        print(f"⚠️  No styles query found for {make} {model_slug} {year}")
-        trim_options.setdefault(make_model_key, {}).setdefault(year, [])
+        print(f"⚠️  No styles query found for {make_model_key} {year}")
+        trim_options.setdefault(make_model_key, {})[year] = []
         return
-    else:
-        body_styles = styles["result"]["ymm"]["bodyStyles"]
 
+    body_styles = styles["result"]["ymm"]["bodyStyles"]
+
+    # Collect raw KBB trims (e.g., "Premium Sport Utility 4D")
     year_trims = []
     for bs in body_styles:
         for t in bs["trims"]:
-            kbb_trim = t["name"]
-            year_trims.append(kbb_trim)
-
-            norm_trim = normalize_trim(kbb_trim)
-            visor_key = find_visor_key(norm_trim, list(trim_map_for_year.keys()), model)
-
-            if visor_key:
-                trim_map_for_year[visor_key].append(kbb_trim)
-            else:
-                continue
-
-    base_key = next((k for k in trim_map_for_year if k.lower() == "base"), None)
-    if base_key and not trim_map_for_year[base_key]:
-        picked = pick_base_by_common_tokens(body_styles)
-        if picked:
-            trim_map_for_year[base_key].append(picked)
-            # optional: logger.info("Base fallback mapped to %s", picked)
+            kbb_trim = t["name"].strip()
+            if kbb_trim not in year_trims:
+                year_trims.append(kbb_trim)
 
     trim_options.setdefault(make_model_key, {})[year] = year_trims
 
@@ -121,26 +92,39 @@ async def get_or_fetch_new_pricing_for_year(
     model: str,
     model_slug: str,
     year: str,
-    trim_map_for_year: dict[str, list[str]],
-    cache_entries,
+    cache_entries: dict,
+    expected_trims: set[str],
 ) -> None:
-    # pre-check before hitting the page
-    all_fresh = True
-    for visor_key in trim_map_for_year.keys():
-        visor_trim = f"{year} {make} {model} {visor_key}"
-        entry = cache_entries.get(visor_trim, {})
-        if not is_pricing_fresh(entry):
-            all_fresh = False
-            break
+    if expected_trims:
+        # Check cache before hitting the page
+        relevant_entries = get_relevant_entries(cache_entries, make, model, year)
 
-    if all_fresh:
-        return  # nothing to do this year, skip webcall
+        expected_norm = {normalize_trim(t) for t in expected_trims}
+        have_norm = {
+            normalize_trim(
+                v.get("kbb_trim", "").split(f"{year} {make} {model}", 1)[-1].strip()
+            )
+            for v in relevant_entries.values()
+            if "kbb_trim" in v
+        }
+
+        all_fresh = expected_norm.issubset(have_norm) and all(
+            is_pricing_fresh(e) for e in relevant_entries.values()
+        )
+
+        if all_fresh:
+            print(
+                f"Cache for {year} {make} {model} is complete and fresh, skipping fetch"
+            )
+            return
 
     url = f"https://kbb.com/{make_string_url_safe(make)}/{model_slug}/{year}"
     await page.goto(url)
+    await page.wait_for_selector("table.css-lb65co tbody tr >> nth=0", timeout=5000)
     rows = await page.query_selector_all("table.css-lb65co tbody tr")
-    visor_keys = list(trim_map_for_year.keys())
 
+    # Collect the pricing data before attempting to get FMV, otherwise page context gets overwritten and Playwright will throw an error
+    pricing_data = []
     for row in rows:
         divs = await row.query_selector_all("div")
         if len(divs) < 3:
@@ -149,38 +133,69 @@ async def get_or_fetch_new_pricing_for_year(
         table_trim = (await divs[0].inner_text()).strip()
         msrp = (await divs[1].inner_text()).strip()
         fpp = (await divs[2].inner_text()).strip()
+        pricing_data.append((table_trim, msrp, fpp))
 
-        # Normalize KBB label and map to visor key
-        norm_trim = normalize_trim(table_trim)
-        visor_key = find_visor_key(norm_trim, visor_keys, model)
+    for table_trim, msrp, fpp in pricing_data:
+        prefix = f"{year} {make} {model}"
+        kbb_trim = f"{prefix} {table_trim}"
 
-        if not visor_key:
-            print(
-                f"{year}: Unable to map KBB trim '{table_trim}' (normalized '{norm_trim}') to visor keys: {visor_keys}"
+        fmv = None
+        fmv_source = None
+        timestamp = ""
+
+        if expected_trims:
+            # try to match against expected trims
+            norm_table = normalize_trim(table_trim)
+            norm_expected = {t: normalize_trim(t) for t in expected_trims}
+
+            match_trim = next(
+                (t for t, norm in norm_expected.items() if norm == norm_table), None
             )
-            continue
 
-        visor_trim = f"{year} {make} {model} {visor_key}"
-        entry = cache_entries.setdefault(visor_trim, {})
-        entry.setdefault("fmv", None)
-        entry.setdefault("fmv_source", None)
+            if not match_trim:
+                match_trim = best_kbb_match(norm_table, list(norm_expected.values()))
+                if match_trim:
+                    for orig, norm in norm_expected.items():
+                        if norm.lower() == match_trim.lower():
+                            match_trim = orig
+                            break
+
+            if not match_trim:
+                print(
+                    f"⚠️ Could not map pricing trim '{table_trim}' to any expected trim"
+                )
+                continue
+
+            kbb_trim_option = f"{prefix} {match_trim}"
+
+            # ✅ only here do we call FMV
+            fmv, fmv_source, timestamp = await get_or_fetch_fmv(
+                page, year, make, model_slug, match_trim, kbb_trim_option, cache_entries
+            )
+
+        else:
+            # no expected trims → just use pricing table trim as key
+            print(f"ℹ️ No FMV data for {kbb_trim}; saving MSRP/FPP only")
+            kbb_trim_option = kbb_trim
+
+        entry = cache_entries.setdefault(kbb_trim_option, {})
 
         fpp_val = None
         if fpp and fpp.upper() != "TBD":
             fpp_val = to_int(fpp)
         msrp_val = to_int(msrp)
 
-        entry["visor_trim"] = visor_trim
-        if msrp_val is not None:
-            entry["msrp"] = msrp_val
-            entry["msrp_source"] = url
-        if fpp_val is not None:
-            entry["fpp"] = fpp_val
-            entry["fpp_source"] = url
-        else:
-            entry["skip_reason"] = (
-                f"There is currently no pricing data for this trim: {norm_trim}"
-            )
+        entry["kbb_trim"] = kbb_trim
+        entry["fmv"] = fmv
+        entry["fmv_source"] = fmv_source
+        entry["timestamp"] = timestamp
+        entry["msrp"] = msrp_val
+        entry["msrp_source"] = url
+        entry["fpp"] = fpp_val
+        entry["fpp_source"] = url
+
+        if fpp_val is None:
+            entry["skip_reason"] = f"There is currently no pricing data for this trim."
 
         entry["pricing_timestamp"] = datetime.now().isoformat()
 
@@ -189,97 +204,47 @@ async def get_or_fetch_fmv(
     page: Page,
     year: str,
     make: str,
-    model: str,
     model_slug: str,
-    trim: str,
     style: str,
+    kbb_trim: str,
     cache_entries: dict[str, dict],
 ):
-    # Always normalize the KBB style and map it back to visor trim key
-    norm_style = normalize_trim(style)
-    visor_key = find_visor_key(norm_style, [trim], model)
-    if not visor_key:
-        return
-
-    visor_trim = f"{year} {make} {model} {visor_key}"
-    kbb_trim = f"{year} {make} {model} {style}"
-
-    entry = cache_entries.setdefault(visor_trim, {})
+    entry = cache_entries.setdefault(kbb_trim, {})
 
     # Check cache first
     if is_fmv_fresh(entry):
-        return TrimValuation.from_dict(
-            {
-                **entry,
-                "visor_trim": visor_trim,
-                "kbb_trim": entry.get("kbb_trim", kbb_trim),
-            }
-        )
+        return entry.get("fmv"), entry.get("fmv_source"), entry.get("timestamp")
 
     fmv_url = f"https://kbb.com/{make_string_url_safe(make)}/{model_slug}/{year}/{make_string_url_safe(style)}/"
     await page.goto(fmv_url)
     try:
-        div_text = await page.inner_text("div.css-fbyg3h")
-    except TimeoutError:
-        print(fmv_url)
-        return
+        div_text = await page.inner_text("div.css-fbyg3h", timeout=10000)
+    except TimeoutError as t:
+        print("Timeout: ", fmv_url)
+        print(t.message)
+        return None, None, ""
 
     match = re.search(r"current resale value of \$([\d,]+)", div_text)
     if match:
         resale_value = int(match.group(1).replace(",", ""))
-        entry.update(
-            {
-                "visor_trim": visor_trim,
-                "kbb_trim": kbb_trim,
-                "fmv": resale_value,
-                "fmv_source": fmv_url,
-                "timestamp": datetime.now().isoformat(),
-            }
-        )
-        return TrimValuation.from_dict(entry)
+        return resale_value, fmv_url, datetime.now().isoformat()
     else:
         # ✅ fallback when FMV is missing
-        entry.update(
-            {
-                "visor_trim": visor_trim,
-                "kbb_trim": kbb_trim,
-                "fmv": None,
-                "fmv_source": None,
-                "timestamp": datetime.now().isoformat(),
-            }
-        )
-        return TrimValuation.from_dict(entry)
+        return None, None, ""
 
 
-def get_trim_valuations_from_cache(
-    make, model, trim_map, cache_entries
-) -> list[TrimValuation]:
+def get_trim_valuations_from_cache(make, model, cache_entries) -> list[TrimValuation]:
     trim_valuations = []
-    for year, trims in trim_map.items():
-        for trim in trims.keys():
-            visor_trim = f"{year} {make} {model} {trim}"
-            cached = cache_entries[visor_trim]
+    for cached in get_relevant_entries(cache_entries, make, model).values():
+        # ensure keys always exist
+        cached.setdefault("fmv", None)
+        cached.setdefault("fmv_source", None)
+        cached.setdefault("msrp", None)
+        cached.setdefault("msrp_source", None)
+        cached.setdefault("fpp", None)
+        cached.setdefault("fpp_source", None)
 
-            # ensure keys always exist
-            cached.setdefault("fmv", None)
-            cached.setdefault("fmv_source", None)
-            cached.setdefault("msrp", None)
-            cached.setdefault("msrp_source", None)
-            cached.setdefault("fpp", None)
-            cached.setdefault("fpp_source", None)
-
-            trim_valuations.append(
-                TrimValuation(
-                    visor_trim=visor_trim,
-                    kbb_trim=cached["kbb_trim"],
-                    fmv=cached["fmv"],
-                    fmv_source=cached["fmv_source"],
-                    msrp=cached["msrp"],
-                    msrp_source=cached["msrp_source"],
-                    fpp=cached["fpp"],
-                    fpp_source=cached["fpp_source"],
-                )
-            )
+        trim_valuations.append(TrimValuation.from_dict(cached))
     return trim_valuations
 
 
@@ -288,11 +253,10 @@ async def get_trim_valuations_from_scrape(
     model: str,
     years: list[str],
     vins: list[str],
-    trim_map,
-    slugs,
-    trim_options,
-    cache_entries,
-    cache,
+    slugs: dict[str, str],
+    trim_options: dict[str, dict[str, list[str]]],
+    cache_entries: dict[str, dict],
+    cache: dict,
 ) -> list[TrimValuation]:
     trim_valuations = []
     async with async_playwright() as p:
@@ -321,114 +285,25 @@ async def get_trim_valuations_from_scrape(
                 await get_trim_options_for_year(
                     page,
                     make,
-                    model,
                     model_slug,
                     year,
-                    trim_map[year],
                     trim_options,
                     make_model_key,
                 )
+                expected_trims = set(trim_options.get(make_model_key, {}).get(year, []))
                 await get_or_fetch_new_pricing_for_year(
-                    page, make, model, model_slug, year, trim_map[year], cache_entries
+                    page, make, model, model_slug, year, cache_entries, expected_trims
                 )
-
-                # 🔧 Patch: ensure all trims from pricing table are in trim_map
-                for visor_trim, entry in cache_entries.items():
-                    if not visor_trim.startswith(f"{year} {make} {model}"):
-                        continue
-                    kbb_trim = entry.get("kbb_trim")
-                    if not kbb_trim:
-                        continue
-                    # visor_key is just the last piece (e.g., "Premium")
-                    raw_key = visor_trim.replace(f"{year} {make} {model}", "").strip()
-                    visor_key = raw_key if raw_key else "Base"
-                    # make sure trim_map has this key and style
-                    if visor_key not in trim_map[year]:
-                        trim_map[year][visor_key] = []
-                    if kbb_trim not in trim_map[year][visor_key]:
-                        trim_map[year][visor_key].append(kbb_trim)
-
-            # Fetch FMVs
-            for year, trims in trim_map.items():
-                for trim, styles in trims.items():
-                    for style in styles:
-                        entry = await get_or_fetch_fmv(
-                            page,
-                            year,
-                            make,
-                            model,
-                            model_slug,
-                            trim,
-                            style,
-                            cache_entries,
-                        )
-                        if entry:
-                            trim_valuations.append(entry)
         finally:
             try:
                 await browser.close()
             except Exception:
                 pass
             save_cache(cache)
+    for entry in get_relevant_entries(cache_entries, make, model).values():
+        trim_valuations.append(TrimValuation.from_dict(entry))
 
     return trim_valuations
-
-
-def pick_base_by_common_tokens(body_styles: list[dict]) -> str | None:
-    # Collect KBB trim names per body style; usually you’ll hit the right one (e.g., “Wagon 4D”)
-    for bs in body_styles:
-        names = [t["name"] for t in bs.get("trims", [])]
-        if not names:
-            continue
-
-        # Normalize/tokenize
-        def toks(s: str) -> list[str]:
-            return [w.lower() for w in re.findall(r"[A-Za-z0-9]+", s)]
-
-        token_lists = [toks(n) for n in names]
-        common = set(token_lists[0])
-        for tl in token_lists[1:]:
-            common &= set(tl)
-        if not common:
-            continue  # no obvious common suffix/prefix; try next body style
-
-        # Trim with zero residual tokens after removing common = “Base”
-        best = None
-        best_res = []
-        for n, tl in zip(names, token_lists):
-            res = [w for w in tl if w not in common]
-            if not res:
-                return n  # perfect match: only common words (e.g., "Wagon 4D")
-            if (
-                best is None
-                or len(res) < len(best_res)
-                or (len(res) == len(best_res) and len(n) < len(best))
-            ):
-                best, best_res = n, res
-
-        # Fallback: shortest residual wins
-        if best:
-            return best
-    return None
-
-
-def check_trim_collisions(
-    year: str, kbb_trims: list[str], visor_keys: list[str], model: str
-):
-    grouped = defaultdict(list)
-    for raw in kbb_trims:
-        norm = normalize_trim(raw)
-        match = find_visor_key(norm, visor_keys, model)  # use the new staged logic
-        if match:
-            grouped[match].append(raw)
-
-    collisions = {k: v for k, v in grouped.items() if len(v) > 1}
-    if collisions:
-        msg_lines = [f"⚠️  Trim mapping collision for {year}:"]
-        # for visor_key, raws in collisions.items():
-        #     msg_lines.append(f"  Visor key '{visor_key}' maps to: {', '.join(raws)}")
-        # # print warning instead of raising
-        # print("\n".join(msg_lines))
 
 
 def find_styles_data(apollo: dict) -> dict | None:
