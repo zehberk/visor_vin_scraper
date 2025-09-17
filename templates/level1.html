@@ -274,29 +274,29 @@
 			</h2>
 			<ul>
 				{% for kbb_trim, trim_val in cache_entries.items() %}
-					<li>
-						<a
-							class="trim-link"
-							href="{{ trim_val.fmv_source or trim_val.fpp_source }}"
-						>
-							{{ trim_val.kbb_trim }}
-							<span class="link-icon">🔗</span>
-						</a>
-						<span class="count">
-							({{ count_for_trim(trim_val.kbb_trim, [great_bin, good_bin, fair_bin, poor_bin, bad_bin, no_price_bin]) }}
-							listings)
-						</span>
-						<span class="fmv"
-							>– {{ "${:,.0f}".format(trim_val.msrp) }} /
-							{{ "${:,.0f}".format(trim_val.fpp) }} /
-							{% if trim_val.fmv %}
-								{{ "${:,.0f}".format(trim_val.fmv) }}
-							{% else %}
-								{{ "${:,.0f}".format(trim_val.fpp) }}
-								(fallback)
-							{% endif %}
-						</span>
-					</li>
+					{% set listings_count = count_for_trim(trim_val.kbb_trim, [great_bin, good_bin, fair_bin, poor_bin, bad_bin, no_price_bin]) | int %}
+					{% if listings_count > 0 %}
+						<li>
+							<a
+								class="trim-link"
+								href="{{ trim_val.fmv_source or trim_val.fpp_source }}"
+							>
+								{{ trim_val.kbb_trim }}
+								<span class="link-icon">🔗</span>
+							</a>
+							<span class="count"> ({{ listings_count }} listings) </span>
+							<span class="fmv"
+								>– {{ "${:,.0f}".format(trim_val.msrp) }} /
+								{{ "${:,.0f}".format(trim_val.fpp) }} /
+								{% if trim_val.fmv %}
+									{{ "${:,.0f}".format(trim_val.fmv) }}
+								{% else %}
+									{{ "${:,.0f}".format(trim_val.fpp) }}
+									(fallback)
+								{% endif %}
+							</span>
+						</li>
+					{% endif %}
 				{% endfor %}
 			</ul>
 			<p>
