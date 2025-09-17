@@ -4,7 +4,6 @@ from typing import Any, Dict, Optional
 
 @dataclass
 class TrimValuation:
-    visor_trim: str
     kbb_trim: str
     fmv: int
     fmv_source: str
@@ -15,8 +14,7 @@ class TrimValuation:
 
     def __repr__(self):
         return (
-            f"TrimValuation(visor_trim={self.visor_trim!r}, "
-            f"kbb_trim={self.kbb_trim!r}, "
+            f"TrimValuation(kbb_trim={self.kbb_trim!r}, "
             f"fmv={self.fmv}, "
             f"fmv_source={self.fmv_source!r})"
             f"msrp={self.fmv}, "
@@ -27,7 +25,6 @@ class TrimValuation:
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "visor_trim": self.visor_trim,
             "kbb_trim": self.kbb_trim,
             "fmv": self.fmv,
             "fmv_source": self.fmv_source,
@@ -40,7 +37,6 @@ class TrimValuation:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "TrimValuation":
         return cls(
-            visor_trim=data["visor_trim"],
             kbb_trim=data["kbb_trim"],
             fmv=data["fmv"],
             fmv_source=data["fmv_source"],
@@ -61,6 +57,7 @@ class CarListing:
     trim: str
     trim_version: str
     title: str
+    cache_key: str
     condition: str  # "New" | "Used" | "Certified"
     miles: int
     price: int
@@ -86,6 +83,7 @@ class CarListing:
             f"trim={self.trim}, "
             f"trim_version={self.trim_version}, "
             f"title={self.title}, "
+            f"cache_key={self.cache_key}, "
             f"condition={self.condition}, "
             f"miles={self.miles!r}, "
             f"price={self.price!r}, "
@@ -110,6 +108,7 @@ class CarListing:
             "trim": self.trim,
             "trim_version": self.trim_version,
             "title": self.title,
+            "cache_key": self.cache_key,
             "condition": self.condition,
             "miles": self.miles,
             "price": self.price,
@@ -135,6 +134,7 @@ class CarListing:
             trim=data["trim"],
             trim_version=data["trim_version"],
             title=data["title"],
+            cache_key=data["cache_key"],
             condition=data["condition"],
             miles=data["miles"],
             price=data["price"],
