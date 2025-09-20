@@ -1,6 +1,5 @@
 from __future__ import annotations
-
-import re
+from collections import defaultdict
 
 from analysis.cache import *
 from analysis.kbb import get_trim_valuations_from_cache, get_trim_valuations_from_scrape
@@ -37,9 +36,17 @@ def slim(listing: dict) -> dict:
     """Convert a raw listing into the minimal Level-1 schema."""
 
     addl = listing.get("additional_docs", {}) or {}
-    carfax_present = bool_from_url(addl.get("carfax_url"))
-    autocheck_present = bool_from_url(addl.get("autocheck_url"))
-    sticker_present = bool_from_url(addl.get("window_sticker_url"))
+    carfax_present: bool = bool_from_url(addl.get("carfax_url"))
+    autocheck_present: bool = bool_from_url(addl.get("autocheck_url"))
+    sticker_present: bool = bool_from_url(addl.get("window_sticker_url"))
+
+    fuel_type = listing["specs"].get("Fuel Type", "").strip().lower()
+    if "hybrid" in fuel_type:
+        is_hybrid = True
+    elif fuel_type == "" or fuel_type == "not specified":
+        is_hybrid = None  # unknown
+    else:
+        is_hybrid = False
 
     war = listing.get("warranty", {}) or {}
     # Treat "present" as: either a non-unknown overall_status or any coverages listed
@@ -58,6 +65,7 @@ def slim(listing: dict) -> dict:
         "condition": listing.get("condition"),
         "price": to_int(listing.get("price")),
         "mileage": to_int(listing.get("mileage")),
+        "is_hybrid": is_hybrid,
         "report_present": carfax_present or autocheck_present,
         "window_sticker_present": sticker_present,
         "warranty_info_present": warranty_present,
@@ -70,14 +78,6 @@ async def create_level1_file(listings: list[dict], metadata: dict):
     model = metadata["vehicle"]["model"]
     years = extract_years(listings)
 
-    # Sort listings by mileage first to hopefully get valid VINs first (KBB may not have info for newer vehicles)
-    def _sort_key(listing: dict):
-        condition_rank = 0 if listing["condition"].lower() == "used" else 1
-        return (condition_rank, listing["mileage"])
-
-    vin_data = sorted(listings, key=_sort_key)
-    vins = [listing["vin"] for listing in vin_data[: min(10, len(listings))]]
-
     trim_valuations: list[TrimValuation]
     if cache_covers_all(make, model, years, cache):
         trim_valuations = get_trim_valuations_from_cache(make, model, cache_entries)
@@ -85,9 +85,8 @@ async def create_level1_file(listings: list[dict], metadata: dict):
         trim_valuations = await get_trim_valuations_from_scrape(
             make,
             model,
-            years,
-            vins,
             slugs,
+            listings,
             trim_options,
             cache_entries,
             cache,
@@ -97,6 +96,7 @@ async def create_level1_file(listings: list[dict], metadata: dict):
     all_listings: list[CarListing] = []
     seen_ids: set[str] = set()  # guard if input has dupes
     skipped_listings = []
+    skip_summary: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
 
     for listing in listings:
         year = listing["year"]
@@ -112,17 +112,16 @@ async def create_level1_file(listings: list[dict], metadata: dict):
             year, make, model, cased_trim, base_trim, keys
         )
 
-        if not cache_key and (
+        if not cache_key or (
             cache_key not in cache_entries
             or cache_entries[cache_key].get("skip_reason")
         ):
             skipped_listings.append(listing)
+            title = listing["title"]
             reason = cache_entries.get(cache_key, {}).get(
-                "skip_reason", "Could not map KBB trim to Visor Trim"
+                "skip_reason", "Could not map KBB trim to Visor trim."
             )
-            print(
-                f"⚠️  Skipping listing #{listing["id"]} {listing["title"]} (Base Trim: {base_trim}): {reason}"
-            )
+            skip_summary[title][reason] += 1
             continue
 
         fmv = cache_entries[cache_key].get("fmv", None)
@@ -210,6 +209,14 @@ async def create_level1_file(listings: list[dict], metadata: dict):
         for k, v in get_relevant_entries(cache_entries, make, model).items()
     }
 
+    # Output skipped listing reasons
+    skip_messages: list[str] = []
+    # print("The following models have been skipped for these reasons:")
+    for title, reasons in sorted(skip_summary.items()):
+        for reason, count in reasons.items():
+            # print(f"  - {title}: {reason} ({count})")
+            skip_messages.append(f"{title}: {reason} ({count})")
+
     await render_pdf(
         make,
         model,
@@ -227,6 +234,7 @@ async def create_level1_file(listings: list[dict], metadata: dict):
         outliers_json,
         crosstab,
         metadata,
+        skip_messages,
     )
 
 
@@ -238,5 +246,4 @@ async def start_level1_analysis(
 
     # Slim all listings
     slimmed = [slim(l) for l in listings if l is not None]
-
     await create_level1_file(slimmed, metadata)

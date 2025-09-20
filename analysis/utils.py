@@ -37,7 +37,8 @@ def get_relevant_entries(
     cache: dict, make: str, model: str, year=""
 ) -> dict[str, dict]:
     model_key = f"{year} {make} {model}" if year else f"{make} {model}"
-    return {k: v for k, v in cache.items() if model_key in k}
+    hybrid_model_key = f"{year} {make} {model}" if year else f"{make} {model}"
+    return {k: v for k, v in cache.items() if model_key in k or hybrid_model_key in k}
 
 
 def is_trim_version_valid(trim_version: str) -> bool:

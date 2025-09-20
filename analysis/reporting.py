@@ -120,6 +120,7 @@ async def render_pdf(
     outliers_json: dict,
     crosstab: dict,
     metadata: dict,
+    skip_messages: list[str],
     out_file=None,
 ):
     env = Environment(loader=FileSystemLoader("templates"))
@@ -147,6 +148,7 @@ async def render_pdf(
         analysis=analysis_json,
         outliers=outliers_json,
         deal_condition_matrix=crosstab,
+        skip_messages=skip_messages,
     )
 
     # Default save location

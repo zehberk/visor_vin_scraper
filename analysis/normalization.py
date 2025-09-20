@@ -22,13 +22,13 @@ def best_kbb_match(visor_trim: str, kbb_trims: list[str]) -> str | None:
     if not kbb_trims:
         return None
 
-    visor_norm = visor_trim.strip().lower()
-    best_trim = None
-    best_score = -1.0
+    visor_norm: str = visor_trim.strip().lower()
+    best_trim: str = ""
+    best_score: float = -1.0
 
     for kbb_trim in kbb_trims:
         score = SequenceMatcher(None, visor_norm, kbb_trim.lower()).ratio()
-        if score > best_score:
+        if score > best_score and score > 0.3:
             best_trim = kbb_trim
             best_score = score
         # if score == best_score, we *don’t* update best_trim
