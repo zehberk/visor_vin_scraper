@@ -1,4 +1,5 @@
-BAD_STRINGS = {"", "unavailable", "n/a", "none", "null"}
+from visor_scraper.constants import BAD_STRINGS
+from visor_scraper.utils import make_string_url_safe
 
 
 def bool_from_url(val: str | None) -> bool:
@@ -34,11 +35,37 @@ def to_int(val):
 
 
 def get_relevant_entries(
-    cache: dict, make: str, model: str, year=""
+    entries: dict, make: str, model: str, year=""
 ) -> dict[str, dict]:
-    model_key = f"{year} {make} {model}" if year else f"{make} {model}"
-    hybrid_model_key = f"{year} {make} {model}" if year else f"{make} {model}"
-    return {k: v for k, v in cache.items() if model_key in k or hybrid_model_key in k}
+    relevant_entries: dict = {}
+    safe_make = make_string_url_safe(make)
+    safe_model = make_string_url_safe(model)
+    for key, entry in entries.items():
+        url: str = entry.get("msrp_source", "").lower()
+        if not url:
+            continue
+
+        path = url.replace("https://www.kbb.com/", "").replace("https://kbb.com/", "")
+        parts = path.split("/")
+
+        make_slug = parts[0] if len(parts) > 0 else ""
+        model_slug = parts[1] if len(parts) > 1 else ""
+
+        if safe_make == make_slug and safe_model == model_slug:
+            if year:
+                url_year = parts[2] if len(parts) > 2 else ""
+                if year == url_year:
+                    relevant_entries[key] = entry
+                elif not url_year:
+                    # Sometimes the source will not have a year because it is the current
+                    # year, so we check the pricing timestamp as a precaution
+                    timestamp: str = entry.get("pricing_timestamp", "")
+                    if timestamp and timestamp.startswith(year):
+                        relevant_entries[key] = entry
+            else:
+                relevant_entries[key] = entry
+
+    return relevant_entries
 
 
 def is_trim_version_valid(trim_version: str) -> bool:

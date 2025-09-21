@@ -87,3 +87,4 @@ BASE_SUFFIXES = [
     "Pickup 4D",
     "Truck 4D",
 ]
+BAD_STRINGS = {"", "unavailable", "n/a", "none", "null"}
