@@ -335,18 +335,21 @@ async def get_or_fetch_fmv(
         return None, None, ""
 
 
-def get_trim_valuations_from_cache(make, model, cache_entries) -> list[TrimValuation]:
+def get_trim_valuations_from_cache(
+    make: str, model: str, years: list[str], entries: dict
+) -> list[TrimValuation]:
     trim_valuations = []
-    for cached in get_relevant_entries(cache_entries, make, model).values():
-        # ensure keys always exist
-        cached.setdefault("fmv", None)
-        cached.setdefault("fmv_source", None)
-        cached.setdefault("msrp", None)
-        cached.setdefault("msrp_source", None)
-        cached.setdefault("fpp", None)
-        cached.setdefault("fpp_source", None)
+    for y in years:
+        for entry in get_relevant_entries(entries, make, model, y).values():
+            entry.setdefault("model", None)
+            entry.setdefault("fmv", None)
+            entry.setdefault("fmv_source", None)
+            entry.setdefault("msrp", None)
+            entry.setdefault("msrp_source", None)
+            entry.setdefault("fpp", None)
+            entry.setdefault("fpp_source", None)
 
-        trim_valuations.append(TrimValuation.from_dict(cached))
+            trim_valuations.append(TrimValuation.from_dict(entry))
     return trim_valuations
 
 
@@ -361,6 +364,7 @@ async def get_trim_valuations_from_scrape(
 ) -> list[TrimValuation]:
     trim_valuations = []
 
+    relevant_slugs: dict[str, str] = {}
     async with async_playwright() as p:
         request = await p.request.new_context()
         browser = await p.chromium.launch(
@@ -407,9 +411,13 @@ async def get_trim_valuations_from_scrape(
                 pass
             save_cache(cache)
 
-    # Collect valuations regardless of branch
-    for entry in get_relevant_entries(cache_entries, make, model).values():
-        trim_valuations.append(TrimValuation.from_dict(entry))
+    for ymm in relevant_slugs.keys():
+        year = ymm[:4]
+        new_model = ymm.replace(year, "").replace(make, "").lower().strip()
+        for entry in get_relevant_entries(
+            cache_entries, make, new_model, year
+        ).values():
+            trim_valuations.append(TrimValuation.from_dict(entry))
 
     return trim_valuations
 

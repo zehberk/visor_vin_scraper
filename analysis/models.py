@@ -4,6 +4,7 @@ from typing import Any, Dict, Optional
 
 @dataclass
 class TrimValuation:
+    model: str
     kbb_trim: str
     fmv: int
     fmv_source: str
@@ -14,7 +15,8 @@ class TrimValuation:
 
     def __repr__(self):
         return (
-            f"TrimValuation(kbb_trim={self.kbb_trim!r}, "
+            f"TrimValuation(model={self.model}, "
+            f"kbb_trim={self.kbb_trim!r}, "
             f"fmv={self.fmv}, "
             f"fmv_source={self.fmv_source!r})"
             f"msrp={self.fmv}, "
@@ -25,6 +27,7 @@ class TrimValuation:
 
     def to_dict(self) -> Dict[str, Any]:
         return {
+            "model": self.model,
             "kbb_trim": self.kbb_trim,
             "fmv": self.fmv,
             "fmv_source": self.fmv_source,
@@ -37,6 +40,7 @@ class TrimValuation:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "TrimValuation":
         return cls(
+            model=data["model"],
             kbb_trim=data["kbb_trim"],
             fmv=data["fmv"],
             fmv_source=data["fmv_source"],

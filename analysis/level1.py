@@ -25,6 +25,8 @@ from analysis.utils import (
     to_int,
 )
 
+from visor_scraper.constants import BAD_STRINGS
+
 
 def extract_years(slimmed: list[dict]) -> list[str]:
     """Extract unique 4-digit years from quicklist entries, sorted ascending."""
@@ -55,13 +57,16 @@ def slim(listing: dict) -> dict:
         not in {"", "unknown", "n/a", "none"}
     )
 
+    tv = listing["specs"].get("Trim Version", "")
+    valid_tv = tv if tv.lower().strip() not in BAD_STRINGS else ""
+
     return {
         "id": listing.get("id"),
         "vin": listing.get("vin"),
         "title": listing.get("title"),
         "year": listing.get("year"),
         "trim": listing.get("trim"),
-        "trim_version": listing["specs"].get("Trim Version"),
+        "trim_version": valid_tv,
         "condition": listing.get("condition"),
         "price": to_int(listing.get("price")),
         "mileage": to_int(listing.get("mileage")),
@@ -80,7 +85,9 @@ async def create_level1_file(listings: list[dict], metadata: dict):
 
     trim_valuations: list[TrimValuation]
     if cache_covers_all(make, model, years, cache):
-        trim_valuations = get_trim_valuations_from_cache(make, model, cache_entries)
+        trim_valuations = get_trim_valuations_from_cache(
+            make, model, years, cache_entries
+        )
     else:
         trim_valuations = await get_trim_valuations_from_scrape(
             make,
