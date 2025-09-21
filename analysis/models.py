@@ -3,6 +3,7 @@ from typing import Any, Dict, Optional
 
 from visor_scraper.constants import (
     BED_LENGTH_RE,
+    BODY_STYLE_ALIASES,
     BODY_STYLE_RE,
     DRIVETRAINS,
     ENGINE_DISPLACEMENT_RE,
@@ -251,6 +252,8 @@ class TrimProfile:
         if match:
             body_style = match.group(0)
             raw = raw.replace(body_style, "")
+            if body_style in BODY_STYLE_ALIASES:
+                body_style = BODY_STYLE_ALIASES[body_style]
 
         for dt in DRIVETRAINS:
             if dt in raw.lower().split():

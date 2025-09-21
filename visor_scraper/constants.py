@@ -104,3 +104,4 @@ BODY_STYLE_RE = re.compile(
     r"\s+(\dD)",  # door count, e.g. 2D, 4D
     re.IGNORECASE,
 )
+BODY_STYLE_ALIASES = {"SUV 4D": "Sport Utility Vehicle 4D"}
