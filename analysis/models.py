@@ -1,6 +1,13 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
+from visor_scraper.constants import (
+    BED_LENGTH_RE,
+    BODY_STYLE_RE,
+    DRIVETRAINS,
+    ENGINE_DISPLACEMENT_RE,
+)
+
 
 @dataclass
 class TrimValuation:
@@ -202,3 +209,56 @@ class DealBin:
             "condition_counts": self.condition_counts,
             "listings": [listing.to_dict() for listing in self.listings],
         }
+
+
+@dataclass
+class TrimProfile:
+    engine: str | None
+    bed_length: str | None
+    drivetrain: str | None
+    body_style: str | None
+    tokens: list[str]
+    full_trim: str
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "full_trim": self.full_trim,
+            "tokens": self.tokens,
+            "engine": self.engine,
+            "bed_length": self.bed_length,
+            "drivetrain": self.drivetrain,
+        }
+
+    @classmethod
+    def from_string(cls, raw: str) -> "TrimProfile":
+        engine = None
+        bed_length = None
+        drivetrain = None
+        body_style = None
+        full_trim = raw
+
+        match = ENGINE_DISPLACEMENT_RE.search(raw)
+        if match:
+            engine = match.group(0)
+            raw = raw.replace(engine, "")
+
+        match = BED_LENGTH_RE.search(raw)
+        if match:
+            bed_length = match.group(0)
+            raw = raw.replace(bed_length, "")
+
+        match = BODY_STYLE_RE.search(raw)
+        if match:
+            body_style = match.group(0)
+            raw = raw.replace(body_style, "")
+
+        for dt in DRIVETRAINS:
+            if dt in raw.lower().split():
+                drivetrain = dt
+                raw = raw.replace(drivetrain, "")
+                break
+
+        # Tokenize the rest
+        tokens = raw.split()
+
+        return cls(engine, bed_length, drivetrain, body_style, tokens, full_trim)
