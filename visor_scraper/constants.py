@@ -78,7 +78,7 @@ PRICE_CHANGE_REGEX = re.compile(r"(-?\$[\d,]+)")
 PRICE_MATCH_REGEX = re.compile(r"\$([\d,]+)")
 MILES_MATCH_REGEX = re.compile(r"([\d,]+)")
 
-BAD_STRINGS = {"", "unavailable", "n/a", "none", "null", "-"}
+BAD_STRINGS = {"", "unavailable", "n/a", "none", "null", "-", "not specified"}
 DRIVETRAINS = {"4x4", "4wd", "2wd", "4xe", "awd", "rwd"}
 ENGINE_DISPLACEMENT_RE = re.compile(
     r"\b"  # start at a word boundary
