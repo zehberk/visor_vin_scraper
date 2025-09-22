@@ -205,6 +205,17 @@
 			.example-lines div {
 				margin-left: 0.5rem;
 			}
+			.skip-messages {
+				font-size: 9pt;
+				color: #666;
+				font-style: italic;
+				margin-top: 0.5em;
+				margin-bottom: 1em;
+			}
+			.skip-messages li {
+				margin: 0.1em 0;
+				padding: 0;
+			}
 		</style>
 		<!--#endregion CSS -->
 	</head>
@@ -301,8 +312,16 @@
 			</ul>
 			<p>
 				<i>
-					{{ analysis.skipped_count }} listings were skipped due to unmapped
-					trims.
+					{% if skip_messages %}
+						<div class="skip-messages">
+							<p>The following models have been skipped for these reasons:</p>
+							<ul>
+								{% for msg in skip_messages %}
+									<li>- {{ msg }}</li>
+								{% endfor %}
+							</ul>
+						</div>
+					{% endif %}
 				</i>
 			</p>
 			<!-- #endregion -->

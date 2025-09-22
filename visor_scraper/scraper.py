@@ -463,7 +463,6 @@ async def extract_full_listing_details(
             await context.add_cookies(
                 convert_browser_cookies_to_playwright(".session/cookies.json")
             )
-            print("AM I HERE?")
             page = await context.new_page()
             cookies_valid = await cookies_are_valid(page)
             await page.close()

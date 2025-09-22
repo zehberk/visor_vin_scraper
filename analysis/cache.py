@@ -70,8 +70,9 @@ def cache_covers_all(make: str, model: str, years: list[str], cache: dict) -> bo
     if len(cache_entries) == 0:
         return False
 
-    for entry in get_relevant_entries(cache_entries, make, model):
-        if not is_fmv_fresh(entry):
-            return False
+    for y in years:
+        for entry in get_relevant_entries(cache_entries, make, model, y):
+            if not is_fmv_fresh(entry):
+                return False
 
     return True
