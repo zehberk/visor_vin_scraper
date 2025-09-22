@@ -485,7 +485,9 @@ async def extract_full_listing_details(
         await detail_page.wait_for_selector(DETAIL_PAGE_ELEMENT, timeout=20000)
 
         try:
-            link = await detail_page.query_selector(LISTING_URL_ELEMENT)
+            link = await detail_page.wait_for_selector(
+                LISTING_URL_ELEMENT, timeout=5000
+            )
             listing_url = await link.get_attribute("href") if link else None
         except TimeoutError:
             metadata["warnings"].append(f"Failed to get listing URL for #{index}")

@@ -72,3 +72,37 @@ def is_trim_version_valid(trim_version: str) -> bool:
     if not trim_version or trim_version.strip().lower() in BAD_STRINGS:
         return False
     return any(c.isalnum() for c in trim_version)
+
+
+def get_variant_map(
+    make: str, model: str, listings: list[dict]
+) -> dict[str, list[dict]]:
+
+    mapped_by_title: dict[str, list[dict]] = {}
+    for l in listings:
+        year = l["year"]
+        ymm = f"{year} {make} {model}"
+        mapped_by_title.setdefault(ymm, []).append(l)
+    sorted_mapping = dict(sorted(mapped_by_title.items()))
+
+    variant_map: dict[str, list[dict]] = {}
+    for ymm, listings in sorted_mapping.items():
+        hybrid = f"{ymm} Hybrid"
+        plugin = f"{ymm} Plug-in Hybrid"
+
+        for l in listings:
+            if l["is_plugin"] is True:
+                variant_map.setdefault(plugin, []).append(l)
+            elif l["is_hybrid"] is True:
+                variant_map.setdefault(hybrid, []).append(l)
+            else:
+                variant_map.setdefault(ymm, []).append(l)
+
+    return variant_map
+
+
+def find_variant_key(variant_map: dict[str, list[dict]], listing: dict) -> str | None:
+    for key, listings in variant_map.items():
+        if listing in listings:
+            return key
+    return None

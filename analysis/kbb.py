@@ -7,35 +7,8 @@ from playwright.async_api import APIRequestContext, async_playwright, Page, Time
 from analysis.cache import is_fmv_fresh, is_pricing_fresh, save_cache
 from analysis.models import TrimValuation
 from analysis.normalization import best_kbb_match
-from analysis.utils import get_relevant_entries, to_int
+from analysis.utils import get_relevant_entries, get_variant_map, to_int
 from visor_scraper.utils import make_string_url_safe
-
-
-def get_hybrid_map(sorted_mapping: dict[str, list[dict]]) -> dict[str, list[dict]]:
-    map_with_hybrids: dict[str, list[dict]] = {}
-    for ymm, listings in sorted_mapping.items():
-        all_none = all(l["is_hybrid"] is None for l in listings)
-        all_hybrid = all(
-            l["is_hybrid"] is True or l["is_hybrid"] is None for l in listings
-        )
-        all_non_hybrid = all(
-            l["is_hybrid"] is False or l["is_hybrid"] is None for l in listings
-        )
-        if all_none:
-            map_with_hybrids.setdefault(ymm, []).extend(listings)
-        elif not all_hybrid and not all_non_hybrid:
-            map_with_hybrids.setdefault(ymm, []).extend(
-                [l for l in listings if l["is_hybrid"] is False]
-            )
-            map_with_hybrids.setdefault(f"{ymm} Hybrid", []).extend(
-                [l for l in listings if l["is_hybrid"] is True]
-            )
-        elif all_non_hybrid:
-            map_with_hybrids.setdefault(ymm, []).extend(listings)
-        elif all_hybrid:
-            map_with_hybrids.setdefault(ymm, []).extend(listings)
-            map_with_hybrids.setdefault(f"{ymm} Hybrid", []).extend(listings)
-    return map_with_hybrids
 
 
 async def get_model_slug_map(
@@ -46,8 +19,6 @@ async def get_model_slug_map(
     make: str,
     model: str,
 ) -> dict[str, str]:
-    mapped_by_title: dict[str, list[dict]] = {}
-    map_with_hybrids: dict[str, list[dict]] = {}
     relevant_slugs: dict[str, str] = {}
 
     # Sort listings by mileage first to hopefully get valid VINs first (KBB may not have info for newer vehicles)
@@ -58,21 +29,17 @@ async def get_model_slug_map(
     def _get_vins(listings: list) -> list[str]:
         return [listing["vin"] for listing in listings[: min(10, len(listings))]]
 
-    for l in slimmed:
-        year = l["year"]
-        ymm = f"{year} {make} {model}"
-        mapped_by_title.setdefault(ymm, []).append(l)
+    variant_map = get_variant_map(make, model, slimmed)
 
-    map_with_hybrids = get_hybrid_map(dict(sorted(mapped_by_title.items())))
-
-    for model_key, listings in map_with_hybrids.items():
+    for model_key, listings in variant_map.items():
         if slugs and model_key in slugs:
             relevant_slugs[model_key] = slugs[model_key]
             continue
         year = model_key[:4]
         safe_make = make_string_url_safe(make)
-        trim = model_key.replace(year, "").replace(make, "").strip()
-        model_slug = make_string_url_safe(trim)
+        model = model_key.replace(year, "").replace(make, "").strip()
+        model_slug = make_string_url_safe(model)
+
         url = f"https://www.kbb.com/{safe_make}/{model_slug}/{year}/"
         try:
             resp = await request.get(url, max_redirects=0)
@@ -300,8 +267,8 @@ async def get_or_fetch_fmv(
         return entry.get("fmv"), entry.get("fmv_source"), entry.get("timestamp")
 
     fmv_url = f"https://kbb.com/{make_string_url_safe(make)}/{model_slug}/{year}/{make_string_url_safe(style)}/"
-    await page.goto(fmv_url)
     try:
+        await page.goto(fmv_url)
         div_text = await page.inner_text("div.css-fbyg3h", timeout=10000)
     except TimeoutError as t:
         print("Timeout: ", fmv_url)

@@ -17,7 +17,9 @@ from analysis.scoring import (
 )
 from analysis.utils import (
     bool_from_url,
+    find_variant_key,
     get_relevant_entries,
+    get_variant_map,
     is_trim_version_valid,
     to_int,
 )
@@ -38,13 +40,20 @@ def slim(listing: dict) -> dict:
     sticker_present: bool = bool_from_url(addl.get("window_sticker_url"))
 
     specs: dict = listing.get("specs", {})
-    fuel_type = specs.get("Fuel Type", "").strip().lower()
-    if "hybrid" in fuel_type:
+    fuel_type: str = specs.get("Fuel Type", "").strip().lower()
+    listing_url: str = listing.get("listing_url", "").lower()
+    if not listing_url:
+        print(f"Listing URL invalid for {listing.get("id")}")
+
+    is_hybrid = False
+    is_plugin = False
+    if "hybrid" in fuel_type or "hybrid" in listing_url:
         is_hybrid = True
+        if "plug" in fuel_type or "plug" in listing_url:
+            is_plugin = True
     elif fuel_type == "" or fuel_type == "not specified":
         is_hybrid = None  # unknown
-    else:
-        is_hybrid = False
+        is_plugin = None  # unknown
 
     war = listing.get("warranty", {}) or {}
     # Treat "present" as: either a non-unknown overall_status or any coverages listed
@@ -67,6 +76,7 @@ def slim(listing: dict) -> dict:
         "price": to_int(listing.get("price")),
         "mileage": to_int(listing.get("mileage")),
         "is_hybrid": is_hybrid,
+        "is_plugin": is_plugin,
         "report_present": carfax_present or autocheck_present,
         "window_sticker_present": sticker_present,
         "warranty_info_present": warranty_present,
@@ -101,6 +111,7 @@ async def create_level1_file(listings: list[dict], metadata: dict):
     skipped_listings = []
     skip_summary: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
 
+    variant_map = get_variant_map(make, model, listings)
     for listing in listings:
         year = str(listing["year"])
         base_trim = (
@@ -108,8 +119,14 @@ async def create_level1_file(listings: list[dict], metadata: dict):
             if is_trim_version_valid(listing["trim_version"])
             else listing["trim"]
         )
+        variant_model_key = find_variant_key(variant_map, listing)
+        variant_model = (
+            variant_model_key.replace(year, "").replace(make, "").strip()
+            if variant_model_key
+            else model
+        )
 
-        entries = get_relevant_entries(cache_entries, make, model, year)
+        entries = get_relevant_entries(cache_entries, make, variant_model, year)
         cache_key = best_kbb_match(base_trim, list(entries.keys()))
 
         if not cache_key or (
@@ -214,7 +231,7 @@ async def create_level1_file(listings: list[dict], metadata: dict):
     # print("The following models have been skipped for these reasons:")
     for title, reasons in sorted(skip_summary.items()):
         for reason, count in reasons.items():
-            print(f"  - {title}: {reason} ({count})")
+            # print(f"  - {title}: {reason} ({count})")
             skip_messages.append(f"{title}: {reason} ({count})")
 
     await render_pdf(
