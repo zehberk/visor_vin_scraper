@@ -262,6 +262,31 @@ class TrimProfile:
                 break
 
         # Tokenize the rest
-        tokens = raw.split()
+        tokens = raw.lower().split()
 
         return cls(engine, bed_length, drivetrain, body_style, tokens, full_trim)
+
+    def build_compare_string(
+        self,
+        compare_engine: bool,
+        compare_drivetrain: bool,
+        compare_body: bool,
+        compare_bed: bool,
+    ) -> str:
+
+        # Order matters, so the best approximation is:
+        # Engine, Trim Tokens, Drivetrain, Body Style, and Bed
+        parts = []
+        if compare_engine and self.engine:
+            parts.append(self.engine)
+
+        parts.extend(self.tokens)
+
+        if compare_drivetrain and self.drivetrain:
+            parts.append(self.drivetrain)
+        if compare_body and self.body_style:
+            parts.append(self.body_style)
+        if compare_bed and self.bed_length:
+            parts.append(self.bed_length)
+
+        return " ".join(parts).lower()
