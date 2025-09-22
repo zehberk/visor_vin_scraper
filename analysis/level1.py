@@ -4,10 +4,7 @@ from collections import defaultdict
 from analysis.cache import *
 from analysis.kbb import get_trim_valuations_from_cache, get_trim_valuations_from_scrape
 from analysis.models import CarListing, DealBin, TrimValuation
-from analysis.normalization import (
-    canonicalize_trim,
-    match_listing_to_kbb_trim,
-)
+from analysis.normalization import best_kbb_match
 from analysis.outliers import summarize_outliers
 from analysis.reporting import to_level1_json, render_pdf
 from analysis.scoring import (
@@ -25,8 +22,6 @@ from analysis.utils import (
     to_int,
 )
 
-from visor_scraper.constants import BAD_STRINGS
-
 
 def extract_years(slimmed: list[dict]) -> list[str]:
     """Extract unique 4-digit years from quicklist entries, sorted ascending."""
@@ -42,7 +37,8 @@ def slim(listing: dict) -> dict:
     autocheck_present: bool = bool_from_url(addl.get("autocheck_url"))
     sticker_present: bool = bool_from_url(addl.get("window_sticker_url"))
 
-    fuel_type = listing["specs"].get("Fuel Type", "").strip().lower()
+    specs: dict = listing.get("specs", {})
+    fuel_type = specs.get("Fuel Type", "").strip().lower()
     if "hybrid" in fuel_type:
         is_hybrid = True
     elif fuel_type == "" or fuel_type == "not specified":
@@ -57,8 +53,8 @@ def slim(listing: dict) -> dict:
         not in {"", "unknown", "n/a", "none"}
     )
 
-    tv = listing["specs"].get("Trim Version", "")
-    valid_tv = tv if tv.lower().strip() not in BAD_STRINGS else ""
+    tv = specs.get("Trim Version", "")
+    valid_tv = tv if is_trim_version_valid(tv) else ""
 
     return {
         "id": listing.get("id"),
@@ -106,18 +102,15 @@ async def create_level1_file(listings: list[dict], metadata: dict):
     skip_summary: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
 
     for listing in listings:
-        year = listing["year"]
+        year = str(listing["year"])
         base_trim = (
             listing["trim_version"]
             if is_trim_version_valid(listing["trim_version"])
             else listing["trim"]
         )
-        cased_trim = canonicalize_trim(base_trim, model)
+
         entries = get_relevant_entries(cache_entries, make, model, year)
-        keys = [v.get("kbb_trim_option", k) for k, v in entries.items()]
-        cache_key = match_listing_to_kbb_trim(
-            year, make, model, cased_trim, base_trim, keys
-        )
+        cache_key = best_kbb_match(base_trim, list(entries.keys()))
 
         if not cache_key or (
             cache_key not in cache_entries
@@ -159,7 +152,7 @@ async def create_level1_file(listings: list[dict], metadata: dict):
             year=int(year),
             make=make,
             model=model,
-            trim=cased_trim,
+            trim=base_trim,
             trim_version=listing["trim_version"],
             title=listing["title"],
             cache_key=cache_key,
@@ -221,7 +214,7 @@ async def create_level1_file(listings: list[dict], metadata: dict):
     # print("The following models have been skipped for these reasons:")
     for title, reasons in sorted(skip_summary.items()):
         for reason, count in reasons.items():
-            # print(f"  - {title}: {reason} ({count})")
+            print(f"  - {title}: {reason} ({count})")
             skip_messages.append(f"{title}: {reason} ({count})")
 
     await render_pdf(

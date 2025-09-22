@@ -6,7 +6,7 @@ from playwright.async_api import APIRequestContext, async_playwright, Page, Time
 
 from analysis.cache import is_fmv_fresh, is_pricing_fresh, save_cache
 from analysis.models import TrimValuation
-from analysis.normalization import best_kbb_match, normalize_trim
+from analysis.normalization import best_kbb_match
 from analysis.utils import get_relevant_entries, to_int
 from visor_scraper.utils import make_string_url_safe
 
@@ -178,21 +178,16 @@ async def get_or_fetch_new_pricing_for_year(
     model_slug: str,
     year: str,
     cache_entries: dict,
-    expected_trims: set[str],
+    expected_trims: list[str],
 ) -> None:
 
     relevant_entries = get_relevant_entries(cache_entries, make, model, year)
-    have_norm = {
-        normalize_trim(
-            v.get("kbb_trim", "").split(f"{year} {make} {model}", 1)[-1].strip()
-        )
-        for v in relevant_entries.values()
-        if "kbb_trim" in v
-    }
 
     if expected_trims:
-        expected_norm: set[str] = {normalize_trim(t) for t in expected_trims}
-        all_fresh = expected_norm.issubset(have_norm) and all(
+        all_present = all(
+            f"{year} {make} {model} {t}" in relevant_entries for t in expected_trims
+        )
+        all_fresh = all_present and all(
             is_pricing_fresh(e) for e in relevant_entries.values()
         )
     else:
@@ -244,21 +239,7 @@ async def get_or_fetch_new_pricing_for_year(
         timestamp = ""
 
         if expected_trims:
-            # try to match against expected trims
-            norm_table = normalize_trim(table_trim)
-            norm_expected = {t: normalize_trim(t) for t in expected_trims}
-
-            match_trim = next(
-                (t for t, norm in norm_expected.items() if norm == norm_table), None
-            )
-
-            if not match_trim:
-                match_trim = best_kbb_match(norm_table, list(norm_expected.values()))
-                if match_trim:
-                    for orig, norm in norm_expected.items():
-                        if norm.lower() == match_trim.lower():
-                            match_trim = orig
-                            break
+            match_trim = best_kbb_match(table_trim, expected_trims)
 
             if not match_trim:
                 print(
@@ -274,11 +255,11 @@ async def get_or_fetch_new_pricing_for_year(
             )
 
         else:
-            if fpp:
+            kbb_trim_option = kbb_trim
+            if fpp and fpp != "TBD":
                 print(f"ℹ️  No FMV data for {kbb_trim}; saving MSRP/FPP only")
             else:
                 print(f"ℹ️  No pricing data for {kbb_trim}; saving MSRP only")
-            kbb_trim_option = kbb_trim
 
         entry = cache_entries.setdefault(kbb_trim_option, {})
 
@@ -287,6 +268,7 @@ async def get_or_fetch_new_pricing_for_year(
             fpp_val = to_int(fpp)
         msrp_val = to_int(msrp)
 
+        entry["model"] = model
         entry["kbb_trim"] = kbb_trim
         entry["fmv"] = fmv
         entry["fmv_source"] = fmv_source
@@ -393,7 +375,7 @@ async def get_trim_valuations_from_scrape(
                     await get_trim_options_for_year(
                         page, make, slug, year, trim_options, make_model
                     )
-                    expected_trims = set(trim_options.get(make_model, {}).get(year, []))
+                    expected_trims = trim_options.get(make_model, {}).get(year, [])
                     await get_or_fetch_new_pricing_for_year(
                         page,
                         make,
@@ -414,9 +396,8 @@ async def get_trim_valuations_from_scrape(
     for ymm in relevant_slugs.keys():
         year = ymm[:4]
         new_model = ymm.replace(year, "").replace(make, "").lower().strip()
-        for entry in get_relevant_entries(
-            cache_entries, make, new_model, year
-        ).values():
+        entries = get_relevant_entries(cache_entries, make, new_model, year)
+        for entry in entries.values():
             trim_valuations.append(TrimValuation.from_dict(entry))
 
     return trim_valuations
