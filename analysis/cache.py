@@ -4,22 +4,19 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from analysis.utils import get_relevant_entries
+from visor_scraper.constants import *
 
 
-CACHE_FILE = Path("output") / "level1_pricing_cache.json"
-CACHE_TTL = timedelta(days=7)
-
-
-def load_cache() -> dict[str, dict]:
-    if CACHE_FILE.exists():
-        with CACHE_FILE.open("r", encoding="utf-8") as f:
+def load_cache(cache_file: Path = PRICING_CACHE) -> dict[str, dict]:
+    if cache_file.exists():
+        with cache_file.open("r", encoding="utf-8") as f:
             return json.load(f)
     return {"entries": {}}
 
 
 def save_cache(cache):
-    CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with CACHE_FILE.open("w", encoding="utf-8") as f:
+    PRICING_CACHE.parent.mkdir(parents=True, exist_ok=True)
+    with PRICING_CACHE.open("w", encoding="utf-8") as f:
         json.dump(cache, f, indent=2)
 
 
