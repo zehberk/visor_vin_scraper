@@ -1,9 +1,9 @@
 import json
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
-from analysis.utils import get_relevant_entries
+from visor_scraper.utils import make_string_url_safe
 from visor_scraper.constants import *
 
 
@@ -14,9 +14,9 @@ def load_cache(cache_file: Path = PRICING_CACHE) -> dict[str, dict]:
     return {"entries": {}}
 
 
-def save_cache(cache):
-    PRICING_CACHE.parent.mkdir(parents=True, exist_ok=True)
-    with PRICING_CACHE.open("w", encoding="utf-8") as f:
+def save_cache(cache: dict, cache_file: Path = PRICING_CACHE):
+    cache_file.parent.mkdir(parents=True, exist_ok=True)
+    with cache_file.open("w", encoding="utf-8") as f:
         json.dump(cache, f, indent=2)
 
 
@@ -73,3 +73,37 @@ def cache_covers_all(make: str, model: str, years: list[str], cache: dict) -> bo
                 return False
 
     return True
+
+
+def get_relevant_entries(
+    entries: dict, make: str, model: str, year: str = ""
+) -> dict[str, dict]:
+    relevant_entries: dict = {}
+    safe_make = make_string_url_safe(make)
+    safe_model = make_string_url_safe(model)
+
+    for key, entry in entries.items():
+        url: str = entry.get("msrp_source", "").lower()
+        if not url:
+            continue
+
+        path = url.replace("https://www.kbb.com/", "").replace("https://kbb.com/", "")
+        parts = path.split("/")
+
+        make_slug = parts[0] if len(parts) > 0 else ""
+        model_slug = parts[1] if len(parts) > 1 else ""
+        if safe_make == make_slug and safe_model in model_slug:
+            if year:
+                url_year = parts[2] if len(parts) > 2 else ""
+                if year == url_year:
+                    relevant_entries[key] = entry
+                elif not url_year:
+                    # Sometimes the source will not have a year because it is the current
+                    # year, so we check the pricing timestamp as a precaution
+                    timestamp: str = entry.get("pricing_timestamp", "")
+                    if timestamp and timestamp.startswith(year):
+                        relevant_entries[key] = entry
+            else:
+                relevant_entries[key] = entry
+
+    return relevant_entries

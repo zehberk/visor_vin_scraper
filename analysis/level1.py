@@ -18,7 +18,6 @@ from analysis.scoring import (
 from analysis.utils import (
     bool_from_url,
     find_variant_key,
-    get_relevant_entries,
     get_variant_map,
     is_trim_version_valid,
     to_int,

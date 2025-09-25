@@ -4,10 +4,15 @@ from collections import defaultdict
 from datetime import datetime
 from playwright.async_api import APIRequestContext, async_playwright, Page, TimeoutError
 
-from analysis.cache import is_fmv_fresh, is_pricing_fresh, save_cache
+from analysis.cache import (
+    get_relevant_entries,
+    is_fmv_fresh,
+    is_pricing_fresh,
+    save_cache,
+)
 from analysis.models import TrimValuation
 from analysis.normalization import best_kbb_match
-from analysis.utils import get_relevant_entries, get_variant_map, to_int
+from analysis.utils import get_variant_map, to_int
 from visor_scraper.utils import make_string_url_safe
 
 
