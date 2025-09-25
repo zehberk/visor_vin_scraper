@@ -1,5 +1,4 @@
 {
-  "entries": {},
   "2025": {
     "Acura": [
       "Integra",
@@ -692,23 +691,7 @@
       "Z"
     ],
     "Polestar": [
-      "ARIYA",
-      "Altima",
-      "Armada",
-      "Frontier Crew Cab",
-      "Frontier King Cab",
-      "GT-R",
-      "Kicks",
-      "LEAF",
-      "Murano",
-      "Pathfinder",
-      "Rogue",
-      "Sentra",
-      "TITAN XD Crew Cab",
-      "Titan Crew Cab",
-      "Titan King Cab",
-      "Versa",
-      "Z"
+      "2"
     ],
     "Porsche": [
       "718 Boxster",
@@ -3046,13 +3029,15 @@
       "Tiguan"
     ],
     "Volvo": [
-      "S60",
-      "S90",
-      "V60",
-      "V90",
-      "XC40",
-      "XC60",
-      "XC90"
+      "Arteon",
+      "Atlas",
+      "Atlas Cross Sport",
+      "Golf",
+      "Golf GTI",
+      "Jetta",
+      "Jetta GLI",
+      "Passat",
+      "Tiguan"
     ]
   },
   "2019": {
@@ -3072,10 +3057,13 @@
       "Stelvio"
     ],
     "Aston Martin": [
-      "DB11",
-      "DBS Superleggera",
-      "Rapide AMR",
-      "Vantage"
+      "S60",
+      "S90",
+      "V60",
+      "V90",
+      "XC40",
+      "XC60",
+      "XC90"
     ],
     "Audi": [
       "A3",
@@ -3083,38 +3071,47 @@
       "A4 allroad",
       "A5",
       "A6",
+      "A6 allroad",
       "A7",
       "A8",
       "Q3",
       "Q5",
       "Q7",
       "Q8",
+      "R8",
       "RS 3",
-      "RS 5",
+      "RS Q8",
       "S3",
       "S4",
       "S5",
+      "S6",
+      "S7",
+      "S8",
       "SQ5",
+      "SQ7",
+      "SQ8",
       "TT",
-      "e-tron"
+      "e-tron Sportback"
     ],
     "BMW": [
       "2 Series",
       "3 Series",
       "4 Series",
       "5 Series",
-      "6 Series",
       "7 Series",
       "8 Series",
       "M2",
       "M4",
       "M5",
-      "M6",
+      "M8",
       "X1",
       "X2",
       "X3",
+      "X3 M",
       "X4",
+      "X4 M",
       "X5",
+      "X5 M",
       "X6",
       "X6 M",
       "X7",
@@ -3124,29 +3121,28 @@
     ],
     "Bentley": [
       "Bentayga",
+      "Continental GT",
+      "Flying Spur",
       "Mulsanne"
     ],
     "Buick": [
-      "Cascada",
       "Enclave",
       "Encore",
+      "Encore GX",
       "Envision",
-      "LaCrosse",
       "Regal Sportback",
       "Regal TourX"
     ],
     "Cadillac": [
-      "ATS",
-      "ATS-V",
+      "CT4",
+      "CT5",
       "CT6",
       "CT6-V",
-      "CTS",
-      "CTS-V",
       "Escalade",
       "Escalade ESV",
       "XT4",
       "XT5",
-      "XTS"
+      "XT6"
     ],
     "Chevrolet": [
       "Blazer",
@@ -3155,7 +3151,6 @@
       "Colorado Crew Cab",
       "Colorado Extended Cab",
       "Corvette",
-      "Cruze",
       "Equinox",
       "Express 2500 Cargo",
       "Express 2500 Passenger",
@@ -3165,26 +3160,25 @@
       "Malibu",
       "Silverado 1500 Crew Cab",
       "Silverado 1500 Double Cab",
-      "Silverado 1500 LD Double Cab",
-      "Silverado 1500 Limited Double Cab",
       "Silverado 1500 Regular Cab",
       "Silverado 2500 HD Crew Cab",
       "Silverado 2500 HD Double Cab",
       "Silverado 2500 HD Regular Cab",
       "Silverado 3500 HD Crew Cab",
+      "Silverado 3500 HD Double Cab",
+      "Silverado 3500 HD Regular Cab",
       "Sonic",
       "Spark",
       "Suburban",
-      "Suburban 3500HD",
       "Tahoe",
       "Traverse",
-      "Trax",
-      "Volt"
+      "Trax"
     ],
     "Chrysler": [
       "300",
       "Pacifica",
-      "Pacifica Hybrid"
+      "Pacifica Hybrid",
+      "Voyager"
     ],
     "Dodge": [
       "Challenger",
@@ -3195,26 +3189,22 @@
     ],
     "FIAT": [
       "124 Spider",
-      "500",
-      "500 Abarth",
       "500L",
-      "500X",
-      "500c",
-      "500c Abarth",
-      "500e"
+      "500X"
     ],
     "Ferrari": [
-      "488 GTB",
       "488 Pista",
-      "488 Spider",
       "812 Superfast",
+      "F8",
       "GTC4Lusso",
-      "Portofino"
+      "Portofino",
+      "SF90"
     ],
     "Ford": [
       "EcoSport",
       "Edge",
       "Escape",
+      "Escape Plug-in Hybrid",
       "Expedition",
       "Expedition MAX",
       "Explorer",
@@ -3229,22 +3219,23 @@
       "F350 Super Duty Super Cab",
       "F450 Super Duty Crew Cab",
       "F450 Super Duty Regular Cab",
-      "Fiesta",
-      "Flex",
       "Fusion",
-      "Fusion Energi",
+      "Fusion Plug-in Hybrid",
       "Mustang",
       "Ranger SuperCab",
       "Ranger SuperCrew",
-      "Taurus",
-      "Transit 150 Van",
-      "Transit 150 Wagon",
-      "Transit 250 Van",
-      "Transit 350 HD Van",
-      "Transit 350 Van",
-      "Transit 350 Wagon",
-      "Transit Connect Cargo",
-      "Transit Connect Passenger"
+      "Transit 150 Cargo Van",
+      "Transit 150 Crew Van",
+      "Transit 150 Passenger Van",
+      "Transit 250 Cargo Van",
+      "Transit 250 Crew Van",
+      "Transit 350 Cargo Van",
+      "Transit 350 Crew Van",
+      "Transit 350 HD Cargo Van",
+      "Transit 350 HD Crew Van",
+      "Transit 350 Passenger Van",
+      "Transit Connect Cargo Van",
+      "Transit Connect Passenger Wagon"
     ],
     "Freightliner": [
       "Sprinter 1500 Cargo",
@@ -3269,12 +3260,13 @@
       "Savana 3500 Passenger",
       "Sierra 1500 Crew Cab",
       "Sierra 1500 Double Cab",
-      "Sierra 1500 Limited Double Cab",
       "Sierra 1500 Regular Cab",
       "Sierra 2500 HD Crew Cab",
       "Sierra 2500 HD Double Cab",
       "Sierra 2500 HD Regular Cab",
       "Sierra 3500 HD Crew Cab",
+      "Sierra 3500 HD Double Cab",
+      "Sierra 3500 HD Regular Cab",
       "Terrain",
       "Yukon",
       "Yukon XL"
@@ -3288,6 +3280,7 @@
       "Accord",
       "Accord Hybrid",
       "CR-V",
+      "CR-V Hybrid",
       "Civic",
       "Civic Type R",
       "Clarity Plug-in Hybrid",
@@ -3309,19 +3302,17 @@
       "Kona",
       "Kona Electric",
       "NEXO",
+      "Palisade",
       "Santa Fe",
-      "Santa Fe XL",
       "Sonata",
       "Sonata Hybrid",
-      "Sonata Plug-in Hybrid",
       "Tucson",
-      "Veloster"
+      "Veloster",
+      "Venue"
     ],
     "INFINITI": [
       "Q50",
       "Q60",
-      "Q70",
-      "QX30",
       "QX50",
       "QX60",
       "QX80"
@@ -3332,12 +3323,12 @@
       "F-TYPE",
       "I-PACE",
       "XE",
-      "XF",
-      "XJ"
+      "XF"
     ],
     "Jeep": [
       "Cherokee",
       "Compass",
+      "Gladiator",
       "Grand Cherokee",
       "Renegade",
       "Wrangler",
@@ -3357,9 +3348,9 @@
       "Sedona",
       "Sorento",
       "Soul",
-      "Soul EV",
       "Sportage",
-      "Stinger"
+      "Stinger",
+      "Telluride"
     ],
     "Lamborghini": [
       "Aventador",
@@ -3367,6 +3358,8 @@
       "Urus"
     ],
     "Land Rover": [
+      "Defender 110",
+      "Defender 90",
       "Discovery",
       "Discovery Sport",
       "Range Rover",
@@ -3388,9 +3381,9 @@
       "UX"
     ],
     "Lincoln": [
+      "Aviator",
       "Continental",
-      "MKC",
-      "MKT",
+      "Corsair",
       "MKZ",
       "Nautilus",
       "Navigator",
@@ -3398,6 +3391,7 @@
     ],
     "MAZDA": [
       "CX-3",
+      "CX-30",
       "CX-5",
       "CX-9",
       "MAZDA3",
@@ -3414,15 +3408,15 @@
     ],
     "Maserati": [
       "Ghibli",
-      "GranTurismo",
       "Levante",
       "Quattroporte"
     ],
     "McLaren": [
-      "570GT",
       "570S",
       "600LT",
-      "720S"
+      "620R",
+      "720S",
+      "GT"
     ],
     "Mercedes-Benz": [
       "A-Class",
@@ -3432,24 +3426,21 @@
       "E-Class",
       "G-Class",
       "GLA",
+      "GLB",
       "GLC",
       "GLC Coupe",
       "GLE",
       "GLS",
+      "Mercedes-AMG A-Class",
       "Mercedes-AMG C-Class",
       "Mercedes-AMG CLA",
       "Mercedes-AMG CLS",
       "Mercedes-AMG E-Class",
       "Mercedes-AMG G-Class",
-      "Mercedes-AMG GLA",
       "Mercedes-AMG GLC",
       "Mercedes-AMG GLC Coupe",
-      "Mercedes-AMG GLE",
-      "Mercedes-AMG GLE Coupe",
-      "Mercedes-AMG GLS",
       "Mercedes-AMG GT",
       "Mercedes-AMG S-Class",
-      "Mercedes-AMG SL",
       "Mercedes-AMG SLC",
       "Mercedes-Maybach S-Class",
       "Metris Cargo",
@@ -3492,7 +3483,6 @@
       "Murano",
       "NV1500 Cargo",
       "NV200",
-      "NV200 Taxi",
       "NV2500 HD Cargo",
       "NV3500 HD Cargo",
       "NV3500 HD Passenger",
@@ -3500,22 +3490,21 @@
       "Rogue",
       "Rogue Sport",
       "Sentra",
-      "TITAN Single Cab",
       "TITAN XD Crew Cab",
-      "TITAN XD King Cab",
-      "TITAN XD Single Cab",
       "Titan Crew Cab",
       "Titan King Cab",
-      "Versa",
-      "Versa Note"
+      "Versa"
     ],
     "Porsche": [
       "718 Boxster",
       "718 Cayman",
+      "718 Spyder",
       "911",
       "Cayenne",
+      "Cayenne Coupe",
       "Macan",
-      "Panamera"
+      "Panamera",
+      "Taycan"
     ],
     "Ram": [
       "1500 Classic Crew Cab",
@@ -3553,7 +3542,8 @@
     "Tesla": [
       "Model 3",
       "Model S",
-      "Model X"
+      "Model X",
+      "Model Y"
     ],
     "Toyota": [
       "4Runner",
@@ -3565,13 +3555,14 @@
       "Camry Hybrid",
       "Corolla",
       "Corolla Hatchback",
+      "Corolla Hybrid",
+      "GR Supra",
       "Highlander",
       "Highlander Hybrid",
       "Land Cruiser",
       "Mirai",
       "Prius",
       "Prius Prime",
-      "Prius c",
       "RAV4",
       "RAV4 Hybrid",
       "Sequoia",
@@ -3580,22 +3571,19 @@
       "Tacoma Double Cab",
       "Tundra CrewMax",
       "Tundra Double Cab",
-      "Yaris"
+      "Yaris",
+      "Yaris Hatchback"
     ],
     "Volkswagen": [
       "Arteon",
       "Atlas",
-      "Beetle",
+      "Atlas Cross Sport",
       "Golf",
-      "Golf Alltrack",
       "Golf GTI",
-      "Golf R",
-      "Golf SportWagen",
       "Jetta",
       "Jetta GLI",
       "Passat",
-      "Tiguan",
-      "e-Golf"
+      "Tiguan"
     ],
     "Volvo": [
       "S60",
@@ -3606,10 +3594,7 @@
       "XC60",
       "XC90"
     ],
-    "smart": [
-      "fortwo EQ cabrio",
-      "fortwo EQ coupe"
-    ]
+    "smart": []
   },
   "2018": {
     "Acura": [
@@ -4367,26 +4352,8 @@
       "Yukon XL"
     ],
     "Genesis": [
-      "Acadia",
-      "Acadia Limited",
-      "Canyon Crew Cab",
-      "Canyon Extended Cab",
-      "Savana 2500 Cargo",
-      "Savana 2500 Passenger",
-      "Savana 3500 Cargo",
-      "Savana 3500 Passenger",
-      "Sierra 1500 Crew Cab",
-      "Sierra 1500 Double Cab",
-      "Sierra 1500 Regular Cab",
-      "Sierra 2500 HD Crew Cab",
-      "Sierra 2500 HD Double Cab",
-      "Sierra 2500 HD Regular Cab",
-      "Sierra 3500 HD Crew Cab",
-      "Sierra 3500 HD Double Cab",
-      "Sierra 3500 HD Regular Cab",
-      "Terrain",
-      "Yukon",
-      "Yukon XL"
+      "G80",
+      "G90"
     ],
     "Honda": [
       "Accord",
@@ -5281,7 +5248,34 @@
       "City Express",
       "Colorado Crew Cab",
       "Colorado Extended Cab",
-      "Corvette"
+      "Corvette",
+      "Cruze",
+      "Equinox",
+      "Express 2500 Cargo",
+      "Express 2500 Passenger",
+      "Express 3500 Cargo",
+      "Express 3500 Passenger",
+      "Impala",
+      "Impala Limited",
+      "Malibu",
+      "SS",
+      "Silverado 1500 Crew Cab",
+      "Silverado 1500 Double Cab",
+      "Silverado 1500 Regular Cab",
+      "Silverado 2500 HD Crew Cab",
+      "Silverado 2500 HD Double Cab",
+      "Silverado 2500 HD Regular Cab",
+      "Silverado 3500 HD Crew Cab",
+      "Silverado 3500 HD Double Cab",
+      "Silverado 3500 HD Regular Cab",
+      "Sonic",
+      "Spark",
+      "Spark EV",
+      "Suburban",
+      "Tahoe",
+      "Traverse",
+      "Trax",
+      "Volt"
     ],
     "Chrysler": [
       "200",
@@ -5499,8 +5493,24 @@
       "P1"
     ],
     "Mercedes-Benz": [
-      "650S",
-      "C-Class"
+      "B-Class",
+      "C-Class",
+      "CLA-Class",
+      "CLS-Class",
+      "E-Class",
+      "G-Class",
+      "GL-Class",
+      "GLA-Class",
+      "GLK-Class",
+      "M-Class",
+      "S-Class",
+      "SL-Class",
+      "SLK-Class",
+      "SLS-Class",
+      "Sprinter 2500 Cargo",
+      "Sprinter 2500 Crew",
+      "Sprinter 2500 Passenger",
+      "Sprinter 3500 Cargo"
     ],
     "Mitsubishi": [
       "Lancer",
@@ -5542,24 +5552,7 @@
       "Cayenne",
       "Cayman",
       "Macan",
-      "Panamera",
-      "LEAF",
-      "Murano",
-      "NV1500 Cargo",
-      "NV200",
-      "NV200 Taxi",
-      "NV2500 HD Cargo",
-      "NV3500 HD Cargo",
-      "NV3500 HD Passenger",
-      "Pathfinder",
-      "Quest",
-      "Rogue",
-      "Rogue Select",
-      "Sentra",
-      "Titan Crew Cab",
-      "Titan King Cab",
-      "Versa",
-      "Xterra"
+      "Panamera"
     ],
     "Ram": [
       "1500 Crew Cab",
@@ -6408,12 +6401,9 @@
       "MP4-12C"
     ],
     "Mercedes-Benz": [
-      "MP4-12C"
-    ],
-    "Mitsubishi": [
-      "Lancer",
-      "Outlander",
-      "Outlander Sport",
+      "C-Class",
+      "CL-Class",
+      "CLS-Class",
       "E-Class",
       "G-Class",
       "GL-Class",
@@ -6428,12 +6418,12 @@
       "Sprinter 2500 Passenger",
       "Sprinter 3500 Cargo"
     ],
-    "Nissan": [
+    "Mitsubishi": [
       "Lancer",
       "Outlander",
       "Outlander Sport"
     ],
-    "Porsche": [
+    "Nissan": [
       "370Z",
       "Altima",
       "Armada",
@@ -6459,6 +6449,12 @@
       "Xterra",
       "cube"
     ],
+    "Porsche": [
+      "911",
+      "Boxster",
+      "Cayenne",
+      "Panamera"
+    ],
     "Ram": [
       "1500 Crew Cab",
       "1500 Quad Cab",
@@ -6476,8 +6472,7 @@
       "Phantom"
     ],
     "SRT": [
-      "Viper",
-      "Phantom"
+      "Viper"
     ],
     "Scion": [
       "FR-S",
@@ -6898,29 +6893,11 @@
       "cube"
     ],
     "Porsche": [
-      "370Z",
-      "Altima",
-      "Armada",
-      "Frontier Crew Cab",
-      "Frontier King Cab",
-      "GT-R",
-      "JUKE",
-      "LEAF",
-      "Maxima",
-      "Murano",
-      "NV1500 Cargo",
-      "NV2500 HD Cargo",
-      "NV3500 HD Cargo",
-      "NV3500 HD Passenger",
-      "Pathfinder",
-      "Quest",
-      "Rogue",
-      "Sentra",
-      "Titan Crew Cab",
-      "Titan King Cab",
-      "Versa",
-      "Xterra",
-      "cube"
+      "911",
+      "Boxster",
+      "Cayenne",
+      "Cayman",
+      "Panamera"
     ],
     "Ram": [
       "1500 Crew Cab",
@@ -7273,11 +7250,7 @@
     "Lotus": [
       "Elise",
       "Evora",
-      "Exige",
-      "MKZ",
-      "Navigator",
-      "Navigator L",
-      "Town Car"
+      "Exige"
     ],
     "MAZDA": [
       "CX-7",
@@ -7296,14 +7269,13 @@
       "Hardtop"
     ],
     "Maserati": [
-      "Clubman",
-      "Convertible",
-      "Countryman",
-      "Hardtop"
-    ],
-    "Maybach": [
       "GranTurismo",
       "Quattroporte"
+    ],
+    "Maybach": [
+      "57",
+      "62",
+      "Landaulet"
     ],
     "Mercedes-Benz": [
       "C-Class",
@@ -11349,21 +11321,6 @@
       "allroad"
     ],
     "BMW": [
-      "A4",
-      "A6",
-      "A8",
-      "S4",
-      "S8",
-      "TT",
-      "allroad"
-    ],
-    "Buick": [
-      "Century",
-      "LeSabre",
-      "Park Avenue",
-      "Regal"
-    ],
-    "Cadillac": [
       "3 Series",
       "5 Series",
       "7 Series",
@@ -11373,6 +11330,18 @@
       "X5",
       "Z3",
       "Z8"
+    ],
+    "Buick": [
+      "Century",
+      "LeSabre",
+      "Park Avenue",
+      "Regal"
+    ],
+    "Cadillac": [
+      "Catera",
+      "DeVille",
+      "Eldorado",
+      "Seville"
     ],
     "Chevrolet": [
       "Astro Cargo",
@@ -12269,9 +12238,7 @@
       "Accent",
       "Elantra",
       "Sonata",
-      "Tiburon",
-      "Passport",
-      "Prelude"
+      "Tiburon"
     ],
     "INFINITI": [
       "G",
@@ -14474,13 +14441,9 @@
       "Trans Sport"
     ],
     "Porsche": [
-      "Bonneville",
-      "Firebird",
-      "Grand Am",
-      "Grand Prix",
-      "LeMans",
-      "Sunbird",
-      "Trans Sport"
+      "911",
+      "928",
+      "968"
     ],
     "Saab": [
       "900",
