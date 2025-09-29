@@ -1,5 +1,5 @@
-import asyncio, sys
-
+import asyncio, sys, time
+from pathlib import Path
 from playwright.async_api import async_playwright, Page, TimeoutError
 from tqdm import tqdm
 
@@ -7,171 +7,93 @@ from analysis.cache import load_cache, save_cache
 from visor_scraper.constants import KBB_VARIANT_CACHE
 from visor_scraper.utils import stopwatch
 
+YEAR_SEL = "div.year select"
+MAKE_SEL = "div.make select"
+MODEL_SEL = "div.model select"
 
-# --- Mutation-observer wiring (call once after you switch to Make/Model mode) ---
-async def attach_option_observers(page):
-    await page.evaluate(
-        """
-    (()=>{
-      if (window.__optsMeta) return;
-      window.__optsMeta = { counters:{}, fp:{} };
-
-      const compute = (sel) => {
-        const el = document.querySelector(sel);
-        if (!el) return "";
-        const arr = Array.from(el.querySelectorAll("option"));
-        return arr.map(o => `${String(o.value)}::${(o.textContent||"").trim()}::${o.disabled?'d':'e'}`).join("|");
-      };
-
-      const bumpIfChanged = (sel) => {
-        const now = compute(sel);
-        if (window.__optsMeta.fp[sel] !== now) {
-          window.__optsMeta.fp[sel] = now;
-          window.__optsMeta.counters[sel] = (window.__optsMeta.counters[sel] || 0) + 1;
-        }
-      };
-
-      const wire = (sel) => {
-        const el = document.querySelector(sel);
-        if (!el || el.__wiredObserver) return;
-        // init fp so first mutation compares against something real
-        window.__optsMeta.fp[sel] = compute(sel);
-        const obs = new MutationObserver(() => bumpIfChanged(sel));
-        obs.observe(el, { childList: true, subtree: true, characterData: true, attributes: true });
-        el.addEventListener("input",  () => bumpIfChanged(sel), { capture:true });
-        el.addEventListener("change", () => bumpIfChanged(sel), { capture:true });
-        el.__wiredObserver = true;
-      };
-
-      const ensureWired = () => {
-        wire("div.make select");
-        wire("div.model select");
-      };
-      ensureWired();
-      new MutationObserver(ensureWired).observe(document.body, { childList:true, subtree:true });
-    })();
-    """
-    )
+DEBUG_FILE = Path("model_refresh_debug.txt")
 
 
-async def get_mutation_count(page, div: str) -> int:
-    sel = f"{div} select"
-    return await page.evaluate(
-        "({sel}) => (window.__optsMeta?.counters?.[sel] || 0)", {"sel": sel}
-    )
+def log_refresh(year: str, make: str, models: list[str]) -> None:
+    ts = time.strftime("%H:%M:%S")
+    with DEBUG_FILE.open("a", encoding="utf-8") as f:
+        f.write(f"\n[{ts}] === {year} - {make} ===\n")
+        f.write(f"Models ({len(models)}):\n  " + ", ".join(models) + "\n")
 
 
-async def wait_for_options_mutation(
-    page, div: str, old_count: int, timeout: int = 10000
-):
-    sel = f"{div} select"
-    await page.wait_for_function(
-        """({ sel, old }) => {
-            const el = document.querySelector(sel);
-            if (!el) return false;
-            const bumped = (window.__optsMeta?.counters?.[sel] || 0) > old;
-            if (!bumped) return false;
-            if (el.disabled) return false;
-            return el.querySelectorAll('option:not([disabled])').length > 1;
-        }""",
-        arg={"sel": sel, "old": old_count},
-        timeout=timeout,
-    )
+async def get_div_values(
+    page: Page, div: str, error_msg: str
+) -> tuple[list[str], list[str]]:
+    select = await page.query_selector(f"{div} select")
+    if select:
+        options = await select.query_selector_all("option:not([disabled])")
+        raw_values = [await o.get_attribute("value") for o in options]
+        raw_inner_text = [await o.inner_text() for o in options]
+        values = [v for v in raw_values if v and v.strip()]
+        inner_text = [t for t in raw_inner_text if t and t.strip()]
+        return values, inner_text
+    print(error_msg)
+    sys.exit(1)
 
 
-async def wait_for_year_dropdown(page, timeout: int = 10000):
-    # Year is the root; no mutation counter needed.
-    await page.wait_for_selector("div.year select", state="attached", timeout=timeout)
+async def get_years(page: Page) -> list[str]:
+    await page.wait_for_selector(YEAR_SEL, state="attached", timeout=10000)
     await page.wait_for_function(
         """() => {
             const el = document.querySelector('div.year select');
             if (!el || el.disabled) return false;
             return el.querySelectorAll('option:not([disabled])').length > 1;
         }""",
-        timeout=timeout,
+        timeout=10000,
+    )
+    _, years = await get_div_values(page, "div.year", "No years found")
+    return years
+
+
+async def get_makes(page: Page, year: str) -> tuple[list[str], list[str]]:
+    await page.select_option(YEAR_SEL, label=year)
+    await asyncio.sleep(0.5)
+    values, makes = await get_div_values(page, "div.make", f"No makes found for {year}")
+    return values, makes
+
+
+async def get_models(
+    page: Page, year: str, make: str, models_updated: asyncio.Event, latest_models: dict
+) -> tuple[list[str], list[str]]:
+    models_updated.clear()
+
+    # re-attach observer
+    await page.evaluate(
+        """sel => {
+            const el = document.querySelector(sel);
+            if (!el) return;
+            if (el._observer) { el._observer.disconnect(); }
+            const observer = new MutationObserver(() => {
+                const options = Array.from(el.options).filter(o => !o.disabled);
+                const values = options.map(o => o.value).filter(v => v && v.trim() !== "");
+                const labels = options.map(o => o.textContent.trim()).filter(Boolean);
+                window.onModelChange({values, labels});
+            });
+            observer.observe(el, { childList: true, subtree: true });
+            el._observer = observer;
+        }""",
+        MODEL_SEL,
     )
 
-
-async def wait_for_options_change(
-    page: Page, div: str, old: list[str], timeout: int = 5000
-):
-    def clean(values: list[str]) -> list[str]:
-        return [
-            v.strip()
-            for v in values
-            if v and v.strip() and v.lower() not in {"make", "model", "year"}
-        ]
+    await page.select_option(MAKE_SEL, label=make)
 
     try:
-        await page.wait_for_function(
-            """(old, div) => {
-				const opts = Array.from(document.querySelectorAll(`${div} select option`));
-				const curr = opts.map(o => String(o.value || o.textContent).trim());
-				const clean = arr => arr
-					.map(v => String(v))
-					.filter(v => v && !["make","model","year"].includes(v.toLowerCase()));
-				return clean(curr).join(",") !== clean(old).join(",");
-			}""",
-            arg=(old, div),
-            timeout=timeout,
+        await asyncio.wait_for(models_updated.wait(), timeout=8)
+        values = latest_models.get("values", [])
+        labels = latest_models.get("labels", [])
+    except asyncio.TimeoutError:
+        # fallback: scrape directly
+        values, labels = await get_div_values(
+            page, "div.model", f"No models found for {make}"
         )
-    except TimeoutError:
-        return False
-    return True
 
-
-async def get_div_values(
-    page: Page, div: str, error_msg: str, is_year: bool = False
-) -> list[str]:
-    select = await page.query_selector(f"{div} select")
-    if select:
-        options = await select.query_selector_all("option:not([disabled])")
-        if is_year:
-            raw_values = [await o.get_attribute("value") for o in options]
-        else:
-            raw_values = [await o.inner_text() for o in options]
-        return [v for v in raw_values if v and v.strip()]
-    print(error_msg)
-    sys.exit(1)
-
-
-# --- keep this helper ---
-async def wait_for_dropdown(page, div: str, timeout: int = 10000):
-    sel = f"{div} select"
-    # 1) element exists
-    await page.wait_for_selector(sel, state="attached", timeout=timeout)
-    # 2) enabled + has real options (>1 so it's not just the placeholder)
-    await page.wait_for_function(
-        """({ sel }) => {
-            const el = document.querySelector(sel);
-            if (!el || el.disabled) return false;
-            return el.querySelectorAll('option:not([disabled])').length > 1;
-        }""",
-        arg={"sel": sel},
-        timeout=timeout,
-    )
-
-
-async def get_years(page) -> list[str]:
-    await wait_for_year_dropdown(page)
-    # is_year=True → uses get_attribute("value") in your get_div_values
-    return await get_div_values(page, "div.year", "No years found", is_year=True)
-
-
-async def get_makes(page, year: str) -> list[str]:
-    old = await get_mutation_count(page, "div.make")
-    await page.select_option("div.year select", label=year)
-    await asyncio.sleep(1)
-    # await wait_for_options_mutation(page, "div.make", old)
-    return await get_div_values(page, "div.make", f"No makes found for {year}")
-
-
-async def get_models(page, make: str) -> list[str]:
-    old = await get_mutation_count(page, "div.model")
-    await page.select_option("div.make select", label=make)
-    await asyncio.sleep(1)
-    # await wait_for_options_mutation(page, "div.model", old)
-    return await get_div_values(page, "div.model", f"No models found for {make}")
+    log_refresh(year, make, labels)
+    return values, labels
 
 
 async def main():
@@ -194,21 +116,51 @@ async def main():
 
             await page.goto(base_url, timeout=20000)
             await page.locator("input#makeModelRadioButton").check(force=True)
-            # await attach_option_observers(page)
+
+            # setup event + storage
+            models_updated = asyncio.Event()
+            latest_models: dict = {}
+
+            async def on_model_change(payload: dict):
+                try:
+                    latest_models["values"] = payload["values"]
+                    latest_models["labels"] = payload["labels"]
+                    models_updated.set()
+                except Exception:
+                    pass
+
+            await page.expose_function("onModelChange", on_model_change)
 
             years = await get_years(page)
 
-            cache: dict[str, dict[str, list[str]]] = {}  # load_cache(KBB_VARIANT_CACHE)
-            for idx, year in enumerate(tqdm(years, desc="Saving years", unit="year")):
+            DEBUG_FILE.write_text("")
+            cache: dict[str, dict[str, list[str]]] = {}
+            for year in tqdm(years, desc="Saving years", unit="year"):
                 if year in cache and cache[year]:
                     continue
 
                 makes_map: dict[str, list[str]] = {}
-                makes = await get_makes(page, year)
+                _, makes = await get_makes(page, year)
+
                 for make in makes:
-                    makes_map[make] = await get_models(page, make)
+                    model_values, models = await get_models(
+                        page, year, make, models_updated, latest_models
+                    )
+                    makes_map[make] = models
+
                 cache[year] = makes_map
                 save_cache(cache, KBB_VARIANT_CACHE)
+
+            await page.evaluate(
+                """sel => {
+                    const el = document.querySelector(sel);
+                    if (el && el._observer) {
+                        el._observer.disconnect();
+                        delete el._observer;
+                    }
+                }""",
+                MODEL_SEL,
+            )
 
 
 if __name__ == "__main__":
