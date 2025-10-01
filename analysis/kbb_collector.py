@@ -1,6 +1,6 @@
 import asyncio, sys, time
 from pathlib import Path
-from playwright.async_api import async_playwright, Page, TimeoutError
+from playwright.async_api import async_playwright, Page
 from tqdm import tqdm
 
 from analysis.cache import load_cache, save_cache
@@ -21,17 +21,13 @@ def log_refresh(year: str, make: str, models: list[str]) -> None:
         f.write(f"Models ({len(models)}):\n  " + ", ".join(models) + "\n")
 
 
-async def get_div_values(
-    page: Page, div: str, error_msg: str
-) -> tuple[list[str], list[str]]:
+async def get_div_values(page: Page, div: str, error_msg: str) -> list[str]:
     select = await page.query_selector(f"{div} select")
     if select:
         options = await select.query_selector_all("option:not([disabled])")
-        raw_values = [await o.get_attribute("value") for o in options]
         raw_inner_text = [await o.inner_text() for o in options]
-        values = [v for v in raw_values if v and v.strip()]
         inner_text = [t for t in raw_inner_text if t and t.strip()]
-        return values, inner_text
+        return inner_text
     print(error_msg)
     sys.exit(1)
 
@@ -46,20 +42,20 @@ async def get_years(page: Page) -> list[str]:
         }""",
         timeout=10000,
     )
-    _, years = await get_div_values(page, "div.year", "No years found")
+    years = await get_div_values(page, "div.year", "No years found")
     return years
 
 
-async def get_makes(page: Page, year: str) -> tuple[list[str], list[str]]:
+async def get_makes(page: Page, year: str) -> list[str]:
     await page.select_option(YEAR_SEL, label=year)
     await asyncio.sleep(0.5)
-    values, makes = await get_div_values(page, "div.make", f"No makes found for {year}")
-    return values, makes
+    makes = await get_div_values(page, "div.make", f"No makes found for {year}")
+    return makes
 
 
 async def get_models(
     page: Page, year: str, make: str, models_updated: asyncio.Event, latest_models: dict
-) -> tuple[list[str], list[str]]:
+) -> list[str]:
     models_updated.clear()
 
     # re-attach observer
@@ -69,10 +65,11 @@ async def get_models(
             if (!el) return;
             if (el._observer) { el._observer.disconnect(); }
             const observer = new MutationObserver(() => {
-                const options = Array.from(el.options).filter(o => !o.disabled);
-                const values = options.map(o => o.value).filter(v => v && v.trim() !== "");
-                const labels = options.map(o => o.textContent.trim()).filter(Boolean);
-                window.onModelChange({values, labels});
+                const labels = Array.from(el.options)
+                    .filter(o => !o.disabled && o.value && o.value.trim() !== "")
+                    .map(o => o.textContent.trim())
+                    .filter(Boolean);
+                window.onModelChange(labels);
             });
             observer.observe(el, { childList: true, subtree: true });
             el._observer = observer;
@@ -84,16 +81,13 @@ async def get_models(
 
     try:
         await asyncio.wait_for(models_updated.wait(), timeout=8)
-        values = latest_models.get("values", [])
         labels = latest_models.get("labels", [])
     except asyncio.TimeoutError:
         # fallback: scrape directly
-        values, labels = await get_div_values(
-            page, "div.model", f"No models found for {make}"
-        )
+        labels = await get_div_values(page, "div.model", f"No models found for {make}")
 
-    log_refresh(year, make, labels)
-    return values, labels
+    # log_refresh(year, make, labels)
+    return labels
 
 
 async def main():
@@ -121,10 +115,9 @@ async def main():
             models_updated = asyncio.Event()
             latest_models: dict = {}
 
-            async def on_model_change(payload: dict):
+            async def on_model_change(labels: list[str]):
                 try:
-                    latest_models["values"] = payload["values"]
-                    latest_models["labels"] = payload["labels"]
+                    latest_models["labels"] = labels
                     models_updated.set()
                 except Exception:
                     pass
@@ -133,17 +126,17 @@ async def main():
 
             years = await get_years(page)
 
-            DEBUG_FILE.write_text("")
-            cache: dict[str, dict[str, list[str]]] = {}
+            # DEBUG_FILE.write_text("")
+            cache: dict[str, dict[str, list[str]]] = load_cache(KBB_VARIANT_CACHE)
             for year in tqdm(years, desc="Saving years", unit="year"):
                 if year in cache and cache[year]:
                     continue
 
                 makes_map: dict[str, list[str]] = {}
-                _, makes = await get_makes(page, year)
+                makes = await get_makes(page, year)
 
                 for make in makes:
-                    model_values, models = await get_models(
+                    models = await get_models(
                         page, year, make, models_updated, latest_models
                     )
                     makes_map[make] = models
