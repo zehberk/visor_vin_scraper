@@ -91,7 +91,7 @@ def create_report_parameter_summary(metadata: dict) -> str:
         elif min_miles:
             miles_summary = f"with more than {min_miles:,} miles"
         elif max_miles:
-            miles_summary = f"with fewer than {max_miles:, } miles"
+            miles_summary = f"with fewer than {max_miles:,} miles"
 
     if price_summary and miles_summary:
         summary += price_summary + " and " + miles_summary + "."
