@@ -479,7 +479,7 @@ async def extract_full_listing_details(
     try:
         vin = listing.get("vin")
         url = VIN_DETAILS_URL.format(vin=vin)
-        await detail_page.goto(url, timeout=60000)
+        await detail_page.goto(url, timeout=60000, wait_until="domcontentloaded")
         await detail_page.wait_for_selector(DETAIL_PAGE_ELEMENT, timeout=20000)
 
         try:
