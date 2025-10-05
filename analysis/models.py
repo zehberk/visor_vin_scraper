@@ -240,24 +240,24 @@ class TrimProfile:
 
         match = ENGINE_DISPLACEMENT_RE.search(raw)
         if match:
-            engine = match.group(0)
+            engine = match.group(0).strip()
             raw = raw.replace(engine, "")
 
         match = BED_LENGTH_RE.search(raw)
         if match:
-            bed_length = match.group(0)
+            bed_length = match.group(0).strip()
             raw = raw.replace(bed_length, "")
 
         match = BODY_STYLE_RE.search(raw)
         if match:
-            body_style = match.group(0)
+            body_style = match.group(0).strip()
             raw = raw.replace(body_style, "")
             if body_style in BODY_STYLE_ALIASES:
                 body_style = BODY_STYLE_ALIASES[body_style]
 
         for dt in DRIVETRAINS:
             if dt in raw.lower().split():
-                drivetrain = dt
+                drivetrain = dt.strip()
                 raw = raw.replace(drivetrain, "")
                 break
 
