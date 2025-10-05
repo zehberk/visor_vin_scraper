@@ -1,7 +1,10 @@
 import asyncio, sys, time
+
+from datetime import datetime
 from pathlib import Path
-from playwright.async_api import async_playwright, Page
+from playwright.async_api import async_playwright, Browser, Page
 from tqdm import tqdm
+from typing import Tuple
 
 from analysis.cache import load_cache, save_cache
 from visor_scraper.constants import KBB_VARIANT_CACHE
@@ -36,10 +39,10 @@ async def get_years(page: Page) -> list[str]:
     await page.wait_for_selector(YEAR_SEL, state="attached", timeout=10000)
     await page.wait_for_function(
         """() => {
-            const el = document.querySelector('div.year select');
-            if (!el || el.disabled) return false;
-            return el.querySelectorAll('option:not([disabled])').length > 1;
-        }""",
+			const el = document.querySelector('div.year select');
+			if (!el || el.disabled) return false;
+			return el.querySelectorAll('option:not([disabled])').length > 1;
+		}""",
         timeout=10000,
     )
     years = await get_div_values(page, "div.year", "No years found")
@@ -54,26 +57,35 @@ async def get_makes(page: Page, year: str) -> list[str]:
 
 
 async def get_models(
-    page: Page, year: str, make: str, models_updated: asyncio.Event, latest_models: dict
+    page: Page,
+    make: str,
+    models_updated: asyncio.Event,
+    latest_models: dict,
+    year: str = "",
 ) -> list[str]:
+
+    if year:
+        await page.select_option(YEAR_SEL, label=year)
+        await asyncio.sleep(0.5)
+
     models_updated.clear()
 
     # re-attach observer
     await page.evaluate(
         """sel => {
-            const el = document.querySelector(sel);
-            if (!el) return;
-            if (el._observer) { el._observer.disconnect(); }
-            const observer = new MutationObserver(() => {
-                const labels = Array.from(el.options)
-                    .filter(o => !o.disabled && o.value && o.value.trim() !== "")
-                    .map(o => o.textContent.trim())
-                    .filter(Boolean);
-                window.onModelChange(labels);
-            });
-            observer.observe(el, { childList: true, subtree: true });
-            el._observer = observer;
-        }""",
+			const el = document.querySelector(sel);
+			if (!el) return;
+			if (el._observer) { el._observer.disconnect(); }
+			const observer = new MutationObserver(() => {
+				const labels = Array.from(el.options)
+					.filter(o => !o.disabled && o.value && o.value.trim() !== "")
+					.map(o => o.textContent.trim())
+					.filter(Boolean);
+				window.onModelChange(labels);
+			});
+			observer.observe(el, { childList: true, subtree: true });
+			el._observer = observer;
+		}""",
         MODEL_SEL,
     )
 
@@ -90,70 +102,107 @@ async def get_models(
     return labels
 
 
-async def main():
-    base_url = "https://www.kbb.com/whats-my-car-worth/"
+async def get_missing_models(year: str, make: str) -> list[str]:
+    models: list[str] = []
 
-    with stopwatch("Total time elapsed"):
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(
-                headless=False,
-                args=[
-                    "--disable-blink-features=AutomationControlled",
-                    "--disable-gpu",
-                    "--no-sandbox",
-                    "--disable-dev-shm-usage",
-                    "--disable-infobars",
-                ],
-            )
-            context = await browser.new_context()
-            page: Page = await context.new_page()
+    # Can't query into the future
+    if int(year) > datetime.now().year:
+        return models
 
-            await page.goto(base_url, timeout=20000)
-            await page.locator("input#makeModelRadioButton").check(force=True)
+    browser, page, models_updated, latest_models = await create_collector_page()
+    if browser is None or page is None:
+        sys.exit(1)
 
-            # setup event + storage
-            models_updated = asyncio.Event()
-            latest_models: dict = {}
+    try:
+        if page is not None:
+            models = await get_models(page, make, models_updated, latest_models, year)
 
-            async def on_model_change(labels: list[str]):
-                try:
-                    latest_models["labels"] = labels
-                    models_updated.set()
-                except Exception:
-                    pass
-
-            await page.expose_function("onModelChange", on_model_change)
-
-            years = await get_years(page)
-
-            # DEBUG_FILE.write_text("")
+        if models:
             cache: dict[str, dict[str, list[str]]] = load_cache(KBB_VARIANT_CACHE)
-            for year in tqdm(years, desc="Saving years", unit="year"):
-                if year in cache and cache[year]:
-                    continue
-
-                makes_map: dict[str, list[str]] = {}
-                makes = await get_makes(page, year)
-
-                for make in makes:
-                    models = await get_models(
-                        page, year, make, models_updated, latest_models
-                    )
-                    makes_map[make] = models
-
-                cache[year] = makes_map
+            old_values = cache.setdefault(year, {}).setdefault(make, [])
+            if sorted(old_values) == sorted(models):
+                print(f"There are no new models from KBB: {year} {make}")
+            else:
+                cache[year][make] = models
                 save_cache(cache, KBB_VARIANT_CACHE)
+    except TimeoutError as t:
+        print(t)
+    except Exception as e:
+        print(e)
+    finally:
+        await browser.close()
 
-            await page.evaluate(
-                """sel => {
-                    const el = document.querySelector(sel);
-                    if (el && el._observer) {
-                        el._observer.disconnect();
-                        delete el._observer;
-                    }
-                }""",
-                MODEL_SEL,
-            )
+    return models
+
+
+async def create_collector_page() -> Tuple[Browser, Page, asyncio.Event, dict]:
+    base_url = "https://www.kbb.com/whats-my-car-worth/"
+    models_updated = asyncio.Event()
+    latest_models: dict = {}
+    p = await async_playwright().start()
+    browser = await p.chromium.launch(
+        headless=False,
+        args=[
+            "--disable-blink-features=AutomationControlled",
+            "--disable-gpu",
+            "--no-sandbox",
+            "--disable-dev-shm-usage",
+            "--disable-infobars",
+        ],
+    )
+    context = await browser.new_context()
+    page: Page = await context.new_page()
+
+    await page.goto(base_url, timeout=20000)
+    await page.locator("input#makeModelRadioButton").check(force=True)
+
+    async def on_model_change(labels: list[str]):
+        try:
+            latest_models["labels"] = labels
+            models_updated.set()
+        except Exception:
+            pass
+
+    await page.expose_function("onModelChange", on_model_change)
+
+    return browser, page, models_updated, latest_models
+
+
+async def main():
+    with stopwatch("Total time elapsed"):
+        browser, page, models_updated, latest_models = await create_collector_page()
+        if browser is None or page is None:
+            sys.exit(1)
+
+        years = await get_years(page)
+
+        # DEBUG_FILE.write_text("")
+        cache: dict[str, dict[str, list[str]]] = load_cache(KBB_VARIANT_CACHE)
+        for year in tqdm(years, desc="Saving years", unit="year"):
+            if year in cache and cache[year]:
+                continue
+
+            makes_map: dict[str, list[str]] = {}
+            makes = await get_makes(page, year)
+
+            for make in makes:
+                models = await get_models(page, make, models_updated, latest_models)
+                makes_map[make] = models
+
+            cache[year] = makes_map
+            save_cache(cache, KBB_VARIANT_CACHE)
+
+        await page.evaluate(
+            """sel => {
+				const el = document.querySelector(sel);
+				if (el && el._observer) {
+					el._observer.disconnect();
+					delete el._observer;
+				}
+			}""",
+            MODEL_SEL,
+        )
+        await browser.close()
 
 
 if __name__ == "__main__":
