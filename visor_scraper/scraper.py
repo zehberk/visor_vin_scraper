@@ -267,14 +267,18 @@ async def extract_market_velocity(page, listing, index, metadata):
             labels = await sections[1].query_selector_all(DAYS_ON_MARKET_ELEMENT)
             if len(labels) >= 1:
                 days = await labels[0].inner_text()
-                market_velocity["avg_days_on_market"] = int(
-                    days.strip().replace(" days", "").replace(" day", "")
-                )
+                try:
+                    value = int(days.strip().replace(" days", "").replace(" day", ""))
+                except:
+                    value = "Not available"
+                market_velocity["avg_days_on_market"] = value
             if len(labels) >= 2:
                 days = await labels[1].inner_text()
-                market_velocity["this_vehicle_days"] = int(
-                    days.strip().replace(" days", "").replace(" day", "")
-                )
+                try:
+                    value = int(days.strip().replace(" days", "").replace(" day", ""))
+                except:
+                    value = "Not available"
+                market_velocity["this_vehicle_days"] = value
 
         if len(sections) >= 3:
             demand_el = await sections[2].query_selector(DEMAND_ELEMENT)
