@@ -4,10 +4,15 @@ from collections import defaultdict
 from datetime import datetime
 from playwright.async_api import APIRequestContext, async_playwright, Page, TimeoutError
 
-from analysis.cache import is_fmv_fresh, is_pricing_fresh, save_cache
+from analysis.cache import (
+    get_relevant_entries,
+    is_fmv_fresh,
+    is_pricing_fresh,
+    save_cache,
+)
 from analysis.models import TrimValuation
-from analysis.normalization import best_kbb_match
-from analysis.utils import get_relevant_entries, get_variant_map, to_int
+from analysis.normalization import best_kbb_trim_match
+from analysis.utils import get_variant_map, to_int
 from visor_scraper.utils import make_string_url_safe
 
 
@@ -29,7 +34,7 @@ async def get_model_slug_map(
     def _get_vins(listings: list) -> list[str]:
         return [listing["vin"] for listing in listings[: min(10, len(listings))]]
 
-    variant_map = get_variant_map(make, model, slimmed)
+    variant_map = await get_variant_map(make, model, slimmed)
 
     for model_key, listings in variant_map.items():
         if slugs and model_key in slugs:
@@ -166,8 +171,8 @@ async def get_or_fetch_new_pricing_for_year(
         # print(f"Cache for {year} {make} {model} is complete and fresh, skipping fetch")
         return
 
-    url = f"https://kbb.com/{make_string_url_safe(make)}/{model_slug}/{year}"
-    await page.goto(url)
+    url = f"https://kbb.com/{make_string_url_safe(make)}/{model_slug}/{year}/"
+    await page.goto(url, timeout=30000, wait_until="domcontentloaded")
     try:
         await page.wait_for_selector("table.css-lb65co tbody tr >> nth=0", timeout=5000)
         rows = await page.query_selector_all("table.css-lb65co tbody tr")
@@ -206,7 +211,7 @@ async def get_or_fetch_new_pricing_for_year(
         timestamp = ""
 
         if expected_trims:
-            match_trim = best_kbb_match(table_trim, expected_trims)
+            match_trim = best_kbb_trim_match(table_trim, expected_trims)
 
             if not match_trim:
                 print(
@@ -269,7 +274,22 @@ async def get_or_fetch_fmv(
     fmv_url = f"https://kbb.com/{make_string_url_safe(make)}/{model_slug}/{year}/{make_string_url_safe(style)}/"
     try:
         await page.goto(fmv_url)
-        div_text = await page.inner_text("div.css-fbyg3h", timeout=10000)
+
+        nav_tabs = await page.query_selector_all(
+            "div.styled-nav-tabs.css-16wc4jq.empazup2 button"
+        )
+
+        depreciation_exists = False
+        for button in nav_tabs:
+            aria_label = await button.get_attribute("aria_label")
+            if aria_label == "Depreciation":
+                depreciation_exists = True
+                break
+
+        if depreciation_exists:
+            div_text = await page.inner_text("div.css-fbyg3h", timeout=10000)
+        else:
+            return None, None, ""
     except TimeoutError as t:
         print("Timeout: ", fmv_url)
         print(t.message)

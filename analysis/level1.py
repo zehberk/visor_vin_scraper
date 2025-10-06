@@ -1,10 +1,13 @@
 from __future__ import annotations
+
+import asyncio, glob, json, os
+
 from collections import defaultdict
 
 from analysis.cache import *
 from analysis.kbb import get_trim_valuations_from_cache, get_trim_valuations_from_scrape
 from analysis.models import CarListing, DealBin, TrimValuation
-from analysis.normalization import best_kbb_match
+from analysis.normalization import best_kbb_trim_match
 from analysis.outliers import summarize_outliers
 from analysis.reporting import to_level1_json, render_pdf
 from analysis.scoring import (
@@ -18,7 +21,6 @@ from analysis.scoring import (
 from analysis.utils import (
     bool_from_url,
     find_variant_key,
-    get_relevant_entries,
     get_variant_map,
     is_trim_version_valid,
     to_int,
@@ -89,8 +91,10 @@ async def create_level1_file(listings: list[dict], metadata: dict):
     model = metadata["vehicle"]["model"]
     years = extract_years(listings)
 
+    variant_map = await get_variant_map(make, model, listings)
+
     trim_valuations: list[TrimValuation]
-    if cache_covers_all(make, model, years, cache):
+    if cache_covers_all(make, list(variant_map.keys()), years, cache):
         trim_valuations = get_trim_valuations_from_cache(
             make, model, years, cache_entries
         )
@@ -111,7 +115,6 @@ async def create_level1_file(listings: list[dict], metadata: dict):
     skipped_listings = []
     skip_summary: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
 
-    variant_map = get_variant_map(make, model, listings)
     for listing in listings:
         year = str(listing["year"])
         base_trim = (
@@ -127,7 +130,7 @@ async def create_level1_file(listings: list[dict], metadata: dict):
         )
 
         entries = get_relevant_entries(cache_entries, make, variant_model, year)
-        cache_key = best_kbb_match(base_trim, list(entries.keys()))
+        cache_key = best_kbb_trim_match(base_trim, list(entries.keys()))
 
         if not cache_key or (
             cache_key not in cache_entries
@@ -221,9 +224,12 @@ async def create_level1_file(listings: list[dict], metadata: dict):
     outliers_json = summarize_outliers(all_listings)
 
     # Only pass along the entries from the quicklist, not the entire cache
+    quicklist = sorted(
+        {l.cache_key for l in all_listings if l.cache_key in cache_entries}
+    )
     visible_entries = {
-        k: TrimValuation.from_dict({**v, "kbb_trim": k})
-        for k, v in get_relevant_entries(cache_entries, make, model).items()
+        k: TrimValuation.from_dict({**cache_entries[k], "kbb_trim": k})
+        for k in quicklist
     }
 
     # Output skipped listing reasons
@@ -257,10 +263,22 @@ async def create_level1_file(listings: list[dict], metadata: dict):
 
 async def start_level1_analysis(
     listings: list[dict], metadata: dict, args, timestamp: str
-):
+) -> None:
     if not listings:
         raise ValueError("No listings provided to create_level1_file().")
 
     # Slim all listings
     slimmed = [slim(l) for l in listings if l is not None]
     await create_level1_file(slimmed, metadata)
+
+
+if __name__ == "__main__":
+    json_files = glob.glob(os.path.join("output", "*.json"))
+    latest_json_file = max(json_files, key=os.path.getmtime)
+    data: dict = {}
+    with open(latest_json_file, "r") as file:
+        data = json.load(file)
+    metadata = data.get("metadata", {})
+    listings = data.get("listings", {})
+    if metadata and listings:
+        asyncio.run(start_level1_analysis(listings, metadata, None, ""))

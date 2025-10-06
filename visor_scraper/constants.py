@@ -1,3 +1,4 @@
+from datetime import timedelta
 from pathlib import Path
 import re
 
@@ -77,6 +78,12 @@ ADDON_REGEX = re.compile(r"^(.*?)[\u00a0 ]*\(\$(\d[\d,]*)\)")
 PRICE_CHANGE_REGEX = re.compile(r"(-?\$[\d,]+)")
 PRICE_MATCH_REGEX = re.compile(r"\$([\d,]+)")
 MILES_MATCH_REGEX = re.compile(r"([\d,]+)")
+
+# Cache file paths
+LISTINGS_CACHE = Path("cache") / "listings.cache"
+KBB_VARIANT_CACHE = cache_path = Path("cache") / "kbb.cache"
+PRICING_CACHE = Path("cache") / "level1_pricing.cache"
+CACHE_TTL = timedelta(days=7)
 
 BAD_STRINGS = {"", "unavailable", "n/a", "none", "null", "-", "not specified"}
 DRIVETRAINS = {"4x4", "4wd", "2wd", "4xe", "awd", "rwd"}

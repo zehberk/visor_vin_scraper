@@ -14,21 +14,19 @@ logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 
 # region Cache Logic
 
-CACHE_FILE = Path("output/listings_cache.json")
-
 
 def load_cache() -> dict:
-    if CACHE_FILE.exists():
+    if LISTINGS_CACHE.exists():
         try:
-            return json.loads(CACHE_FILE.read_text(encoding="utf-8"))
+            return json.loads(LISTINGS_CACHE.read_text(encoding="utf-8"))
         except Exception:
             return {}
     return {}
 
 
 def save_cache(cache: dict) -> None:
-    CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    CACHE_FILE.write_text(
+    LISTINGS_CACHE.parent.mkdir(parents=True, exist_ok=True)
+    LISTINGS_CACHE.write_text(
         json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8"
     )
 
@@ -481,7 +479,7 @@ async def extract_full_listing_details(
     try:
         vin = listing.get("vin")
         url = VIN_DETAILS_URL.format(vin=vin)
-        await detail_page.goto(url, timeout=60000)
+        await detail_page.goto(url, timeout=60000, wait_until="domcontentloaded")
         await detail_page.wait_for_selector(DETAIL_PAGE_ELEMENT, timeout=20000)
 
         try:

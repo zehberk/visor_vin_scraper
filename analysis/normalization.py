@@ -62,7 +62,61 @@ def get_sequence_score(
     return SequenceMatcher(None, visor_string, kbb_string).ratio()
 
 
-def best_kbb_match(visor_trim: str, kbb_trims: list[str]) -> str | None:
+def best_kbb_model_match(
+    make: str, model: str, listing: dict, kbb_models: list[str]
+) -> str | None:
+    best_match = None
+
+    # Handle hybrids first
+    if listing.get("is_hybrid", False):
+        if listing.get("is_plugin", False):
+            for kbb_m in kbb_models:
+                if "plug" in kbb_m.lower() or "phev" in kbb_m.lower():
+                    best_match = kbb_m
+                    break
+
+        if best_match is None:
+            for kbb_m in kbb_models:
+                if "hybrid" in kbb_m.lower():
+                    best_match = kbb_m
+                    break
+
+    if best_match is None:
+        # KBB/Visor sometimes drops the '-' for models, so we want to make sure we are removing that string as well
+        stripped_model = model.replace("-", "")
+
+        # Look for exact matches
+        for kbb_m in kbb_models:
+            if model == kbb_m or stripped_model == kbb_m:
+                best_match = kbb_m
+                break
+
+        # If there are not any exact matches, do a token match with the trim version
+        if best_match is None:
+            trim_version: str = listing.get("trim_version", "")
+            if trim_version:
+                stripped_make = make.replace("-", "")
+                stripped_tv = (
+                    trim_version.replace(make, "")
+                    .replace(model, "")
+                    .replace(stripped_make, "")
+                    .replace(stripped_model, "")
+                )
+                listing_tokens = [t.lower() for t in stripped_tv.split()]
+
+                best_score = 0
+                for kbb_m in kbb_models:
+                    stripped_m = kbb_m.replace(model, "").replace(stripped_model, "")
+                    kbb_tokens = [t.lower() for t in stripped_m.split()]
+                    score = len(set(listing_tokens) & set(kbb_tokens))
+                    if score > best_score:
+                        best_score = score
+                        best_match = kbb_m
+
+    return best_match
+
+
+def best_kbb_trim_match(visor_trim: str, kbb_trims: list[str]) -> str | None:
     if not visor_trim or not kbb_trims:
         return None
 

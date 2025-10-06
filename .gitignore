@@ -32,6 +32,10 @@ presets/presets.json
 !output/example_output.json
 !presets/presets.example.json
 
+# Local cache files
+cache/level1_pricing.cache
+cache/listings.cache
+
 # OS-generated files
 .DS_Store
 Thumbs.db
