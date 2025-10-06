@@ -2,7 +2,7 @@ import asyncio, sys, time
 
 from datetime import datetime
 from pathlib import Path
-from playwright.async_api import async_playwright, Browser, Page
+from playwright.async_api import async_playwright, Browser, BrowserContext, Page
 from tqdm import tqdm
 from typing import Tuple
 
@@ -28,9 +28,15 @@ async def get_div_values(page: Page, div: str, error_msg: str) -> list[str]:
     select = await page.query_selector(f"{div} select")
     if select:
         options = await select.query_selector_all("option:not([disabled])")
-        raw_inner_text = [await o.inner_text() for o in options]
-        inner_text = [t for t in raw_inner_text if t and t.strip()]
-        return inner_text
+        attempt = 0
+        while len(options) == 0 and attempt < 100:
+            await asyncio.sleep(0.1)
+            options = await select.query_selector_all("option:not([disabled])")
+            attempt += 1
+        if attempt < 100:
+            raw_inner_text = [await o.inner_text() for o in options]
+            inner_text = [t for t in raw_inner_text if t and t.strip()]
+            return inner_text
     print(error_msg)
     sys.exit(1)
 
@@ -61,13 +67,7 @@ async def get_models(
     make: str,
     models_updated: asyncio.Event,
     latest_models: dict,
-    year: str = "",
 ) -> list[str]:
-
-    if year:
-        await page.select_option(YEAR_SEL, label=year)
-        await asyncio.sleep(0.5)
-
     models_updated.clear()
 
     # re-attach observer
@@ -109,13 +109,20 @@ async def get_missing_models(year: str, make: str) -> list[str]:
     if int(year) > datetime.now().year:
         return models
 
-    browser, page, models_updated, latest_models = await create_collector_page()
+    context, browser, page, models_updated, latest_models = (
+        await create_collector_page()
+    )
     if browser is None or page is None:
         sys.exit(1)
 
     try:
         if page is not None:
-            models = await get_models(page, make, models_updated, latest_models, year)
+            makes = await get_makes(page, year)
+            matched_make = next((m for m in makes if m.lower() == make.lower()), None)
+            if not matched_make:
+                print("No matching makes:", make)
+                return models
+            models = await get_models(page, matched_make, models_updated, latest_models)
 
         if models:
             cache: dict[str, dict[str, list[str]]] = load_cache(KBB_VARIANT_CACHE)
@@ -130,12 +137,15 @@ async def get_missing_models(year: str, make: str) -> list[str]:
     except Exception as e:
         print(e)
     finally:
+        await context.close()
         await browser.close()
 
     return models
 
 
-async def create_collector_page() -> Tuple[Browser, Page, asyncio.Event, dict]:
+async def create_collector_page() -> (
+    Tuple[BrowserContext, Browser, Page, asyncio.Event, dict]
+):
     base_url = "https://www.kbb.com/whats-my-car-worth/"
     models_updated = asyncio.Event()
     latest_models: dict = {}
@@ -165,12 +175,14 @@ async def create_collector_page() -> Tuple[Browser, Page, asyncio.Event, dict]:
 
     await page.expose_function("onModelChange", on_model_change)
 
-    return browser, page, models_updated, latest_models
+    return context, browser, page, models_updated, latest_models
 
 
 async def main():
     with stopwatch("Total time elapsed"):
-        browser, page, models_updated, latest_models = await create_collector_page()
+        context, browser, page, models_updated, latest_models = (
+            await create_collector_page()
+        )
         if browser is None or page is None:
             sys.exit(1)
 
@@ -202,6 +214,7 @@ async def main():
 			}""",
             MODEL_SEL,
         )
+        await context.close()
         await browser.close()
 
 

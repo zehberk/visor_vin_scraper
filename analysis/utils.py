@@ -1,4 +1,9 @@
+import json
+from playwright.async_api import Page
+
 from analysis.cache import load_cache
+from analysis.kbb_collector import get_missing_models
+from analysis.normalization import best_kbb_model_match
 
 from visor_scraper.constants import BAD_STRINGS, KBB_VARIANT_CACHE
 
@@ -41,34 +46,74 @@ def is_trim_version_valid(trim_version: str) -> bool:
     return any(c.isalnum() for c in trim_version)
 
 
-def get_variant_map(
+async def get_variant_map(
     make: str, model: str, listings: list[dict]
 ) -> dict[str, list[dict]]:
 
     # Year, Make, list[Models/Variants]
     variant_cache: dict[str, dict[str, list[str]]] = load_cache(KBB_VARIANT_CACHE)
-
-    mapped_by_title: dict[str, list[dict]] = {}
-    for l in listings:
-        year = l["year"]
-        ymm = f"{year} {make} {model}"
-        mapped_by_title.setdefault(ymm, []).append(l)
-    sorted_mapping = dict(sorted(mapped_by_title.items()))
-
+    candidate_map: dict[str, list[str]] = {}
     variant_map: dict[str, list[dict]] = {}
-    for ymm, listings in sorted_mapping.items():
-        hybrid = f"{ymm} Hybrid"
-        plugin = f"{ymm} Plug-in Hybrid"
 
-        for l in listings:
-            if l["is_plugin"] is True:
-                variant_map.setdefault(plugin, []).append(l)
-            elif l["is_hybrid"] is True:
-                variant_map.setdefault(hybrid, []).append(l)
-            else:
-                variant_map.setdefault(ymm, []).append(l)
+    stripped_model = model.replace("-", "")
 
-    return variant_map
+    years = sorted(set({str(l["year"]) for l in listings}))
+    prev_year = ""
+    for year in years:
+        cache_models = variant_cache.get(year, {}).get(make, [])
+        # Get missing models if we don't find them
+        if not cache_models:
+            cache_models = await get_missing_models(year, make)
+
+        models = [
+            m
+            for m in cache_models
+            if model.lower() in m.lower()
+            or m.lower() in model.lower()
+            or stripped_model.lower() in m.lower()
+            or m.lower() in stripped_model.lower()
+        ]
+        if not models:
+            # print(
+            #     f"No relevant models found, using previous year: {prev_year} {make} {model}."
+            # )
+            models = candidate_map.get(prev_year, [])
+        candidate_map[year] = models
+        prev_year = year
+
+    no_match: list[dict] = []
+    for l in listings:
+        year = str(l["year"])
+
+        if not candidate_map or not candidate_map[year]:
+            no_match.append(l)
+            continue
+        elif len(candidate_map[year]) == 1:
+            selected = candidate_map[year][0]
+        else:
+            selected = best_kbb_model_match(make, model, l, candidate_map[year])
+            if selected is None:
+                no_match.append(l)
+                continue
+
+        ymm = f"{year} {make} {selected}"
+        variant_map.setdefault(ymm, []).append(l)
+
+    # This is any entry in the variant map that has the most listings associated with it
+    most_key = max(variant_map, key=lambda x: len(variant_map[x]))
+
+    for l in no_match:
+        year = str(l["year"])
+        key_year = most_key[:4]
+        variant = most_key.replace(key_year, "").replace(make, "").strip()
+        if variant in candidate_map[year]:
+            mod_key = most_key.replace(key_year, year)
+        else:
+            mod_key = year + " " + candidate_map[year][0]
+
+        variant_map.setdefault(mod_key, []).append(l)
+
+    return dict(sorted(variant_map.items()))
 
 
 def find_variant_key(variant_map: dict[str, list[dict]], listing: dict) -> str | None:
