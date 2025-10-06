@@ -176,9 +176,13 @@ async def get_or_fetch_new_pricing_for_year(
     try:
         await page.wait_for_selector("table.css-lb65co tbody tr >> nth=0", timeout=5000)
         rows = await page.query_selector_all("table.css-lb65co tbody tr")
-    except TimeoutError as t:
-        await page.wait_for_selector("div.css-127mtog table", timeout=5000)
-        rows = await page.query_selector_all("div.css-127mtog table tbody tr")
+    except TimeoutError as t1:
+        try:
+            await page.wait_for_selector("div.css-127mtog table", timeout=5000)
+            rows = await page.query_selector_all("div.css-127mtog table tbody tr")
+        except TimeoutError as t2:
+            print(f"Unable to find table fore pricing: {url}")
+            return
 
     # Collect the pricing data before attempting to get FMV, otherwise page context gets
     # overwritten and Playwright will throw an error
@@ -347,6 +351,14 @@ async def get_trim_valuations_from_scrape(
             ],
         )
         context = await browser.new_context()
+        await context.route(
+            "**/*",
+            lambda route: (
+                route.abort()
+                if route.request.resource_type in ["image", "media", "font"]
+                else route.continue_()
+            ),
+        )
         page = await context.new_page()
 
         try:
