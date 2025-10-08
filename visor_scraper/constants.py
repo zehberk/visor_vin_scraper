@@ -103,12 +103,12 @@ BED_LENGTH_RE = re.compile(
     re.IGNORECASE,
 )
 BODY_STYLE_RE = re.compile(
-    r"\s+"  # leading space
-    r"(Sedan|Coupe|Hatchback|"
-    r"Sport Utility|SUV|"
+    r"\b("  # leading space
+    r"Sedan|Coupe|Hatchback|"
+    r"Sport Utility|Sport Utility Vehicle|SUV|"
     r"Crew Cab|Extended Cab|SuperCrew Cab|"
-    r"Van|Wagon|Pickup)"  # body style group
-    r"\s+(\dD)",  # door count, e.g. 2D, 4D
+    r"Van|Wagon|Pickup"  # body style group
+    r")\s+(\dD)\b",  # door count, e.g. 2D, 4D
     re.IGNORECASE,
 )
 BODY_STYLE_ALIASES = {"SUV 4D": "Sport Utility Vehicle 4D"}
