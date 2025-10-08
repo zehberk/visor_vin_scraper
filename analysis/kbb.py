@@ -181,7 +181,7 @@ async def get_or_fetch_new_pricing_for_year(
             await page.wait_for_selector("div.css-127mtog table", timeout=5000)
             rows = await page.query_selector_all("div.css-127mtog table tbody tr")
         except TimeoutError as t2:
-            print(f"Unable to find table fore pricing: {url}")
+            print(f"Unable to find table for pricing: {url}")
             return
 
     # Collect the pricing data before attempting to get FMV, otherwise page context gets
@@ -277,7 +277,7 @@ async def get_or_fetch_fmv(
 
     fmv_url = f"https://kbb.com/{make_string_url_safe(make)}/{model_slug}/{year}/{make_string_url_safe(style)}/"
     try:
-        await page.goto(fmv_url)
+        await page.goto(fmv_url, wait_until="domcontentloaded")
 
         nav_tabs = await page.query_selector_all(
             "div.styled-nav-tabs.css-16wc4jq.empazup2 button"
@@ -285,7 +285,7 @@ async def get_or_fetch_fmv(
 
         depreciation_exists = False
         for button in nav_tabs:
-            aria_label = await button.get_attribute("aria_label")
+            aria_label = await button.get_attribute("aria-label")
             if aria_label == "Depreciation":
                 depreciation_exists = True
                 break
