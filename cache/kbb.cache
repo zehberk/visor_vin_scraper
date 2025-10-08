@@ -1,35 +1,51 @@
 {
-  "2025": {
+  "2027": {
+    "Rivian": [
+      "R3"
+    ],
+    "Scout": [
+      "Terra",
+      "Traveler"
+    ],
+    "Slate": [
+      "Truck"
+    ]
+  },
+  "2026": {
     "Acura": [
       "Integra",
-      "RDX",
-      "TLX"
+      "MDX",
+      "RSX"
     ],
-    "Alfa Romeo": [
-      "Giulia"
-    ],
-    "Aston Martin": [
-      "Vantage"
+    "AFEELA": [
+      "1",
+      "Sedan"
     ],
     "Audi": [
       "A3",
-      "A4 allroad",
       "A6",
       "Q3",
+      "Q4 e-tron",
+      "Q4 Sportback e-tron",
       "Q5",
       "Q7",
       "Q8",
-      "RS 5 Sportback",
-      "RS e-tron GT",
-      "S e-tron GT",
-      "S5",
-      "S5 Sportback"
+      "SQ7",
+      "SQ8"
     ],
     "BMW": [
+      "2 Series",
       "3 Series",
       "4 Series",
       "5 Series",
       "7 Series",
+      "8 Series",
+      "i5",
+      "i7",
+      "iX",
+      "M2",
+      "M3",
+      "M4",
       "M5",
       "X1",
       "X2",
@@ -39,15 +55,12 @@
       "X6",
       "X6 M",
       "X7",
-      "Z4",
-      "iX"
-    ],
-    "Bentley": [
-      "Continental GT"
+      "Z4"
     ],
     "Buick": [
       "Enclave",
       "Encore GX",
+      "Envision",
       "Envista"
     ],
     "Cadillac": [
@@ -56,14 +69,31 @@
       "CT5",
       "CT5-V",
       "Escalade",
-      "Escalade ESV",
-      "XT4"
+      "Escalade IQ",
+      "Escalade IQL",
+      "LYRIQ",
+      "LYRIQ-V",
+      "OPTIQ",
+      "OPTIQ-V",
+      "VISTIQ",
+      "XT5"
     ],
     "Chevrolet": [
       "Blazer",
+      "Blazer EV",
+      "Colorado Crew Cab",
+      "Corvette",
       "Equinox",
-      "Malibu",
       "Silverado 1500 Crew Cab",
+      "Silverado 1500 Double Cab",
+      "Silverado 1500 Regular Cab",
+      "Silverado 2500 HD Crew Cab",
+      "Silverado 2500 HD Double Cab",
+      "Silverado 2500 HD Regular Cab",
+      "Silverado 3500 HD Crew Cab",
+      "Silverado EV",
+      "Suburban",
+      "Tahoe",
       "Trailblazer",
       "Traverse",
       "Trax"
@@ -73,47 +103,544 @@
       "Pacifica Hybrid",
       "Voyager"
     ],
-    "Ford": [
-      "Bronco Sport",
-      "Escape",
-      "Explorer",
-      "Mustang"
+    "Dodge": [
+      "Charger",
+      "Charger Daytona",
+      "Durango"
     ],
-    "GMC": [
-      "HUMMER EV Pickup",
-      "Sierra 1500 Crew Cab",
-      "Sierra 1500 Double Cab"
+    "Ford": [
+      "E-Transit 350 Cargo Van",
+      "Escape",
+      "Escape Plug-in Hybrid",
+      "Expedition",
+      "Expedition MAX",
+      "Explorer",
+      "F250 Super Duty Crew Cab",
+      "F250 Super Duty Regular Cab",
+      "F250 Super Duty Super Cab",
+      "F350 Super Duty Crew Cab",
+      "F350 Super Duty Regular Cab",
+      "F350 Super Duty Super Cab",
+      "F450 Super Duty Crew Cab",
+      "F450 Super Duty Regular Cab",
+      "Transit 150 Cargo Van",
+      "Transit 250 Cargo Van",
+      "Transit 350 Cargo Van",
+      "Transit 350 HD Cargo Van",
+      "Transit 350 Passenger Van"
     ],
     "Genesis": [
       "Electrified GV70",
       "G70",
+      "G80",
+      "G90",
+      "GV70",
+      "GV80",
+      "GV80 Coupe"
+    ],
+    "GMC": [
+      "Acadia",
+      "Canyon Crew Cab",
+      "HUMMER EV Pickup",
+      "HUMMER EV SUV",
+      "Sierra 1500 Crew Cab",
+      "Sierra 1500 Double Cab",
+      "Sierra 1500 Regular Cab",
+      "Sierra EV",
+      "Terrain",
+      "Yukon",
+      "Yukon XL"
+    ],
+    "Honda": [
+      "Civic",
+      "Civic Hybrid",
+      "CR-V",
+      "CR-V Hybrid",
+      "HR-V",
+      "Odyssey",
+      "Passport",
+      "Prelude"
+    ],
+    "Hyundai": [
+      "IONIQ 6",
+      "IONIQ 6 N",
+      "IONIQ 9",
+      "Kona",
+      "Palisade",
+      "Palisade Hybrid",
+      "Santa Cruz",
+      "Santa Fe",
+      "Santa Fe Hybrid",
+      "Sonata",
+      "Sonata Hybrid",
+      "Tucson",
+      "Tucson Hybrid",
+      "Tucson Plug-in Hybrid"
+    ],
+    "INFINITI": [
+      "QX60",
+      "QX65",
+      "QX80"
+    ],
+    "Jaguar": [
+      "F-PACE"
+    ],
+    "Jeep": [
+      "Cherokee",
+      "Compass",
+      "Grand Cherokee",
+      "Recon"
+    ],
+    "Kia": [
+      "Carnival",
+      "Carnival Hybrid",
+      "EV4",
+      "EV9",
+      "K4 Hatchback",
+      "K5",
+      "Seltos",
+      "Sorento",
+      "Sorento Hybrid",
+      "Sorento Plug-in Hybrid",
+      "Sportage",
+      "Sportage Hybrid",
+      "Sportage Plug-in Hybrid"
+    ],
+    "Land Rover": [
+      "Defender 110",
+      "Defender 130",
+      "Defender 90",
+      "Discovery",
+      "Discovery Sport",
+      "Range Rover Evoque",
+      "Range Rover Velar"
+    ],
+    "Lexus": [
+      "ES",
+      "LC",
+      "NX",
+      "RX",
+      "RZ",
+      "TX"
+    ],
+    "Lincoln": [
+      "Aviator",
+      "Corsair",
+      "Nautilus",
+      "Navigator",
+      "Navigator L"
+    ],
+    "Lucid": [
+      "Air",
+      "Gravity"
+    ],
+    "MAZDA": [
+      "CX-30",
+      "CX-5",
+      "CX-90",
+      "MAZDA3"
+    ],
+    "McLaren": [
+      "750S",
+      "Artura",
+      "GTS"
+    ],
+    "Mercedes-Benz": [
+      "CLA",
+      "CLE",
+      "E-Class",
+      "EQE",
+      "EQE SUV",
+      "EQS",
+      "GLA",
+      "GLB",
+      "GLC",
+      "GLE",
+      "GLE Coupe",
+      "GLS",
+      "Mercedes-AMG EQE",
+      "Mercedes-AMG EQE SUV",
+      "Mercedes-AMG GLC",
+      "Mercedes-AMG GLE",
+      "Mercedes-AMG GLE Coupe",
+      "Mercedes-AMG GLS",
+      "Mercedes-AMG S-Class",
+      "Mercedes-AMG SL",
+      "Mercedes-Maybach GLS",
+      "Mercedes-Maybach S-Class",
+      "Mercedes-Maybach SL",
+      "S-Class",
+      "Sprinter 2500 Cargo",
+      "Sprinter 2500 Crew",
+      "Sprinter 2500 Passenger",
+      "Sprinter 3500 Cargo",
+      "Sprinter 3500 XD Cargo",
+      "Sprinter 4500 Cargo"
+    ],
+    "MINI": [
+      "Convertible",
+      "Countryman",
+      "Hardtop 2 Door",
+      "Hardtop 4 Door"
+    ],
+    "Mitsubishi": [
+      "Eclipse Cross",
+      "Outlander"
+    ],
+    "Nissan": [
+      "Armada",
+      "Kicks",
+      "LEAF",
+      "Murano",
+      "Rogue",
+      "Sentra"
+    ],
+    "Polestar": [
+      "4",
+      "5"
+    ],
+    "Porsche": [
+      "911",
+      "Cayenne",
+      "Cayenne Coupe",
+      "Cayenne EV",
+      "Macan",
+      "Panamera",
+      "Taycan",
+      "Taycan Cross Turismo",
+      "Taycan Sport Turismo"
+    ],
+    "Ram": [
+      "1500 Crew Cab",
+      "1500 Quad Cab",
+      "2500 Crew Cab",
+      "2500 Mega Cab",
+      "2500 Regular Cab",
+      "3500 Mega Cab",
+      "3500 Regular Cab",
+      "ProMaster Cargo Van",
+      "ProMaster Window Van"
+    ],
+    "Rivian": [
+      "R1S",
+      "R1T",
+      "R2"
+    ],
+    "Subaru": [
+      "Ascent",
+      "Crosstrek",
+      "Crosstrek Hybrid",
+      "Impreza",
+      "Outback",
+      "Solterra",
+      "Uncharted"
+    ],
+    "Tesla": [
+      "Model S",
+      "Model X",
+      "Model Y"
+    ],
+    "Toyota": [
+      "bZ",
+      "C-HR",
+      "Camry",
+      "Corolla",
+      "Corolla Cross",
+      "Corolla Cross Hybrid",
+      "Corolla Hatchback",
+      "Corolla Hybrid",
+      "Crown",
+      "GR Supra",
+      "Grand Highlander",
+      "Grand Highlander Hybrid",
+      "Highlander",
+      "Highlander Hybrid",
+      "Prius",
+      "Prius Plug-in Hybrid",
+      "RAV4",
+      "RAV4 Plug-in Hybrid",
+      "Sequoia",
+      "Tundra CrewMax",
+      "Tundra Double Cab",
+      "Tundra i-FORCE MAX CrewMax"
+    ],
+    "Volkswagen": [
+      "Atlas",
+      "Atlas Cross Sport",
+      "Jetta",
+      "Taos"
+    ],
+    "Volvo": [
+      "ES90",
+      "EX30",
+      "V60",
+      "V90",
+      "XC40",
+      "XC60",
+      "XC90"
+    ]
+  },
+  "2025": {
+    "Acura": [
+      "ADX",
+      "Integra",
+      "MDX",
+      "RDX",
+      "TLX"
+    ],
+    "Alfa Romeo": [
+      "Giulia",
+      "Stelvio",
+      "Tonale"
+    ],
+    "Aston Martin": [
+      "DB12",
+      "DBX",
+      "Vanquish",
+      "Vantage"
+    ],
+    "Audi": [
+      "A3",
+      "A4",
+      "A4 allroad",
+      "A5",
+      "A5 Sportback",
+      "A6",
+      "A6 allroad",
+      "A6 e-tron",
+      "A6 Sportback e-tron",
+      "A7",
+      "A8",
+      "Q3",
+      "Q4 e-tron",
+      "Q4 Sportback e-tron",
+      "Q5",
+      "Q5 Sportback",
+      "Q6 e-tron",
+      "Q6 Sportback e-tron",
+      "Q7",
+      "Q8",
+      "Q8 e-tron",
+      "Q8 Sportback e-tron",
+      "RS 3",
+      "RS 5 Sportback",
+      "RS 6",
+      "RS 7",
+      "RS e-tron GT",
+      "RS Q8",
+      "S e-tron GT",
+      "S3",
+      "S4",
+      "S5",
+      "S5 Sportback",
+      "S6",
+      "S6 e-tron",
+      "S6 Sportback e-tron",
+      "S7",
+      "S8",
+      "SQ5",
+      "SQ5 Sportback",
+      "SQ6 e-tron",
+      "SQ6 Sportback e-tron",
+      "SQ7",
+      "SQ8",
+      "SQ8 e-tron",
+      "SQ8 Sportback e-tron"
+    ],
+    "Bentley": [
+      "Bentayga",
+      "Bentayga EWB",
+      "Continental GT",
+      "Continental GTC",
+      "Flying Spur"
+    ],
+    "BMW": [
+      "2 Series",
+      "3 Series",
+      "4 Series",
+      "5 Series",
+      "7 Series",
+      "8 Series",
+      "i4",
+      "i5",
+      "i7",
+      "iX",
+      "M2",
+      "M3",
+      "M4",
+      "M5",
+      "M8",
+      "X1",
+      "X2",
+      "X3",
+      "X4",
+      "X4 M",
+      "X5",
+      "X5 M",
+      "X6",
+      "X6 M",
+      "X7",
+      "XM",
+      "Z4"
+    ],
+    "Buick": [
+      "Enclave",
+      "Encore GX",
+      "Envision",
+      "Envista"
+    ],
+    "Cadillac": [
+      "Celestiq",
+      "CT4",
+      "CT4-V",
+      "CT5",
+      "CT5-V",
+      "Escalade",
+      "Escalade ESV",
+      "Escalade IQ",
+      "LYRIQ",
+      "OPTIQ",
+      "XT4",
+      "XT5",
+      "XT6"
+    ],
+    "Chevrolet": [
+      "Blazer",
+      "Blazer EV",
+      "Colorado Crew Cab",
+      "Corvette",
+      "Equinox",
+      "Equinox EV",
+      "Express 2500 Cargo",
+      "Express 2500 Passenger",
+      "Express 3500 Cargo",
+      "Express 3500 Passenger",
+      "Malibu",
+      "Silverado 1500 Crew Cab",
+      "Silverado 1500 Double Cab",
+      "Silverado 1500 Regular Cab",
+      "Silverado 2500 HD Crew Cab",
+      "Silverado 2500 HD Double Cab",
+      "Silverado 2500 HD Regular Cab",
+      "Silverado 3500 HD Crew Cab",
+      "Silverado 3500 HD Double Cab",
+      "Silverado 3500 HD Regular Cab",
+      "Silverado EV",
+      "Suburban",
+      "Tahoe",
+      "Trailblazer",
+      "Traverse",
+      "Trax"
+    ],
+    "Chrysler": [
+      "Pacifica",
+      "Pacifica Hybrid",
+      "Voyager"
+    ],
+    "Dodge": [
+      "Charger",
+      "Charger Daytona",
+      "Durango",
+      "Hornet"
+    ],
+    "Ferrari": [
+      "296 GTS",
+      "Purosangue"
+    ],
+    "FIAT": [
+      "500e"
+    ],
+    "Ford": [
+      "Bronco",
+      "Bronco Sport",
+      "E-Transit 350 Cargo Van",
+      "Escape",
+      "Escape Plug-in Hybrid",
+      "Expedition",
+      "Expedition MAX",
+      "Explorer",
+      "F150 Lightning",
+      "F150 Regular Cab",
+      "F150 Super Cab",
+      "F150 SuperCrew Cab",
+      "F250 Super Duty Crew Cab",
+      "F250 Super Duty Regular Cab",
+      "F250 Super Duty Super Cab",
+      "F350 Super Duty Crew Cab",
+      "F350 Super Duty Regular Cab",
+      "F350 Super Duty Super Cab",
+      "F450 Super Duty Crew Cab",
+      "F450 Super Duty Regular Cab",
+      "Maverick",
+      "Mustang",
+      "Mustang MACH-E",
+      "Ranger SuperCrew",
+      "Transit 150 Cargo Van",
+      "Transit 250 Cargo Van",
+      "Transit 350 Cargo Van",
+      "Transit 350 HD Cargo Van",
+      "Transit 350 Passenger Van"
+    ],
+    "Genesis": [
+      "Electrified G80",
+      "Electrified GV70",
+      "G70",
+      "G80",
       "G90",
       "GV60",
       "GV70",
       "GV80",
       "GV80 Coupe"
     ],
+    "GMC": [
+      "Acadia",
+      "Canyon Crew Cab",
+      "HUMMER EV Pickup",
+      "HUMMER EV SUV",
+      "Savana 2500 Cargo",
+      "Savana 2500 Passenger",
+      "Savana 3500 Cargo",
+      "Savana 3500 Passenger",
+      "Sierra 1500 Crew Cab",
+      "Sierra 1500 Double Cab",
+      "Sierra 1500 Regular Cab",
+      "Sierra 2500 HD Crew Cab",
+      "Sierra 2500 HD Double Cab",
+      "Sierra 2500 HD Regular Cab",
+      "Sierra 3500 HD Crew Cab",
+      "Sierra 3500 HD Double Cab",
+      "Sierra 3500 HD Regular Cab",
+      "Sierra EV",
+      "Terrain",
+      "Yukon",
+      "Yukon XL"
+    ],
     "Honda": [
       "Accord",
       "Accord Hybrid",
-      "CR-V",
-      "CR-V Hybrid",
       "Civic",
       "Civic Hybrid",
       "Civic Type R",
+      "CR-V",
+      "CR-V e:FCEV",
+      "CR-V Hybrid",
       "HR-V",
       "Odyssey",
       "Passport",
-      "Pilot"
+      "Pilot",
+      "Prologue",
+      "Ridgeline"
     ],
     "Hyundai": [
       "Elantra",
       "Elantra Hybrid",
       "Elantra N",
+      "IONIQ 5",
       "IONIQ 5 N",
       "IONIQ 6",
       "Kona",
       "Kona Electric",
+      "NEXO",
       "Palisade",
       "Santa Cruz",
       "Santa Fe",
@@ -121,49 +648,116 @@
       "Sonata",
       "Sonata Hybrid",
       "Tucson",
+      "Tucson Hybrid",
+      "Tucson Plug-in Hybrid",
       "Venue"
     ],
+    "INEOS": [
+      "Grenadier Quartermaster",
+      "Grenadier Station Wagon"
+    ],
     "INFINITI": [
+      "QX50",
+      "QX55",
       "QX60",
       "QX80"
     ],
+    "Jaguar": [
+      "F-PACE"
+    ],
     "Jeep": [
-      "Compass"
+      "Compass",
+      "Gladiator",
+      "Grand Cherokee",
+      "Grand Cherokee 4xe",
+      "Grand Cherokee L",
+      "Grand Wagoneer",
+      "Grand Wagoneer L",
+      "Wagoneer",
+      "Wagoneer L",
+      "Wagoneer S",
+      "Wrangler 2 Door",
+      "Wrangler 4 Door",
+      "Wrangler 4xe"
+    ],
+    "Karma": [
+      "Revero"
     ],
     "Kia": [
       "Carnival",
       "Carnival Hybrid",
+      "EV3",
+      "EV6",
+      "EV9",
       "K4",
       "K5",
+      "Niro",
+      "Niro EV",
+      "Niro Plug-in Hybrid",
       "Seltos",
       "Sorento",
       "Sorento Hybrid",
       "Sorento Plug-in Hybrid",
       "Soul",
       "Sportage",
+      "Sportage Hybrid",
+      "Sportage Plug-in Hybrid",
       "Telluride"
+    ],
+    "Lamborghini": [
+      "Revuelto",
+      "Urus"
     ],
     "Land Rover": [
       "Defender 110",
+      "Defender 130",
+      "Defender 90",
+      "Discovery",
+      "Discovery Sport",
+      "Range Rover",
+      "Range Rover Evoque",
       "Range Rover Sport",
       "Range Rover Velar"
     ],
     "Lexus": [
       "ES",
+      "GX",
       "IS",
       "LC",
+      "LS",
+      "LX",
       "NX",
+      "RC",
       "RX",
+      "RZ",
       "TX",
       "UX"
     ],
     "Lincoln": [
-      "Aviator"
+      "Aviator",
+      "Corsair",
+      "Nautilus",
+      "Navigator",
+      "Navigator L"
+    ],
+    "Lotus": [
+      "Eletre",
+      "Emira"
+    ],
+    "Lucid": [
+      "Air",
+      "Gravity"
+    ],
+    "Maserati": [
+      "GranCabrio",
+      "GranTurismo",
+      "Grecale"
     ],
     "MAZDA": [
       "CX-30",
       "CX-5",
       "CX-50",
+      "CX-50 Hybrid",
       "CX-70",
       "CX-70 PHEV",
       "CX-90",
@@ -172,13 +766,8 @@
       "MX-5 Miata",
       "MX-5 Miata RF"
     ],
-    "MINI": [
-      "Convertible",
-      "Countryman",
-      "Hardtop 2 Door",
-      "Hardtop 4 Door"
-    ],
     "McLaren": [
+      "750S",
       "Artura",
       "GTS"
     ],
@@ -186,18 +775,72 @@
       "C-Class",
       "CLA",
       "CLE",
+      "E-Class",
+      "eSprinter",
+      "G-Class",
+      "G-Class EV",
+      "GLA",
+      "GLB",
+      "GLC",
+      "GLC Coupe",
       "GLE",
       "GLE Coupe",
       "GLS",
       "Mercedes-AMG C-Class",
+      "Mercedes-AMG CLA",
       "Mercedes-AMG CLE",
+      "Mercedes-AMG E-Class",
+      "Mercedes-AMG EQE",
+      "Mercedes-AMG EQE SUV",
+      "Mercedes-AMG EQS",
+      "Mercedes-AMG G-Class",
+      "Mercedes-AMG GLA",
+      "Mercedes-AMG GLB",
+      "Mercedes-AMG GLC",
+      "Mercedes-AMG GLC Coupe",
       "Mercedes-AMG GLE",
       "Mercedes-AMG GLE Coupe",
-      "Mercedes-AMG SL"
+      "Mercedes-AMG GLS",
+      "Mercedes-AMG GT",
+      "Mercedes-AMG S-Class",
+      "Mercedes-AMG SL",
+      "Mercedes-EQ EQB",
+      "Mercedes-EQ EQE",
+      "Mercedes-EQ EQE SUV",
+      "Mercedes-EQ EQS",
+      "Mercedes-EQ EQS SUV",
+      "Mercedes-Maybach EQS SUV",
+      "Mercedes-Maybach GLS",
+      "Mercedes-Maybach S-Class",
+      "S-Class",
+      "Sprinter 2500 Cargo",
+      "Sprinter 2500 Crew",
+      "Sprinter 2500 Passenger",
+      "Sprinter 3500 Cargo",
+      "Sprinter 3500 XD Cargo",
+      "Sprinter 4500 Cargo"
+    ],
+    "MINI": [
+      "Convertible",
+      "Countryman",
+      "Countryman Electric",
+      "Hardtop 2 Door",
+      "Hardtop 4 Door"
+    ],
+    "Mitsubishi": [
+      "Eclipse Cross",
+      "Outlander",
+      "Outlander PHEV",
+      "Outlander Sport"
     ],
     "Nissan": [
       "Altima",
+      "ARIYA",
+      "Armada",
+      "Frontier Crew Cab",
+      "Frontier King Cab",
       "Kicks",
+      "Kicks Play",
       "LEAF",
       "Murano",
       "Pathfinder",
@@ -206,51 +849,130 @@
       "Versa",
       "Z"
     ],
+    "Polestar": [
+      "2",
+      "3",
+      "4"
+    ],
     "Porsche": [
-      "Macan"
+      "718 Boxster",
+      "718 Cayman",
+      "718 Spyder",
+      "911",
+      "Cayenne",
+      "Cayenne Coupe",
+      "Macan",
+      "Macan Electric",
+      "Panamera",
+      "Taycan",
+      "Taycan Cross Turismo",
+      "Taycan Sport Turismo"
     ],
     "Ram": [
       "1500 Crew Cab",
-      "ProMaster Cargo Van"
+      "1500 Quad Cab",
+      "1500 Ramcharger",
+      "1500 REV",
+      "2500 Crew Cab",
+      "2500 Mega Cab",
+      "2500 Regular Cab",
+      "3500 Crew Cab",
+      "3500 Mega Cab",
+      "3500 Regular Cab",
+      "ProMaster Cargo Van",
+      "ProMaster EV",
+      "ProMaster Window Van"
+    ],
+    "Rivian": [
+      "R1S",
+      "R1T"
+    ],
+    "Rolls-Royce": [
+      "Cullinan",
+      "Ghost",
+      "Phantom",
+      "Spectre"
     ],
     "Subaru": [
+      "Ascent",
+      "BRZ",
+      "Crosstrek",
       "Forester",
+      "Forester Hybrid",
+      "Impreza",
       "Legacy",
-      "Outback"
+      "Outback",
+      "Solterra",
+      "WRX"
     ],
     "Tesla": [
-      "Model 3"
+      "Cybertruck",
+      "Model 3",
+      "Model S",
+      "Model X",
+      "Model Y"
     ],
     "Toyota": [
       "4Runner",
       "4Runner i-FORCE MAX",
+      "bZ4X",
       "Camry",
       "Corolla",
+      "Corolla Cross",
+      "Corolla Cross Hybrid",
       "Corolla Hatchback",
       "Corolla Hybrid",
       "Crown",
       "Crown Signia",
+      "GR Corolla",
       "GR Supra",
       "GR86",
+      "Grand Highlander",
+      "Grand Highlander Hybrid",
+      "Highlander",
+      "Highlander Hybrid",
       "Land Cruiser",
+      "Mirai",
+      "Prius",
+      "Prius Plug-in Hybrid",
       "RAV4",
       "RAV4 Hybrid",
       "RAV4 Plug-in Hybrid",
       "Sequoia",
-      "Sienna"
+      "Sienna",
+      "Tacoma Double Cab",
+      "Tacoma i-FORCE MAX Double Cab",
+      "Tacoma XtraCab",
+      "Tundra CrewMax",
+      "Tundra Double Cab",
+      "Tundra i-FORCE MAX CrewMax"
+    ],
+    "VinFast": [
+      "VF 8"
     ],
     "Volkswagen": [
       "Atlas",
       "Atlas Cross Sport",
       "Golf GTI",
       "Golf R",
+      "ID.4",
       "ID.Buzz",
       "Jetta",
-      "Jetta GLI"
+      "Jetta GLI",
+      "Taos",
+      "Tiguan"
     ],
     "Volvo": [
+      "EC40",
+      "EX30",
       "EX40",
+      "EX90",
+      "S60",
+      "S90",
+      "V60",
+      "V90",
       "XC40",
+      "XC60",
       "XC90"
     ]
   },
