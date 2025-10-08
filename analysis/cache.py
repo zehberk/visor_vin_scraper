@@ -29,7 +29,7 @@ def prepare_cache():
 
 
 def is_fmv_fresh(entry):
-    if "timestamp" not in entry or not entry.get("timestamp"):
+    if "timestamp" not in entry or not entry.get("timestamp", ""):
         return False
     ts = datetime.fromisoformat(entry["timestamp"])
     return datetime.now() - ts < CACHE_TTL
@@ -62,7 +62,7 @@ def cache_covers_all(
         model = make_model_key.replace(make, "")
 
         # Check model slug
-        if make_model_key not in slugs:
+        if ymm not in slugs:
             return False
 
         # Check trims
@@ -72,7 +72,8 @@ def cache_covers_all(
         ):
             return False
 
-        for entry in get_relevant_entries(cache_entries, make, model, year):
+        relevant_entries = get_relevant_entries(cache_entries, make, model, year)
+        for entry in relevant_entries.values():
             if not is_fmv_fresh(entry):
                 return False
 
