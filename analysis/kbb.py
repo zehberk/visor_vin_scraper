@@ -212,7 +212,7 @@ async def get_or_fetch_new_pricing_for_year(
 
         fmv = None
         fmv_source = None
-        timestamp = ""
+        timestamp = datetime.now().isoformat()
 
         if expected_trims:
             match_trim = best_kbb_trim_match(table_trim, expected_trims)
