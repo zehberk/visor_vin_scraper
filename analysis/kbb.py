@@ -210,8 +210,8 @@ async def get_or_fetch_new_pricing_for_year(
         prefix = f"{year} {make} {model}"
         kbb_trim = f"{prefix} {table_trim}"
 
-        fmv = None
-        fmv_source = None
+        fmv: int | None = None
+        fmv_source: str | None = None
         timestamp = datetime.now().isoformat()
 
         if expected_trims:
@@ -226,7 +226,7 @@ async def get_or_fetch_new_pricing_for_year(
             kbb_trim_option = f"{prefix} {match_trim}"
 
             # only here do we call FMV
-            fmv, fmv_source, timestamp = await get_or_fetch_fmv(
+            fmv, fmv_source = await get_or_fetch_fmv(
                 page, year, make, model_slug, match_trim, kbb_trim_option, cache_entries
             )
 
@@ -273,7 +273,7 @@ async def get_or_fetch_fmv(
 
     # Check cache first
     if is_fmv_fresh(entry):
-        return entry.get("fmv"), entry.get("fmv_source"), entry.get("timestamp")
+        return entry.get("fmv"), entry.get("fmv_source")
 
     fmv_url = f"https://kbb.com/{make_string_url_safe(make)}/{model_slug}/{year}/{make_string_url_safe(style)}/"
     try:
@@ -293,19 +293,20 @@ async def get_or_fetch_fmv(
         if depreciation_exists:
             div_text = await page.inner_text("div.css-fbyg3h", timeout=10000)
         else:
-            return None, None, ""
+            # No depreciation table found
+            return None, None
     except TimeoutError as t:
         print("Timeout: ", fmv_url)
         print(t.message)
-        return None, None, ""
+        return None, None
 
     match = re.search(r"current resale value of \$([\d,]+)", div_text)
     if match:
         resale_value = int(match.group(1).replace(",", ""))
-        return resale_value, fmv_url, datetime.now().isoformat()
+        return resale_value, fmv_url
     else:
-        # ✅ fallback when FMV is missing
-        return None, None, ""
+        # fallback if we can't find any information
+        return None, None
 
 
 def get_trim_valuations_from_cache(

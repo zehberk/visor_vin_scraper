@@ -3,8 +3,9 @@ import json
 from datetime import datetime
 from pathlib import Path
 
+from analysis.analysis_constants import *
+
 from visor_scraper.utils import make_string_url_safe
-from visor_scraper.constants import *
 
 
 def load_cache(cache_file: Path = PRICING_CACHE) -> dict[str, dict]:
