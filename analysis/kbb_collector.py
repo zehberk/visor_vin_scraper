@@ -1,5 +1,5 @@
 import asyncio, sys, time, warnings
-from asyncio import base_subprocess, proactor_events, windows_utils
+from asyncio import base_subprocess, proactor_events
 
 warnings.filterwarnings("ignore", category=ResourceWarning)
 proactor_events._ProactorBasePipeTransport.__del__ = lambda self: None
@@ -11,8 +11,8 @@ from playwright.async_api import async_playwright, Browser, BrowserContext, Page
 from tqdm import tqdm
 from typing import Tuple
 
+from analysis.analysis_constants import *
 from analysis.cache import load_cache, save_cache
-from visor_scraper.constants import KBB_VARIANT_CACHE
 from visor_scraper.utils import stopwatch
 
 YEAR_SEL = "div.year select"
@@ -151,7 +151,7 @@ async def get_missing_models(year: str, make: str) -> list[str]:
 async def create_collector_page() -> (
     Tuple[BrowserContext, Browser, Page, asyncio.Event, dict]
 ):
-    base_url = "https://www.kbb.com/car-prices/"
+    base_url = KBB_CAR_PRICES_URL
     models_updated = asyncio.Event()
     latest_models: dict = {}
     p = await async_playwright().start()

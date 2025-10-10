@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
-from visor_scraper.constants import (
+from analysis.analysis_constants import (
     BED_LENGTH_RE,
     BODY_STYLE_ALIASES,
     BODY_STYLE_RE,

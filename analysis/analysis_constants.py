@@ -3,6 +3,7 @@ import re
 from datetime import timedelta
 from pathlib import Path
 
+KBB_CAR_PRICES_URL = "https://www.kbb.com/car-prices/"
 KBB_WHATS_MY_CAR_WORTH_URL = "https://www.kbb.com/whats-my-car-worth/"
 KBB_LOOKUP_BASE_URL = "https://kbb.com/{make}/{model}/{year}/"
 KBB_LOOKUP_STYLES_URL = KBB_LOOKUP_BASE_URL + "styles/?intent=trade-in-sell&mileage=1"
