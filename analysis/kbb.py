@@ -6,7 +6,7 @@ from playwright.async_api import APIRequestContext, async_playwright, Page, Time
 from analysis.analysis_constants import *
 from analysis.cache import (
     get_relevant_entries,
-    is_fmv_fresh,
+    is_entry_fresh,
     is_pricing_fresh,
     save_cache,
 )
@@ -274,7 +274,7 @@ async def get_or_fetch_fmv(
     entry = cache_entries.setdefault(kbb_trim, {})
 
     # Check cache first
-    if is_fmv_fresh(entry):
+    if is_entry_fresh(entry):
         return entry.get("fmv"), entry.get("fmv_source")
 
     safe_make = make_string_url_safe(make)

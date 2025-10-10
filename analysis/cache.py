@@ -29,11 +29,20 @@ def prepare_cache():
     return cache, slugs, trim_options, cache_entries
 
 
-def is_fmv_fresh(entry):
-    if "timestamp" not in entry or not entry.get("timestamp", ""):
+def is_entry_fresh(entry: dict):
+    if (
+        "pricing_timestamp" not in entry
+        or not entry.get("pricing_timestamp", "")
+        or "timestamp" not in entry
+        or not entry.get("timestamp", "")
+    ):
         return False
-    ts = datetime.fromisoformat(entry["timestamp"])
-    return datetime.now() - ts < CACHE_TTL
+    fpp_ts = datetime.fromisoformat(entry["pricing_timestamp"])
+    is_fpp_fresh = datetime.now() - fpp_ts < CACHE_TTL
+    fmv_ts = datetime.fromisoformat(entry["timestamp"])
+    is_fmv_fresh = datetime.now() - fmv_ts < CACHE_TTL
+
+    return is_fpp_fresh and is_fmv_fresh
 
 
 def is_pricing_fresh(entry: dict) -> bool:
@@ -75,7 +84,7 @@ def cache_covers_all(
 
         relevant_entries = get_relevant_entries(cache_entries, make, model, year)
         for entry in relevant_entries.values():
-            if not is_fmv_fresh(entry):
+            if is_entry_fresh(entry) is False:
                 return False
 
     return True
