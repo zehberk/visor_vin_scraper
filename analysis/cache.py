@@ -21,14 +21,6 @@ def save_cache(cache: dict, cache_file: Path = PRICING_CACHE):
         json.dump(cache, f, indent=2)
 
 
-def prepare_cache():
-    cache = load_cache()
-    slugs: dict[str, str] = cache.setdefault("model_slugs", {})
-    trim_options: dict[str, dict[str, list[str]]] = cache.setdefault("trim_options", {})
-    cache_entries: dict = cache.setdefault("entries", {})
-    return cache, slugs, trim_options, cache_entries
-
-
 def is_entry_fresh(entry: dict):
     if (
         "pricing_timestamp" not in entry
