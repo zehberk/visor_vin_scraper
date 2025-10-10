@@ -1,9 +1,9 @@
-import json, re, sys
+import json, re
 
-from collections import defaultdict
 from datetime import datetime
 from playwright.async_api import APIRequestContext, async_playwright, Page, TimeoutError
 
+from analysis.analysis_constants import *
 from analysis.cache import (
     get_relevant_entries,
     is_fmv_fresh,
@@ -45,7 +45,7 @@ async def get_model_slug_map(
         model = model_key.replace(year, "").replace(make, "").strip()
         model_slug = make_string_url_safe(model)
 
-        url = f"https://www.kbb.com/{safe_make}/{model_slug}/{year}/"
+        url = KBB_LOOKUP_BASE_URL.format(make=safe_make, model=model_slug, year=year)
         try:
             resp = await request.get(url, max_redirects=0)
             if resp.status in [200, 301]:
@@ -69,7 +69,7 @@ async def get_model_slug_map(
 
 
 async def get_model_slug_from_vins(page: Page, model_key: str, vins: list[str]) -> str:
-    await page.goto("https://www.kbb.com/whats-my-car-worth")
+    await page.goto(KBB_WHATS_MY_CAR_WORTH_URL)
 
     # Ensure VIN mode is selected
     await page.locator("input#vinButton").check()
@@ -118,8 +118,9 @@ async def get_trim_options_for_year(
     # If we already have cached trims for this year, we don't need another lookup
     if make_model_key in trim_options and year in trim_options[make_model_key]:
         return
+    safe_make = make_string_url_safe(make)
 
-    url = f"https://kbb.com/{make_string_url_safe(make)}/{model_slug}/{year}/styles/?intent=trade-in-sell&mileage=1"
+    url = KBB_LOOKUP_STYLES_URL.format(make=safe_make, model=model_slug, year=year)
     await page.goto(url)
     raw = await page.inner_text("script#__NEXT_DATA__")
     data = json.loads(raw)
@@ -171,7 +172,8 @@ async def get_or_fetch_new_pricing_for_year(
         # print(f"Cache for {year} {make} {model} is complete and fresh, skipping fetch")
         return
 
-    url = f"https://kbb.com/{make_string_url_safe(make)}/{model_slug}/{year}/"
+    safe_make = make_string_url_safe(make)
+    url = KBB_LOOKUP_BASE_URL.format(make=safe_make, model=model_slug, year=year)
     await page.goto(url, timeout=30000, wait_until="domcontentloaded")
     try:
         await page.wait_for_selector("table.css-lb65co tbody tr >> nth=0", timeout=5000)
@@ -265,7 +267,7 @@ async def get_or_fetch_fmv(
     year: str,
     make: str,
     model_slug: str,
-    style: str,
+    trim: str,
     kbb_trim: str,
     cache_entries: dict[str, dict],
 ):
@@ -275,7 +277,11 @@ async def get_or_fetch_fmv(
     if is_fmv_fresh(entry):
         return entry.get("fmv"), entry.get("fmv_source")
 
-    fmv_url = f"https://kbb.com/{make_string_url_safe(make)}/{model_slug}/{year}/{make_string_url_safe(style)}/"
+    safe_make = make_string_url_safe(make)
+    safe_trim = make_string_url_safe(trim)
+    fmv_url = KBB_LOOKUP_TRIM_URL.format(
+        make=safe_make, model=model_slug, year=year, trim=safe_trim
+    )
     try:
         await page.goto(fmv_url, wait_until="domcontentloaded")
 

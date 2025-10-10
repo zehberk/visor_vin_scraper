@@ -3,6 +3,12 @@ import re
 from datetime import timedelta
 from pathlib import Path
 
+KBB_WHATS_MY_CAR_WORTH_URL = "https://www.kbb.com/whats-my-car-worth/"
+KBB_LOOKUP_BASE_URL = "https://kbb.com/{make}/{model}/{year}/"
+KBB_LOOKUP_STYLES_URL = KBB_LOOKUP_BASE_URL + "styles/?intent=trade-in-sell&mileage=1"
+KBB_LOOKUP_TRIM_URL = KBB_LOOKUP_BASE_URL + "/{trim}/"
+
+
 KBB_VARIANT_CACHE = cache_path = Path("cache") / "kbb.cache"
 PRICING_CACHE = Path("cache") / "level1_pricing.cache"
 CACHE_TTL = timedelta(days=7)
