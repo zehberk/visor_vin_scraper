@@ -1,4 +1,9 @@
-import asyncio, sys, time
+import asyncio, sys, time, warnings
+from asyncio import base_subprocess, proactor_events
+
+warnings.filterwarnings("ignore", category=ResourceWarning)
+proactor_events._ProactorBasePipeTransport.__del__ = lambda self: None
+base_subprocess.BaseSubprocessTransport.__del__ = lambda self: None
 
 from datetime import datetime
 from pathlib import Path
@@ -6,8 +11,8 @@ from playwright.async_api import async_playwright, Browser, BrowserContext, Page
 from tqdm import tqdm
 from typing import Tuple
 
+from analysis.analysis_constants import *
 from analysis.cache import load_cache, save_cache
-from visor_scraper.constants import KBB_VARIANT_CACHE
 from visor_scraper.utils import stopwatch
 
 YEAR_SEL = "div.year select"
@@ -146,7 +151,7 @@ async def get_missing_models(year: str, make: str) -> list[str]:
 async def create_collector_page() -> (
     Tuple[BrowserContext, Browser, Page, asyncio.Event, dict]
 ):
-    base_url = "https://www.kbb.com/whats-my-car-worth/"
+    base_url = KBB_CAR_PRICES_URL
     models_updated = asyncio.Event()
     latest_models: dict = {}
     p = await async_playwright().start()
@@ -164,7 +169,6 @@ async def create_collector_page() -> (
     page: Page = await context.new_page()
 
     await page.goto(base_url, timeout=20000)
-    await page.locator("input#makeModelRadioButton").check(force=True)
 
     async def on_model_change(labels: list[str]):
         try:
@@ -191,7 +195,9 @@ async def main():
         # DEBUG_FILE.write_text("")
         cache: dict[str, dict[str, list[str]]] = load_cache(KBB_VARIANT_CACHE)
         for year in tqdm(years, desc="Saving years", unit="year"):
-            if year in cache and cache[year]:
+            # KBB has a bad tendency to not include models from this year consistency, so we add an additional check
+            this_year: int = datetime.now().year
+            if int(year) < this_year and year in cache and cache[year]:
                 continue
 
             makes_map: dict[str, list[str]] = {}
@@ -203,6 +209,10 @@ async def main():
 
             cache[year] = makes_map
             save_cache(cache, KBB_VARIANT_CACHE)
+        # Do a final save, but ordered by year (useful for when new model years are added)
+        sorted_keys = sorted(cache.keys(), reverse=True)
+        sorted_cache = {key: cache[key] for key in sorted_keys}
+        save_cache(sorted_cache, KBB_VARIANT_CACHE)
 
         await page.evaluate(
             """sel => {

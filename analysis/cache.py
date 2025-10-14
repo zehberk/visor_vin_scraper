@@ -3,8 +3,9 @@ import json
 from datetime import datetime
 from pathlib import Path
 
+from analysis.analysis_constants import *
+
 from visor_scraper.utils import make_string_url_safe
-from visor_scraper.constants import *
 
 
 def load_cache(cache_file: Path = PRICING_CACHE) -> dict[str, dict]:
@@ -20,30 +21,36 @@ def save_cache(cache: dict, cache_file: Path = PRICING_CACHE):
         json.dump(cache, f, indent=2)
 
 
-def prepare_cache():
-    cache = load_cache()
-    slugs: dict[str, str] = cache.setdefault("model_slugs", {})
-    trim_options: dict[str, dict[str, list[str]]] = cache.setdefault("trim_options", {})
-    cache_entries: dict = cache.setdefault("entries", {})
-    return cache, slugs, trim_options, cache_entries
-
-
-def is_fmv_fresh(entry):
-    if "timestamp" not in entry or not entry.get("timestamp"):
+def is_entry_fresh(entry: dict):
+    if (
+        "pricing_timestamp" not in entry
+        or not entry.get("pricing_timestamp", "")
+        or "timestamp" not in entry
+        or not entry.get("timestamp", "")
+    ):
         return False
-    ts = datetime.fromisoformat(entry["timestamp"])
-    return datetime.now() - ts < CACHE_TTL
+    fpp_ts = datetime.fromisoformat(entry["pricing_timestamp"])
+    is_fpp_fresh = datetime.now() - fpp_ts < CACHE_TTL
+    fmv_ts = datetime.fromisoformat(entry["timestamp"])
+    is_fmv_fresh = datetime.now() - fmv_ts < CACHE_TTL
+
+    return is_fpp_fresh and is_fmv_fresh
 
 
-def is_pricing_fresh(entry: dict) -> bool:
-    ts = entry.get("pricing_timestamp")
-    if not ts:
+def is_fpp_fresh(entry: dict) -> bool:
+    if "pricing_timestamp" not in entry or not entry.get("pricing_timestamp", ""):
         return False
-    saved = datetime.fromisoformat(ts)
-    now = datetime.now()
+    fpp_ts = datetime.fromisoformat(entry["pricing_timestamp"])
 
-    # Fresh if we're still in the same month & year
-    return (saved.year == now.year) and (saved.month == now.month)
+    return datetime.now() - fpp_ts < CACHE_TTL
+
+
+def is_fmv_fresh(entry: dict) -> bool:
+    if "timestamp" not in entry or not entry.get("timestamp", ""):
+        return False
+    fmv_ts = datetime.fromisoformat(entry["timestamp"])
+
+    return datetime.now() - fmv_ts < CACHE_TTL
 
 
 def cache_covers_all(
@@ -62,7 +69,7 @@ def cache_covers_all(
         model = make_model_key.replace(make, "")
 
         # Check model slug
-        if make_model_key not in slugs:
+        if ymm not in slugs:
             return False
 
         # Check trims
@@ -72,8 +79,9 @@ def cache_covers_all(
         ):
             return False
 
-        for entry in get_relevant_entries(cache_entries, make, model, year):
-            if not is_fmv_fresh(entry):
+        relevant_entries = get_relevant_entries(cache_entries, make, model, year)
+        for entry in relevant_entries.values():
+            if is_entry_fresh(entry) is False:
                 return False
 
     return True

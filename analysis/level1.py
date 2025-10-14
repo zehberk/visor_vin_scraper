@@ -86,7 +86,11 @@ def slim(listing: dict) -> dict:
 
 
 async def create_level1_file(listings: list[dict], metadata: dict):
-    cache, slugs, trim_options, cache_entries = prepare_cache()
+    cache = load_cache()
+    slugs: dict[str, str] = cache.setdefault("model_slugs", {})
+    trim_options: dict[str, dict[str, list[str]]] = cache.setdefault("trim_options", {})
+    cache_entries: dict = cache.setdefault("entries", {})
+
     make = metadata["vehicle"]["make"]
     model = metadata["vehicle"]["model"]
     years = extract_years(listings)
