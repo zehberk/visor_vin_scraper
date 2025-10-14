@@ -37,15 +37,20 @@ def is_entry_fresh(entry: dict):
     return is_fpp_fresh and is_fmv_fresh
 
 
-def is_pricing_fresh(entry: dict) -> bool:
-    ts = entry.get("pricing_timestamp")
-    if not ts:
+def is_fpp_fresh(entry: dict) -> bool:
+    if "pricing_timestamp" not in entry or not entry.get("pricing_timestamp", ""):
         return False
-    saved = datetime.fromisoformat(ts)
-    now = datetime.now()
+    fpp_ts = datetime.fromisoformat(entry["pricing_timestamp"])
 
-    # Fresh if we're still in the same month & year
-    return (saved.year == now.year) and (saved.month == now.month)
+    return datetime.now() - fpp_ts < CACHE_TTL
+
+
+def is_fmv_fresh(entry: dict) -> bool:
+    if "timestamp" not in entry or not entry.get("timestamp", ""):
+        return False
+    fmv_ts = datetime.fromisoformat(entry["timestamp"])
+
+    return datetime.now() - fmv_ts < CACHE_TTL
 
 
 def cache_covers_all(
