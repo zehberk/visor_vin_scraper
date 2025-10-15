@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 from websocket import create_connection
 from playwright.async_api import async_playwright
 
-from visor_scraper.constants import DOC_PATH
+from utils.constants import DOC_PATH
 
 CHROME_EXE = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
 USER_DATA_DIR = str(
@@ -33,10 +33,7 @@ PROVIDERS = {
     },
 }
 
-# -------------------------------------------
 
-
-# ===== Shared I/O (moved from scraper.py) =====
 def save_listing_json(listing: dict, folder: str) -> str:
     path = os.path.join(folder, "listing.json")
     with open(path, "w", encoding="utf-8") as f:
@@ -59,7 +56,6 @@ async def download_sticker(req, listing: dict, folder: str) -> bool:
     return True
 
 
-# ===== Carfax PDF (CDP — single Chrome, many tabs) =====
 def _to_https(url: str) -> str:
     return (
         url.replace("http://", "https://", 1)
