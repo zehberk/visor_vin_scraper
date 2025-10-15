@@ -1,7 +1,7 @@
-from analysis.analysis_constants import BAD_STRINGS, KBB_VARIANT_CACHE
 from analysis.cache import load_cache
 from analysis.kbb_collector import get_missing_models
 from analysis.normalization import best_kbb_model_match
+from utils.constants import BAD_STRINGS, KBB_VARIANT_CACHE
 
 
 def bool_from_url(val: str | None) -> bool:

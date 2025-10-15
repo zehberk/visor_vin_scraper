@@ -10,7 +10,6 @@ from playwright.async_api import (
     TimeoutError,
 )
 
-from analysis.analysis_constants import *
 from analysis.cache import (
     get_relevant_entries,
     is_entry_fresh,
@@ -20,7 +19,8 @@ from analysis.cache import (
 from analysis.models import TrimValuation
 from analysis.normalization import best_kbb_trim_match
 from analysis.utils import get_variant_map, to_int
-from visor_scraper.utils import make_string_url_safe
+from utils.common import make_string_url_safe
+from utils.constants import *
 
 
 async def get_model_slug_map(

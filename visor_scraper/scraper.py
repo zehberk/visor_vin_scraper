@@ -1,4 +1,5 @@
 import argparse, asyncio, json, logging, os, sys
+
 from datetime import date
 from pathlib import Path
 from playwright.async_api import async_playwright, Browser, Page, TimeoutError
@@ -6,8 +7,8 @@ from tqdm import tqdm
 from urllib.parse import urlencode
 
 from analysis.level1 import start_level1_analysis
-from visor_scraper.constants import *
-from visor_scraper.download import download_files
+from utils.constants import *
+from utils.download import download_files
 from visor_scraper.utils import *
 
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
