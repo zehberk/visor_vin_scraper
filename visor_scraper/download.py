@@ -364,10 +364,10 @@ def download_report_pdfs(listings: Iterable[dict]) -> None:
                 sid = _attach(ws, target_id)
                 try:
                     if provider == "carfax":
-                        _wait_until_carfax_ready(ws, sid, timeout=90)
+                        _wait_until_carfax_ready(ws, sid, timeout=60)
                         _set_media(ws, sid, "screen")  # guard against print CSS hiding
                     else:
-                        _wait_until_selector_ready(ws, sid, provider, timeout=90)
+                        _wait_until_selector_ready(ws, sid, provider, timeout=60)
                 except RuntimeError as e:
                     if "access blocked" in str(e).lower():
                         _cdp(ws, 12, "Page.reload", sid=sid)
@@ -381,6 +381,12 @@ def download_report_pdfs(listings: Iterable[dict]) -> None:
                     else:
                         raise
                 _print_to_pdf(ws, sid, out_path)
+
+                # Only save HTML if the PDF actually exists and isn't empty
+                if out_path.exists() and out_path.stat().st_size > 0:
+                    html_path = out_path.with_suffix(".html")
+                    html_source = _eval(ws, sid, "document.documentElement.outerHTML")
+                    html_path.write_text(html_source, encoding="utf-8")
             except Exception:
                 try:
                     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -404,7 +410,6 @@ def download_report_pdfs(listings: Iterable[dict]) -> None:
                 pass
 
 
-# ===== Orchestrator for all downloads =====
 async def download_files(listings: list[dict], include_reports: bool = True) -> None:
     """
     Saves listing.json, downloads window stickers, and (optionally) Carfax/AutoCheck reports.
