@@ -1,19 +1,19 @@
-# tabs only; Python 3.13
 import base64, json, os, platform, requests, shutil, subprocess, time
+
 from pathlib import Path
 from typing import Iterable
 from urllib.parse import urlparse
 from websocket import create_connection
 from playwright.async_api import async_playwright
 
-# --------- CONFIG (edit if needed) ----------
+from visor_scraper.constants import DOC_PATH
+
 CHROME_EXE = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
 USER_DATA_DIR = str(
     f"{os.path.abspath(os.getcwd())}/.chrome_profile"
 )  # dedicated profile for Carfax auth, must use absolute path
-DEVTOOLS_PORT = 9223  # pick an open port
+DEVTOOLS_PORT = 9223
 
-OUTPUT_ROOT = "output"  # matches scraper.py
 PROVIDERS = {
     "carfax": {
         "key": "carfax_url",
@@ -289,7 +289,7 @@ def _collect_report_jobs(listings: Iterable[dict]):
             url = doc.get(meta["key"])
             if not url or url == "Unavailable":
                 continue
-            folder = os.path.join(OUTPUT_ROOT, title, vin)
+            folder = os.path.join(DOC_PATH, title, vin)
             out_path = Path(folder) / meta["file"]
             unavail = Path(folder) / meta["unavailable"]
 
@@ -347,7 +347,7 @@ def download_report_pdfs(listings: Iterable[dict]) -> None:
     if not jobs:
         print("No documents to save")
         return
-    Path(OUTPUT_ROOT).mkdir(parents=True, exist_ok=True)
+    Path(DOC_PATH).mkdir(parents=True, exist_ok=True)
     _bootstrap_profile(USER_DATA_DIR)
     proc = _launch_chrome(DEVTOOLS_PORT, USER_DATA_DIR)
     time.sleep(2.0)
@@ -419,7 +419,7 @@ async def download_files(listings: list[dict], include_reports: bool = True) -> 
                 if not title or not vin:
                     continue
 
-                folder = os.path.join(OUTPUT_ROOT, title, vin)
+                folder = os.path.join(DOC_PATH, title, vin)
                 os.makedirs(folder, exist_ok=True)
 
                 save_listing_json(lst, folder)
