@@ -7,6 +7,7 @@
 # Prettier code formatting
 node_modules/
 .prettierrc
+package*.json
 
 # Python cache files
 __pycache__/
@@ -22,15 +23,15 @@ htmlcov/
 
 # User presets
 presets/presets.json
+!presets/presets.example.json
 
 # Output listing files
-*.json
-*.jsonc
-*.pdf
-*.txt
+output/*
 !output/*/*prompt.txt
 !output/example_output.json
-!presets/presets.example.json
+
+# Session files
+.session/*
 
 # Local cache files
 cache/level1_pricing.cache
@@ -44,5 +45,7 @@ Thumbs.db
 visor_scraper/test_script.py
 presets/presets.json
 playwright-profile/*
+samples/*
 evalutation_instructions.md
 test.bat
+test.py
