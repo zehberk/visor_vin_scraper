@@ -277,7 +277,7 @@ async def start_level1_analysis(
 
 
 if __name__ == "__main__":
-    json_files = glob.glob(os.path.join("output", "*.json"))
+    json_files = glob.glob(os.path.join("output/raw", "*.json"))
     latest_json_file = max(json_files, key=os.path.getmtime)
     data: dict = {}
     with open(latest_json_file, "r") as file:

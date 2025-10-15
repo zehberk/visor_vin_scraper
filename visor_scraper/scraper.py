@@ -12,8 +12,6 @@ from visor_scraper.utils import *
 
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 
-# region Cache Logic
-
 
 def load_cache() -> dict:
     if LISTINGS_CACHE.exists():
@@ -68,9 +66,6 @@ def put_cached_filename(args, filename: str) -> None:
     save_cache(cache)
 
 
-# endregion
-
-
 async def fetch_page(page, url):
     try:
         await page.goto(url, timeout=60000)
@@ -105,9 +100,6 @@ async def extract_numbers_from_sidebar(page, metadata):
             logging.info(
                 f"Total for sale nationwide: {metadata["site_info"]['total_for_sale']}"
             )
-
-
-# region Listing-specific functions and logic
 
 
 async def parse_warranty_coverage(coverage, index, metadata):
@@ -507,9 +499,6 @@ async def extract_full_listing_details(
         return cookies_valid
 
 
-# endregion
-
-
 async def auto_scroll_to_load_all(page, metadata, max_listings, delay_ms=250):
     previous_count = 0
     i = 0
@@ -626,10 +615,12 @@ async def safe_vin(card, index, metadata):
         return None
 
 
-def save_results(listings, metadata, args, output_dir="output"):
+def save_results(listings, metadata, args, output_path=LISTINGS_PATH):
     ts = current_timestamp()
+    if not output_path.exists():
+        output_path.mkdir(parents=True, exist_ok=True)
     filename = f"{args.make}_{args.model}_listings_{ts}.json".replace(" ", "_")
-    path = os.path.join(output_dir, filename)
+    path = os.path.join(output_path, filename)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(
             {"metadata": metadata, "listings": listings},
@@ -693,17 +684,16 @@ async def scrape(args):
             )
         timestamp = save_results(listings, metadata, args)  # pragma: no cover
         # register in cache
-        filename = f"output/{args.make}_{args.model}_listings_{timestamp}.json".replace(
-            " ", "_"
+        filename = (
+            f"output/raw/{args.make}_{args.model}_listings_{timestamp}.json".replace(
+                " ", "_"
+            )
         )
         put_cached_filename(args, filename)
         await browser.close()  # pragma: no cover
     if args.save_docs:
         await download_files(listings)
     await run_analysis(listings, metadata, args, timestamp)
-
-
-# region Command-line logic
 
 
 def save_preset_if_requested(args):
@@ -780,9 +770,6 @@ def resolve_args(args):
         logging.error("You must provide either a --preset OR both --make and --model.")
         exit(1)
     return args
-
-
-# endregion
 
 
 # Entry point
