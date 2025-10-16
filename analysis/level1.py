@@ -4,8 +4,7 @@ import asyncio, glob, json, os
 
 from collections import defaultdict
 
-from analysis.cache import *
-from analysis.kbb import get_trim_valuations_from_cache, get_trim_valuations_from_scrape
+from analysis.cache import get_relevant_entries, load_cache
 from analysis.models import CarListing, DealBin, TrimValuation
 from analysis.normalization import best_kbb_trim_match
 from analysis.outliers import summarize_outliers
@@ -20,17 +19,15 @@ from analysis.scoring import (
 )
 from analysis.utils import (
     bool_from_url,
+    get_pricing_data,
+    filter_valid_listings,
     find_variant_key,
     get_variant_map,
     is_trim_version_valid,
     to_int,
 )
 
-
-def extract_years(slimmed: list[dict]) -> list[str]:
-    """Extract unique 4-digit years from quicklist entries, sorted ascending."""
-    years = {str(l["year"]) for l in slimmed if l.get("year")}
-    return sorted(years)
+from utils.constants import PRICING_CACHE
 
 
 def slim(listing: dict) -> dict:
@@ -86,67 +83,31 @@ def slim(listing: dict) -> dict:
 
 
 async def create_level1_file(listings: list[dict], metadata: dict):
-    cache = load_cache()
-    slugs: dict[str, str] = cache.setdefault("model_slugs", {})
-    trim_options: dict[str, dict[str, list[str]]] = cache.setdefault("trim_options", {})
+    cache = load_cache(PRICING_CACHE)
     cache_entries: dict = cache.setdefault("entries", {})
 
     make = metadata["vehicle"]["make"]
     model = metadata["vehicle"]["model"]
-    years = extract_years(listings)
 
     variant_map = await get_variant_map(make, model, listings)
 
-    trim_valuations: list[TrimValuation]
-    if cache_covers_all(make, list(variant_map.keys()), years, cache):
-        trim_valuations = get_trim_valuations_from_cache(
-            make, model, years, cache_entries
-        )
-    else:
-        trim_valuations = await get_trim_valuations_from_scrape(
-            make,
-            model,
-            slugs,
-            listings,
-            trim_options,
-            cache_entries,
-            cache,
-        )
+    trim_valuations: list[TrimValuation] = await get_pricing_data(
+        make, model, listings, cache
+    )
 
     no_price_bin = DealBin(category="No Price", listings=[], count=0)
     all_listings: list[CarListing] = []
     seen_ids: set[str] = set()  # guard if input has dupes
-    skipped_listings = []
-    skip_summary: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
 
-    for listing in listings:
-        year = str(listing["year"])
-        base_trim = (
-            listing["trim_version"]
-            if is_trim_version_valid(listing["trim_version"])
-            else listing["trim"]
-        )
-        variant_model_key = find_variant_key(variant_map, listing)
-        variant_model = (
-            variant_model_key.replace(year, "").replace(make, "").strip()
-            if variant_model_key
-            else model
-        )
+    valid_data, skipped_listings, skip_summary = filter_valid_listings(
+        make, model, listings, cache_entries, variant_map
+    )
 
-        entries = get_relevant_entries(cache_entries, make, variant_model, year)
-        cache_key = best_kbb_trim_match(base_trim, list(entries.keys()))
-
-        if not cache_key or (
-            cache_key not in cache_entries
-            or cache_entries[cache_key].get("skip_reason")
-        ):
-            skipped_listings.append(listing)
-            title = listing["title"]
-            reason = cache_entries.get(cache_key, {}).get(
-                "skip_reason", "Could not map KBB trim to Visor trim."
-            )
-            skip_summary[title][reason] += 1
-            continue
+    for item in valid_data:
+        listing = item["listing"]
+        cache_key = item["cache_key"]
+        year = item["year"]
+        base_trim = item["base_trim"]
 
         fmv = cache_entries[cache_key].get("fmv", None)
         fpp = cache_entries[cache_key].get("fpp")

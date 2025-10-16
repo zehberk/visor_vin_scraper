@@ -7,6 +7,7 @@ from tqdm import tqdm
 from urllib.parse import urlencode
 
 from analysis.level1 import start_level1_analysis
+from analysis.level2 import start_level2_analysis
 from utils.constants import *
 from utils.download import download_files
 from visor_scraper.utils import *
@@ -638,7 +639,7 @@ async def run_analysis(listings: list, metadata: dict, args, timestamp: str):
         if args.level1:
             await start_level1_analysis(listings, metadata, args, timestamp)
         elif args.level2:
-            print("Level 2")
+            await start_level2_analysis(metadata, listings)
         elif args.level3:
             print("Level 3")
 
