@@ -1,7 +1,8 @@
 import asyncio, glob, json, os
 
 from analysis.cache import load_cache
-from analysis.utils import get_pricing_data, get_variant_map, filter_valid_listings
+from analysis.kbb import get_pricing_data
+from analysis.normalization import filter_valid_listings, get_variant_map
 
 from utils.constants import *
 from utils.download import download_files, download_report_pdfs

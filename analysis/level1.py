@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio, glob, json, os
 
 from analysis.cache import load_cache
+from analysis.kbb import get_pricing_data
+from analysis.normalization import filter_valid_listings, get_variant_map
 from analysis.outliers import summarize_outliers
 from analysis.reporting import to_level1_json, render_pdf
 from analysis.scoring import (
@@ -15,9 +17,6 @@ from analysis.scoring import (
 )
 from analysis.utils import (
     bool_from_url,
-    get_pricing_data,
-    filter_valid_listings,
-    get_variant_map,
     is_trim_version_valid,
     to_int,
 )

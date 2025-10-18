@@ -11,13 +11,15 @@ from playwright.async_api import (
 )
 
 from analysis.cache import (
+    cache_covers_all,
     get_relevant_entries,
+    get_trim_valuations_from_cache,
     is_entry_fresh,
     is_fpp_fresh,
     save_cache,
 )
-from analysis.normalization import best_kbb_trim_match
-from analysis.utils import get_variant_map, to_int
+from analysis.normalization import best_kbb_trim_match, get_variant_map
+from analysis.utils import extract_years, to_int
 from utils.common import make_string_url_safe
 from utils.constants import *
 from utils.models import TrimValuation
@@ -444,3 +446,21 @@ def find_styles_data(apollo: dict) -> dict | None:
             if found:
                 return found
     return None
+
+
+async def get_pricing_data(
+    make: str, model: str, listings: list[dict], cache: dict
+) -> list[TrimValuation]:
+    cache_entries = cache.setdefault("entries", {})
+    slugs = cache.setdefault("model_slugs", {})
+    trim_options = cache.setdefault("trim_options", {})
+
+    years = extract_years(listings)
+    variant_map = await get_variant_map(make, model, listings)
+
+    if cache_covers_all(make, list(variant_map.keys()), years, cache):
+        return get_trim_valuations_from_cache(make, model, years, cache_entries)
+
+    return await get_trim_valuations_from_scrape(
+        make, model, slugs, listings, trim_options, cache_entries, cache
+    )

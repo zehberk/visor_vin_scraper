@@ -1,11 +1,5 @@
-from collections import defaultdict
-
-from analysis.cache import cache_covers_all, get_relevant_entries, load_cache
-from analysis.kbb import get_trim_valuations_from_scrape
-from analysis.kbb_collector import get_missing_models
-from analysis.normalization import best_kbb_model_match, best_kbb_trim_match
-from utils.constants import BAD_STRINGS, KBB_VARIANT_CACHE
-from utils.models import TrimValuation
+from utils.common import make_string_url_safe
+from utils.constants import *
 
 
 def bool_from_url(val: str | None) -> bool:
@@ -46,76 +40,6 @@ def is_trim_version_valid(trim_version: str) -> bool:
     return any(c.isalnum() for c in trim_version)
 
 
-async def get_variant_map(
-    make: str, model: str, listings: list[dict]
-) -> dict[str, list[dict]]:
-
-    # Year, Make, list[Models/Variants]
-    variant_cache: dict[str, dict[str, list[str]]] = load_cache(KBB_VARIANT_CACHE)
-    candidate_map: dict[str, list[str]] = {}
-    variant_map: dict[str, list[dict]] = {}
-
-    stripped_model = model.replace("-", "")
-
-    years = sorted(set({str(l["year"]) for l in listings}))
-    prev_year = ""
-    for year in years:
-        cache_models = variant_cache.get(year, {}).get(make, [])
-        # Get missing models if we don't find them
-        if not cache_models:
-            cache_models = await get_missing_models(year, make)
-
-        models = [
-            m
-            for m in cache_models
-            if model.lower() in m.lower()
-            or m.lower() in model.lower()
-            or stripped_model.lower() in m.lower()
-            or m.lower() in stripped_model.lower()
-        ]
-        if not models:
-            # print(
-            #     f"No relevant models found, using previous year: {prev_year} {make} {model}."
-            # )
-            models = candidate_map.get(prev_year, [])
-        candidate_map[year] = models
-        prev_year = year
-
-    no_match: list[dict] = []
-    for l in listings:
-        year = str(l["year"])
-
-        if not candidate_map or not candidate_map[year]:
-            no_match.append(l)
-            continue
-        elif len(candidate_map[year]) == 1:
-            selected = candidate_map[year][0]
-        else:
-            selected = best_kbb_model_match(make, model, l, candidate_map[year])
-            if selected is None:
-                no_match.append(l)
-                continue
-
-        ymm = f"{year} {make} {selected}"
-        variant_map.setdefault(ymm, []).append(l)
-
-    # This is any entry in the variant map that has the most listings associated with it
-    most_key = max(variant_map, key=lambda x: len(variant_map[x]))
-
-    for l in no_match:
-        year = str(l["year"])
-        key_year = most_key[:4]
-        variant = most_key.replace(key_year, "").replace(make, "").strip()
-        if variant in candidate_map[year]:
-            mod_key = most_key.replace(key_year, year)
-        else:
-            mod_key = year + " " + candidate_map[year][0]
-
-        variant_map.setdefault(mod_key, []).append(l)
-
-    return dict(sorted(variant_map.items()))
-
-
 def find_variant_key(variant_map: dict[str, list[dict]], listing: dict) -> str | None:
     for key, listings in variant_map.items():
         if listing in listings:
@@ -129,83 +53,38 @@ def extract_years(slimmed: list[dict]) -> list[str]:
     return sorted(years)
 
 
-def get_trim_valuations_from_cache(
-    make: str, model: str, years: list[str], entries: dict
-) -> list[TrimValuation]:
-    trim_valuations = []
-    for y in years:
-        for entry in get_relevant_entries(entries, make, model, y).values():
-            entry.setdefault("model", None)
-            entry.setdefault("fmv", None)
-            entry.setdefault("fmv_source", None)
-            entry.setdefault("msrp", None)
-            entry.setdefault("msrp_source", None)
-            entry.setdefault("fpp", None)
-            entry.setdefault("fpp_source", None)
+def get_relevant_entries(
+    entries: dict, make: str, model: str, year: str = ""
+) -> dict[str, dict]:
+    relevant_entries: dict = {}
+    safe_make = make_string_url_safe(make)
+    safe_model = make_string_url_safe(model)
+    stripped_safe_model = safe_model.replace("-", "")
 
-            trim_valuations.append(TrimValuation.from_dict(entry))
-    return trim_valuations
-
-
-async def get_pricing_data(
-    make: str, model: str, listings: list[dict], cache: dict
-) -> list[TrimValuation]:
-    cache_entries = cache.setdefault("entries", {})
-    slugs = cache.setdefault("model_slugs", {})
-    trim_options = cache.setdefault("trim_options", {})
-
-    years = extract_years(listings)
-    variant_map = await get_variant_map(make, model, listings)
-
-    if cache_covers_all(make, list(variant_map.keys()), years, cache):
-        return get_trim_valuations_from_cache(make, model, years, cache_entries)
-
-    return await get_trim_valuations_from_scrape(
-        make, model, slugs, listings, trim_options, cache_entries, cache
-    )
-
-
-def filter_valid_listings(
-    make: str, model: str, listings: list[dict], cache_entries: dict, variant_map: dict
-) -> tuple[list[dict], list[dict], defaultdict]:
-    valid_entries: list[dict] = []
-    skipped_listings: list[dict] = []
-    skip_summary = defaultdict(lambda: defaultdict(int))
-
-    for l in listings:
-        year = str(l["year"])
-        base_trim = (
-            l["trim_version"] if is_trim_version_valid(l["trim_version"]) else l["trim"]
-        )
-        variant_model_key = find_variant_key(variant_map, l)
-        variant_model = (
-            variant_model_key.replace(year, "").replace(make, "").strip()
-            if variant_model_key
-            else model
-        )
-        entries = get_relevant_entries(cache_entries, make, variant_model, year)
-        cache_key = best_kbb_trim_match(base_trim, list(entries.keys()))
-
-        if (
-            not cache_key
-            or cache_key not in cache_entries
-            or cache_entries[cache_key].get("skip_reason")
-        ):
-            skipped_listings.append(l)
-            title = l.get("title", "Unknown")
-            reason = cache_entries.get(cache_key, {}).get(
-                "skip_reason", "Could not map KBB trim to Visor trim."
-            )
-            skip_summary[title][reason] += 1
+    for key, entry in entries.items():
+        url: str = entry.get("msrp_source", "").lower()
+        if not url:
             continue
 
-        valid_entries.append(
-            {
-                "listing": l,
-                "year": year,
-                "base_trim": base_trim,
-                "cache_key": cache_key,
-            }
-        )
+        path = url.replace("https://www.kbb.com/", "").replace("https://kbb.com/", "")
+        parts = path.split("/")
 
-    return valid_entries, skipped_listings, skip_summary
+        make_slug = parts[0] if len(parts) > 0 else ""
+        model_slug = parts[1] if len(parts) > 1 else ""
+        if safe_make == make_slug and (
+            safe_model in model_slug or stripped_safe_model in model_slug
+        ):
+            if year:
+                url_year = parts[2] if len(parts) > 2 else ""
+                if year == url_year:
+                    relevant_entries[key] = entry
+                elif not url_year:
+                    # Sometimes the source will not have a year because it is the current
+                    # year, so we check the pricing timestamp as a precaution
+                    timestamp: str = entry.get("pricing_timestamp", "")
+                    if timestamp and timestamp.startswith(year):
+                        relevant_entries[key] = entry
+            else:
+                relevant_entries[key] = entry
+
+    return relevant_entries
