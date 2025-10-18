@@ -1,6 +1,6 @@
 from difflib import SequenceMatcher
 
-from analysis.models import TrimProfile
+from utils.models import TrimProfile
 
 
 def get_token_score(

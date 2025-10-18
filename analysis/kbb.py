@@ -16,11 +16,11 @@ from analysis.cache import (
     is_fpp_fresh,
     save_cache,
 )
-from analysis.models import TrimValuation
 from analysis.normalization import best_kbb_trim_match
 from analysis.utils import get_variant_map, to_int
 from utils.common import make_string_url_safe
 from utils.constants import *
+from utils.models import TrimValuation
 
 
 async def get_model_slug_map(

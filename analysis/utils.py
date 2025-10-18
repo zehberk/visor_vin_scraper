@@ -3,9 +3,9 @@ from collections import defaultdict
 from analysis.cache import cache_covers_all, get_relevant_entries, load_cache
 from analysis.kbb import get_trim_valuations_from_scrape
 from analysis.kbb_collector import get_missing_models
-from analysis.models import TrimValuation
 from analysis.normalization import best_kbb_model_match, best_kbb_trim_match
 from utils.constants import BAD_STRINGS, KBB_VARIANT_CACHE
+from utils.models import TrimValuation
 
 
 def bool_from_url(val: str | None) -> bool:

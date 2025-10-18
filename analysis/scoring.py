@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from analysis.models import CarListing, DealBin
+from utils.models import CarListing, DealBin
 
 
 DEAL_ORDER = ["Great", "Good", "Fair", "Poor", "Bad"]

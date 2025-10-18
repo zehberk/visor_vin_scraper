@@ -2,11 +2,7 @@ from __future__ import annotations
 
 import asyncio, glob, json, os
 
-from collections import defaultdict
-
-from analysis.cache import get_relevant_entries, load_cache
-from analysis.models import CarListing, DealBin, TrimValuation
-from analysis.normalization import best_kbb_trim_match
+from analysis.cache import load_cache
 from analysis.outliers import summarize_outliers
 from analysis.reporting import to_level1_json, render_pdf
 from analysis.scoring import (
@@ -21,13 +17,13 @@ from analysis.utils import (
     bool_from_url,
     get_pricing_data,
     filter_valid_listings,
-    find_variant_key,
     get_variant_map,
     is_trim_version_valid,
     to_int,
 )
 
 from utils.constants import PRICING_CACHE
+from utils.models import CarListing, DealBin, TrimValuation
 
 
 def slim(listing: dict) -> dict:

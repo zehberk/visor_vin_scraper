@@ -1,11 +1,11 @@
 import asyncio, glob, json, os
 
 from analysis.cache import load_cache
-from analysis.models import TrimValuation
 from analysis.utils import get_pricing_data, get_variant_map, filter_valid_listings
 
 from utils.constants import *
 from utils.download import download_files, download_report_pdfs
+from utils.models import TrimValuation
 
 
 def get_vehicle_dir(listing: dict) -> Path | None:
@@ -33,7 +33,7 @@ def check_missing_docs(listings: list[dict]):
             not pdf.exists()
             and not unavail.exists()
             and not html.exists()
-            and carfax_url is not "Unavailable"
+            and carfax_url != "Unavailable"
         ):
             missing_reports.append(l)
 
@@ -84,6 +84,11 @@ async def start_level2_analysis(metadata: dict, listings: list[dict]):
     valid_listings, trim_valuations = await get_valid_pricing(
         make, model, filtered_listings
     )
+
+    if len(valid_listings) == 0:
+        print("Unable to perform level2 analysis: no valid listings found")
+    else:
+        print(f"{len(valid_listings)} valid listings found.")
 
 
 if __name__ == "__main__":
