@@ -5,7 +5,7 @@ from jinja2 import Environment, FileSystemLoader
 from pathlib import Path
 from playwright.async_api import async_playwright
 
-from analysis.models import CarListing, DealBin, TrimValuation
+from utils.models import CarListing, DealBin, TrimValuation
 
 
 def to_level1_json(

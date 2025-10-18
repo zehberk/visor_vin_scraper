@@ -3,7 +3,7 @@ import re
 
 PRESET_PATH = Path(__file__).parent.parent / "presets" / "presets.json"
 LISTINGS_PATH = Path(__file__).parent.parent / "output" / "raw"
-DOC_PATH = Path(__file__).parent.parent / "output" / "vehicles"
+DOC_PATH = Path(__file__).parent.parent.parent / "output" / "vehicles"
 
 # URL strings
 BASE_URL = "https://visor.vin/search/listings"

@@ -1,8 +1,95 @@
-import glob, json, os
+import asyncio, glob, json, os
+
+from analysis.cache import load_cache
+from analysis.kbb import get_pricing_data
+from analysis.normalization import filter_valid_listings, get_variant_map
+
+from utils.constants import *
+from utils.download import download_files, download_report_pdfs
+from utils.models import TrimValuation
 
 
-def start_level2_analysis():
-    print("placeholder")
+def get_vehicle_dir(listing: dict) -> Path | None:
+    title = listing.get("title")
+    vin = listing.get("vin")
+    if title is None or vin is None:
+        return None
+    path = Path(DOC_PATH) / title / vin
+    return path if path.is_dir() else None
+
+
+def check_missing_docs(listings: list[dict]):
+    # Check to see if files exists
+    missing_reports = []
+    for l in listings:
+        dir = get_vehicle_dir(l)
+        if dir is None:
+            continue
+        html = dir / "carfax.html"
+        pdf = dir / "carfax.pdf"
+        unavail = dir / "carfax_unavailable.txt"
+
+        carfax_url = l.get("additional_docs", {}).get("carfax_url", "Unavailable")
+        if (
+            not pdf.exists()
+            and not unavail.exists()
+            and not html.exists()
+            and carfax_url != "Unavailable"
+        ):
+            missing_reports.append(l)
+
+    if missing_reports:
+        print(f"Downloading reports for {len(missing_reports)} listings...")
+        download_report_pdfs(missing_reports)
+
+
+async def get_valid_pricing(
+    make: str, model: str, listings: list[dict]
+) -> tuple[list[dict], list[TrimValuation]]:
+    cache = load_cache(PRICING_CACHE)
+    cache_entries: dict = cache.setdefault("entries", {})
+    variant_map = await get_variant_map(make, model, listings)
+
+    trim_valuations = await get_pricing_data(make, model, listings, cache)
+
+    valid_data, skipped_listings, skip_summary = filter_valid_listings(
+        make, model, listings, cache_entries, variant_map
+    )
+
+    return [item["listing"] for item in valid_data], trim_valuations
+
+
+async def start_level2_analysis(metadata: dict, listings: list[dict]):
+    make = metadata["vehicle"]["make"]
+    model = metadata["vehicle"]["model"]
+
+    # Ensure all folders exist, and if not, save the documents
+    if not all(get_vehicle_dir(l) for l in listings):
+        await download_files(listings)
+
+    # Check for missings documents (pdfs, html)
+    check_missing_docs(listings)
+
+    # Filter out only the listings that have a carfax report
+    # TODO: add auto-check
+    filtered_listings = []
+    for l in listings:
+        dir = get_vehicle_dir(l)
+        if dir is None:
+            continue
+        html = dir / "carfax.html"
+        if html.exists():
+            filtered_listings.append(l)
+
+    # Check for missing fmv/fpp
+    valid_listings, trim_valuations = await get_valid_pricing(
+        make, model, filtered_listings
+    )
+
+    if len(valid_listings) == 0:
+        print("Unable to perform level2 analysis: no valid listings found")
+    else:
+        print(f"{len(valid_listings)} valid listings found.")
 
 
 if __name__ == "__main__":
@@ -14,4 +101,4 @@ if __name__ == "__main__":
     metadata = data.get("metadata", {})
     listings = data.get("listings", {})
     if metadata and listings:
-        start_level2_analysis()
+        asyncio.run(start_level2_analysis(metadata, listings))

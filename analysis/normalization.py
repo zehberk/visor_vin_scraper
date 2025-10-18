@@ -1,6 +1,9 @@
+from collections import defaultdict
 from difflib import SequenceMatcher
 
-from analysis.models import TrimProfile
+from analysis.utils import find_variant_key, get_relevant_entries, is_trim_version_valid
+from utils.constants import *
+from utils.models import TrimProfile
 
 
 def get_token_score(
@@ -177,3 +180,123 @@ def best_kbb_trim_match(visor_trim: str, kbb_trims: list[str]) -> str | None:
                 best_trim = kbb.full_trim
 
     return best_trim
+
+
+async def get_variant_map(
+    make: str, model: str, listings: list[dict]
+) -> dict[str, list[dict]]:
+
+    from analysis.cache import load_cache
+    from analysis.kbb_collector import get_missing_models
+
+    # Year, Make, list[Models/Variants]
+    variant_cache: dict[str, dict[str, list[str]]] = load_cache(KBB_VARIANT_CACHE)
+    candidate_map: dict[str, list[str]] = {}
+    variant_map: dict[str, list[dict]] = {}
+
+    stripped_model = model.replace("-", "")
+
+    years = sorted(set({str(l["year"]) for l in listings}))
+    prev_year = ""
+    for year in years:
+        cache_models = variant_cache.get(year, {}).get(make, [])
+        # Get missing models if we don't find them
+        if not cache_models:
+            cache_models = await get_missing_models(year, make)
+
+        models = [
+            m
+            for m in cache_models
+            if model.lower() in m.lower()
+            or m.lower() in model.lower()
+            or stripped_model.lower() in m.lower()
+            or m.lower() in stripped_model.lower()
+        ]
+        if not models:
+            # print(
+            #     f"No relevant models found, using previous year: {prev_year} {make} {model}."
+            # )
+            models = candidate_map.get(prev_year, [])
+        candidate_map[year] = models
+        prev_year = year
+
+    no_match: list[dict] = []
+    for l in listings:
+        year = str(l["year"])
+
+        if not candidate_map or not candidate_map[year]:
+            no_match.append(l)
+            continue
+        elif len(candidate_map[year]) == 1:
+            selected = candidate_map[year][0]
+        else:
+            selected = best_kbb_model_match(make, model, l, candidate_map[year])
+            if selected is None:
+                no_match.append(l)
+                continue
+
+        ymm = f"{year} {make} {selected}"
+        variant_map.setdefault(ymm, []).append(l)
+
+    # This is any entry in the variant map that has the most listings associated with it
+    most_key = max(variant_map, key=lambda x: len(variant_map[x]))
+
+    for l in no_match:
+        year = str(l["year"])
+        key_year = most_key[:4]
+        variant = most_key.replace(key_year, "").replace(make, "").strip()
+        if variant in candidate_map[year]:
+            mod_key = most_key.replace(key_year, year)
+        else:
+            mod_key = year + " " + candidate_map[year][0]
+
+        variant_map.setdefault(mod_key, []).append(l)
+
+    return dict(sorted(variant_map.items()))
+
+
+def filter_valid_listings(
+    make: str, model: str, listings: list[dict], cache_entries: dict, variant_map: dict
+) -> tuple[list[dict], list[dict], defaultdict]:
+    valid_entries: list[dict] = []
+    skipped_listings: list[dict] = []
+    skip_summary = defaultdict(lambda: defaultdict(int))
+
+    for l in listings:
+        year = str(l["year"])
+        trim_version = l.get(
+            "trim_version", l.setdefault("specs", {}).get("trim_version", "")
+        )
+        base_trim = trim_version if is_trim_version_valid(trim_version) else l["trim"]
+        variant_model_key = find_variant_key(variant_map, l)
+        variant_model = (
+            variant_model_key.replace(year, "").replace(make, "").strip()
+            if variant_model_key
+            else model
+        )
+        entries = get_relevant_entries(cache_entries, make, variant_model, year)
+        cache_key = best_kbb_trim_match(base_trim, list(entries.keys()))
+
+        if (
+            not cache_key
+            or cache_key not in cache_entries
+            or cache_entries[cache_key].get("skip_reason")
+        ):
+            skipped_listings.append(l)
+            title = l.get("title", "Unknown")
+            reason = cache_entries.get(cache_key, {}).get(
+                "skip_reason", "Could not map KBB trim to Visor trim."
+            )
+            skip_summary[title][reason] += 1
+            continue
+
+        valid_entries.append(
+            {
+                "listing": l,
+                "year": year,
+                "base_trim": base_trim,
+                "cache_key": cache_key,
+            }
+        )
+
+    return valid_entries, skipped_listings, skip_summary

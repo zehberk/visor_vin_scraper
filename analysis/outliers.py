@@ -1,5 +1,5 @@
-from analysis.models import CarListing
 from analysis.utils import percentile
+from utils.models import CarListing
 
 
 UNDER = -10.0  # ≤ -10% = strong underpriced

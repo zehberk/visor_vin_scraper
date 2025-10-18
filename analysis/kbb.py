@@ -10,17 +10,19 @@ from playwright.async_api import (
     TimeoutError,
 )
 
-from analysis.analysis_constants import *
 from analysis.cache import (
+    cache_covers_all,
     get_relevant_entries,
+    get_trim_valuations_from_cache,
     is_entry_fresh,
     is_fpp_fresh,
     save_cache,
 )
-from analysis.models import TrimValuation
-from analysis.normalization import best_kbb_trim_match
-from analysis.utils import get_variant_map, to_int
-from visor_scraper.utils import make_string_url_safe
+from analysis.normalization import best_kbb_trim_match, get_variant_map
+from analysis.utils import extract_years, to_int
+from utils.common import make_string_url_safe
+from utils.constants import *
+from utils.models import TrimValuation
 
 
 async def get_model_slug_map(
@@ -339,24 +341,6 @@ async def get_or_fetch_fmv(
         return None, None
 
 
-def get_trim_valuations_from_cache(
-    make: str, model: str, years: list[str], entries: dict
-) -> list[TrimValuation]:
-    trim_valuations = []
-    for y in years:
-        for entry in get_relevant_entries(entries, make, model, y).values():
-            entry.setdefault("model", None)
-            entry.setdefault("fmv", None)
-            entry.setdefault("fmv_source", None)
-            entry.setdefault("msrp", None)
-            entry.setdefault("msrp_source", None)
-            entry.setdefault("fpp", None)
-            entry.setdefault("fpp_source", None)
-
-            trim_valuations.append(TrimValuation.from_dict(entry))
-    return trim_valuations
-
-
 async def create_kbb_browser() -> (
     tuple[APIRequestContext, Browser, BrowserContext, Page]
 ):
@@ -462,3 +446,21 @@ def find_styles_data(apollo: dict) -> dict | None:
             if found:
                 return found
     return None
+
+
+async def get_pricing_data(
+    make: str, model: str, listings: list[dict], cache: dict
+) -> list[TrimValuation]:
+    cache_entries = cache.setdefault("entries", {})
+    slugs = cache.setdefault("model_slugs", {})
+    trim_options = cache.setdefault("trim_options", {})
+
+    years = extract_years(listings)
+    variant_map = await get_variant_map(make, model, listings)
+
+    if cache_covers_all(make, list(variant_map.keys()), years, cache):
+        return get_trim_valuations_from_cache(make, model, years, cache_entries)
+
+    return await get_trim_valuations_from_scrape(
+        make, model, slugs, listings, trim_options, cache_entries, cache
+    )

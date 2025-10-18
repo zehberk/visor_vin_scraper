@@ -11,9 +11,9 @@ from playwright.async_api import async_playwright, Browser, BrowserContext, Page
 from tqdm import tqdm
 from typing import Tuple
 
-from analysis.analysis_constants import *
 from analysis.cache import load_cache, save_cache
-from visor_scraper.utils import stopwatch
+from utils.common import stopwatch
+from utils.constants import *
 
 YEAR_SEL = "div.year select"
 MAKE_SEL = "div.make select"

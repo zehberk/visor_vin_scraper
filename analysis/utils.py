@@ -1,7 +1,5 @@
-from analysis.analysis_constants import BAD_STRINGS, KBB_VARIANT_CACHE
-from analysis.cache import load_cache
-from analysis.kbb_collector import get_missing_models
-from analysis.normalization import best_kbb_model_match
+from utils.common import make_string_url_safe
+from utils.constants import *
 
 
 def bool_from_url(val: str | None) -> bool:
@@ -42,78 +40,51 @@ def is_trim_version_valid(trim_version: str) -> bool:
     return any(c.isalnum() for c in trim_version)
 
 
-async def get_variant_map(
-    make: str, model: str, listings: list[dict]
-) -> dict[str, list[dict]]:
-
-    # Year, Make, list[Models/Variants]
-    variant_cache: dict[str, dict[str, list[str]]] = load_cache(KBB_VARIANT_CACHE)
-    candidate_map: dict[str, list[str]] = {}
-    variant_map: dict[str, list[dict]] = {}
-
-    stripped_model = model.replace("-", "")
-
-    years = sorted(set({str(l["year"]) for l in listings}))
-    prev_year = ""
-    for year in years:
-        cache_models = variant_cache.get(year, {}).get(make, [])
-        # Get missing models if we don't find them
-        if not cache_models:
-            cache_models = await get_missing_models(year, make)
-
-        models = [
-            m
-            for m in cache_models
-            if model.lower() in m.lower()
-            or m.lower() in model.lower()
-            or stripped_model.lower() in m.lower()
-            or m.lower() in stripped_model.lower()
-        ]
-        if not models:
-            # print(
-            #     f"No relevant models found, using previous year: {prev_year} {make} {model}."
-            # )
-            models = candidate_map.get(prev_year, [])
-        candidate_map[year] = models
-        prev_year = year
-
-    no_match: list[dict] = []
-    for l in listings:
-        year = str(l["year"])
-
-        if not candidate_map or not candidate_map[year]:
-            no_match.append(l)
-            continue
-        elif len(candidate_map[year]) == 1:
-            selected = candidate_map[year][0]
-        else:
-            selected = best_kbb_model_match(make, model, l, candidate_map[year])
-            if selected is None:
-                no_match.append(l)
-                continue
-
-        ymm = f"{year} {make} {selected}"
-        variant_map.setdefault(ymm, []).append(l)
-
-    # This is any entry in the variant map that has the most listings associated with it
-    most_key = max(variant_map, key=lambda x: len(variant_map[x]))
-
-    for l in no_match:
-        year = str(l["year"])
-        key_year = most_key[:4]
-        variant = most_key.replace(key_year, "").replace(make, "").strip()
-        if variant in candidate_map[year]:
-            mod_key = most_key.replace(key_year, year)
-        else:
-            mod_key = year + " " + candidate_map[year][0]
-
-        variant_map.setdefault(mod_key, []).append(l)
-
-    return dict(sorted(variant_map.items()))
-
-
 def find_variant_key(variant_map: dict[str, list[dict]], listing: dict) -> str | None:
     for key, listings in variant_map.items():
         if listing in listings:
             return key
     return None
+
+
+def extract_years(slimmed: list[dict]) -> list[str]:
+    """Extract unique 4-digit years from quicklist entries, sorted ascending."""
+    years = {str(l["year"]) for l in slimmed if l.get("year")}
+    return sorted(years)
+
+
+def get_relevant_entries(
+    entries: dict, make: str, model: str, year: str = ""
+) -> dict[str, dict]:
+    relevant_entries: dict = {}
+    safe_make = make_string_url_safe(make)
+    safe_model = make_string_url_safe(model)
+    stripped_safe_model = safe_model.replace("-", "")
+
+    for key, entry in entries.items():
+        url: str = entry.get("msrp_source", "").lower()
+        if not url:
+            continue
+
+        path = url.replace("https://www.kbb.com/", "").replace("https://kbb.com/", "")
+        parts = path.split("/")
+
+        make_slug = parts[0] if len(parts) > 0 else ""
+        model_slug = parts[1] if len(parts) > 1 else ""
+        if safe_make == make_slug and (
+            safe_model in model_slug or stripped_safe_model in model_slug
+        ):
+            if year:
+                url_year = parts[2] if len(parts) > 2 else ""
+                if year == url_year:
+                    relevant_entries[key] = entry
+                elif not url_year:
+                    # Sometimes the source will not have a year because it is the current
+                    # year, so we check the pricing timestamp as a precaution
+                    timestamp: str = entry.get("pricing_timestamp", "")
+                    if timestamp and timestamp.startswith(year):
+                        relevant_entries[key] = entry
+            else:
+                relevant_entries[key] = entry
+
+    return relevant_entries

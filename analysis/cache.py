@@ -3,9 +3,9 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-from analysis.analysis_constants import *
-
-from visor_scraper.utils import make_string_url_safe
+from analysis.utils import get_relevant_entries
+from utils.constants import *
+from utils.models import *
 
 
 def load_cache(cache_file: Path = PRICING_CACHE) -> dict[str, dict]:
@@ -80,6 +80,9 @@ def cache_covers_all(
             return False
 
         relevant_entries = get_relevant_entries(cache_entries, make, model, year)
+        if len(relevant_entries) == 0:
+            return False
+
         for entry in relevant_entries.values():
             if is_entry_fresh(entry) is False:
                 return False
@@ -87,38 +90,19 @@ def cache_covers_all(
     return True
 
 
-def get_relevant_entries(
-    entries: dict, make: str, model: str, year: str = ""
-) -> dict[str, dict]:
-    relevant_entries: dict = {}
-    safe_make = make_string_url_safe(make)
-    safe_model = make_string_url_safe(model)
-    stripped_safe_model = safe_model.replace("-", "")
+def get_trim_valuations_from_cache(
+    make: str, model: str, years: list[str], entries: dict
+) -> list[TrimValuation]:
+    trim_valuations = []
+    for y in years:
+        for entry in get_relevant_entries(entries, make, model, y).values():
+            entry.setdefault("model", None)
+            entry.setdefault("fmv", None)
+            entry.setdefault("fmv_source", None)
+            entry.setdefault("msrp", None)
+            entry.setdefault("msrp_source", None)
+            entry.setdefault("fpp", None)
+            entry.setdefault("fpp_source", None)
 
-    for key, entry in entries.items():
-        url: str = entry.get("msrp_source", "").lower()
-        if not url:
-            continue
-
-        path = url.replace("https://www.kbb.com/", "").replace("https://kbb.com/", "")
-        parts = path.split("/")
-
-        make_slug = parts[0] if len(parts) > 0 else ""
-        model_slug = parts[1] if len(parts) > 1 else ""
-        if safe_make == make_slug and (
-            safe_model in model_slug or stripped_safe_model in model_slug
-        ):
-            if year:
-                url_year = parts[2] if len(parts) > 2 else ""
-                if year == url_year:
-                    relevant_entries[key] = entry
-                elif not url_year:
-                    # Sometimes the source will not have a year because it is the current
-                    # year, so we check the pricing timestamp as a precaution
-                    timestamp: str = entry.get("pricing_timestamp", "")
-                    if timestamp and timestamp.startswith(year):
-                        relevant_entries[key] = entry
-            else:
-                relevant_entries[key] = entry
-
-    return relevant_entries
+            trim_valuations.append(TrimValuation.from_dict(entry))
+    return trim_valuations
