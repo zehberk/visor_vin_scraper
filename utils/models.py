@@ -290,3 +290,12 @@ class TrimProfile:
             parts.append(self.bed_length)
 
         return " ".join(parts).lower()
+
+
+@dataclass
+class CarfaxData:
+    summary: dict[str, str]
+    accident_damage: dict[str, dict[str, str]]
+    additional_history: dict[str, str]
+    ownership_history: dict[str, dict[str, str]]
+    detailed_history: list[tuple[str, str, str, str]]
