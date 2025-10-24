@@ -75,9 +75,9 @@ def summarize_outliers(listings: list[CarListing]):
             (l.condition == "Certified" and (l.deviation_pct or 0) <= -7.0)
             or (
                 l.condition == "New"
-                and l.fpp
+                and l.fpp_local
                 and l.price is not None
-                and l.price < 0.95 * l.fpp
+                and l.price < 0.95 * l.fpp_local
             )
             or (l.deal_rating == "Bad" and l.condition == "Certified")
         )

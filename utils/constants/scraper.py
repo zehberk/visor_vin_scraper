@@ -1,9 +1,10 @@
 from pathlib import Path
 import re
 
-PRESET_PATH = Path(__file__).parent.parent / "presets" / "presets.json"
-LISTINGS_PATH = Path(__file__).parent.parent / "output" / "raw"
-DOC_PATH = Path(__file__).parent.parent.parent / "output" / "vehicles"
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PRESET_PATH = PROJECT_ROOT / "presets" / "presets.json"
+LISTINGS_PATH = PROJECT_ROOT / "output" / "raw"
+DOC_PATH = PROJECT_ROOT / "output" / "vehicles"
 
 # URL strings
 BASE_URL = "https://visor.vin/search/listings"

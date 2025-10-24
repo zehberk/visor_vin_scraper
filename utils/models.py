@@ -94,9 +94,10 @@ class CarListing:
     uncertainty: str
     risk: str
     msrp: int
-    fpp: int
-    fmv: int
-    compare_price: int
+    fpp_natl: int | None
+    fpp_local: int | None
+    fmv: int | None
+    compare_price: int | None
     deal_rating: Optional[str] = (
         None  # "Great" | "Good" | "Fair" | "Poor" | "Bad" | None if no price
     )
@@ -120,7 +121,8 @@ class CarListing:
             f"uncertainty={self.uncertainty!r}, "
             f"risk={self.risk!r}, "
             f"msrp={self.msrp!r}, "
-            f"fpp={self.fpp!r}, "
+            f"fpp_natl={self.fpp_natl!r}, "
+            f"fpp_local={self.fpp_local!r}, "
             f"fmv={self.fmv!r}, "
             f"compare_price={self.compare_price!r}, "
             f"deal_rating={self.deal_rating!r}, "
@@ -145,7 +147,8 @@ class CarListing:
             "uncertainty": self.uncertainty,
             "risk": self.risk,
             "msrp": self.msrp,
-            "fpp": self.fpp,
+            "fpp_natl": self.fpp_natl,
+            "fpp_local": self.fpp_local,
             "fmv": self.fmv,
             "compare_price": self.compare_price,
             "deal_rating": self.deal_rating,
@@ -171,7 +174,8 @@ class CarListing:
             uncertainty=data["uncertainty"],
             risk=data["risk"],
             msrp=data["msrp"],
-            fpp=data["fpp"],
+            fpp_natl=data["fpp_natl"],
+            fpp_local=data["fpp_local"],
             fmv=data["fmv"],
             compare_price=data["compare_price"],
             deal_rating=data["deal_rating"],
