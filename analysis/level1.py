@@ -150,7 +150,8 @@ async def create_level1_file(listings: list[dict], metadata: dict):
             deal_rating=deal,
             compare_price=best_value,
             msrp=msrp,
-            fpp=fpp_local,
+            fpp_natl=fpp_natl,
+            fpp_local=fpp_local,
             fmv=fmv,
             deviation_pct=deviation_pct(price, best_value),
         )
