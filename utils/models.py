@@ -29,8 +29,8 @@ class TrimValuation:
     fmv: int
 
     # Only two sources — one for each page type
-    model_source: str
-    trim_source: str
+    natl_source: str
+    local_source: str
 
     def __repr__(self):
         return (
@@ -42,8 +42,8 @@ class TrimValuation:
             f"fmr_high={self.fmr_high}, "
             f"fpp_local={self.fpp_local}, "
             f"fmv={self.fmv}, "
-            f"model_source={self.model_source!r})"
-            f"trim_source={self.trim_source!r})"
+            f"model_source={self.natl_source!r})"
+            f"trim_source={self.local_source!r})"
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -56,8 +56,8 @@ class TrimValuation:
             "fmr_high": self.fmr_high,
             "fpp_local": self.fpp_local,
             "fmv": self.fmv,
-            "model_source": self.model_source,
-            "trim_source": self.trim_source,
+            "natl_source": self.natl_source,
+            "local_source": self.local_source,
         }
 
     @classmethod
@@ -71,8 +71,8 @@ class TrimValuation:
             fmr_high=data["fmr_high"],
             fpp_local=data["fpp_local"],
             fmv=data["fmv"],
-            model_source=data["model_source"],
-            trim_source=data["trim_source"],
+            natl_source=data["natl_source"],
+            local_source=data["local_source"],
         )
 
 
