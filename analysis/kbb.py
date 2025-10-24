@@ -15,7 +15,7 @@ from analysis.cache import (
     get_relevant_entries,
     get_trim_valuations_from_cache,
     is_entry_fresh,
-    is_fpp_fresh,
+    is_natl_fresh,
     save_cache,
 )
 from analysis.normalization import best_kbb_trim_match, get_variant_map
@@ -167,7 +167,7 @@ async def get_or_fetch_fpp(
     relevant_entries = get_relevant_entries(cache_entries, make, model, year)
 
     all_fresh = bool(relevant_entries) and all(
-        is_fpp_fresh(e) for e in relevant_entries.values()
+        is_natl_fresh(e) for e in relevant_entries.values()
     )
     if expected_trims:
         all_fresh = all_fresh and all(
