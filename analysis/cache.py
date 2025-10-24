@@ -23,32 +23,28 @@ def save_cache(cache: dict, cache_file: Path = PRICING_CACHE):
 
 def is_entry_fresh(entry: dict):
     if (
-        "pricing_timestamp" not in entry
-        or not entry.get("pricing_timestamp", "")
-        or "timestamp" not in entry
-        or not entry.get("timestamp", "")
+        "natl_timestamp" not in entry
+        or not entry.get("natl_timestamp", "")
+        or "local_timestamp" not in entry
+        or not entry.get("local_timestamp", "")
     ):
         return False
-    fpp_ts = datetime.fromisoformat(entry["pricing_timestamp"])
-    is_fpp_fresh = datetime.now() - fpp_ts < CACHE_TTL
-    fmv_ts = datetime.fromisoformat(entry["timestamp"])
-    is_fmv_fresh = datetime.now() - fmv_ts < CACHE_TTL
 
-    return is_fpp_fresh and is_fmv_fresh
+    return is_natl_fresh(entry) and is_local_fresh(entry)
 
 
-def is_fpp_fresh(entry: dict) -> bool:
-    if "pricing_timestamp" not in entry or not entry.get("pricing_timestamp", ""):
+def is_natl_fresh(entry: dict) -> bool:
+    if "natl_timestamp" not in entry or not entry.get("natl_timestamp", ""):
         return False
-    fpp_ts = datetime.fromisoformat(entry["pricing_timestamp"])
+    natl_ts = datetime.fromisoformat(entry["natl_timestamp"])
 
-    return datetime.now() - fpp_ts < CACHE_TTL
+    return datetime.now() - natl_ts < CACHE_TTL
 
 
-def is_fmv_fresh(entry: dict) -> bool:
-    if "timestamp" not in entry or not entry.get("timestamp", ""):
+def is_local_fresh(entry: dict) -> bool:
+    if "local_timestamp" not in entry or not entry.get("local_timestamp", ""):
         return False
-    fmv_ts = datetime.fromisoformat(entry["timestamp"])
+    fmv_ts = datetime.fromisoformat(entry["local_timestamp"])
 
     return datetime.now() - fmv_ts < CACHE_TTL
 
@@ -97,12 +93,15 @@ def get_trim_valuations_from_cache(
     for y in years:
         for entry in get_relevant_entries(entries, make, model, y).values():
             entry.setdefault("model", None)
-            entry.setdefault("fmv", None)
-            entry.setdefault("fmv_source", None)
+            entry.setdefault("kbb_trim", None)
             entry.setdefault("msrp", None)
-            entry.setdefault("msrp_source", None)
-            entry.setdefault("fpp", None)
-            entry.setdefault("fpp_source", None)
+            entry.setdefault("fpp_natl", None)
+            entry.setdefault("fmr_low", None)
+            entry.setdefault("fmr_high", None)
+            entry.setdefault("fpp_local", None)
+            entry.setdefault("fmv", None)
+            entry.setdefault("natl_source", None)
+            entry.setdefault("local_source", None)
 
             trim_valuations.append(TrimValuation.from_dict(entry))
     return trim_valuations

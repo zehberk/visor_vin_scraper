@@ -104,18 +104,16 @@ async def create_level1_file(listings: list[dict], metadata: dict):
         year = item["year"]
         base_trim = item["base_trim"]
 
+        fpp_natl = cache_entries[cache_key].get("fpp_natl", None)
+        fpp_local = cache_entries[cache_key].get("fpp_local", None)
         fmv = cache_entries[cache_key].get("fmv", None)
-        fpp = cache_entries[cache_key].get("fpp")
+        best_value = (
+            (fpp_local if fpp_local else fpp_natl) if fpp_natl else fmv if fmv else 0
+        )
         if listing.get("price"):
             price = listing["price"]
-            # New prices should be compared to fair purpose price, while Used and Certified
-            # should use fair market value. If there is no FMV, then we default to FPP
-            if listing["condition"] == "New" or fmv is None:
-                delta = price - fpp
-                compare_price = fpp
-            else:
-                delta = price - fmv
-                compare_price = fmv
+            delta = price - best_value
+            compare_price = best_value
         else:
             # Listings with no price can't be compared
             price = 0
@@ -145,9 +143,9 @@ async def create_level1_file(listings: list[dict], metadata: dict):
             deal_rating=deal,
             compare_price=compare_price,
             msrp=cache_entries[cache_key]["msrp"],
-            fpp=fpp,
+            fpp=fpp_local,
             fmv=fmv,
-            deviation_pct=deviation_pct(price, fmv),
+            deviation_pct=deviation_pct(price, best_value),
         )
 
         if deal == "No price":

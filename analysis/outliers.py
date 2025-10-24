@@ -1,3 +1,5 @@
+from typing import Callable
+
 from analysis.utils import percentile
 from utils.models import CarListing
 
@@ -8,7 +10,11 @@ DROP = 2000  # ≥ $2,000 price whiplash
 LOW_PCTL = 0.15
 HIGH_PCTL = 0.85
 EXAMPLE_LIMIT = 3
-EXTRA_RULES = {
+
+# Each rule takes a CarListing and returns a list of strings
+RuleFunc = Callable[[CarListing], list[str]]
+
+EXTRA_RULES: dict[str, RuleFunc] = {
     "strong_underpriced": lambda l: (
         [f"{l.deviation_pct:+.1f}%"] if l.deviation_pct is not None else []
     ),
@@ -31,7 +37,7 @@ EXTRA_RULES = {
 }
 
 
-def mileage_price_tension(listings: list) -> list:
+def mileage_price_tension(listings: list[CarListing]) -> list:
     miles_list = [l.miles for l in listings if l.miles is not None]
     if not miles_list:
         return []
@@ -52,7 +58,7 @@ def mileage_price_tension(listings: list) -> list:
     return [l for l in listings if is_tension(l)]
 
 
-def summarize_outliers(listings: list):
+def summarize_outliers(listings: list[CarListing]):
     # Strong under/over
     strong_under = [
         l for l in listings if l.deviation_pct is not None and l.deviation_pct <= UNDER

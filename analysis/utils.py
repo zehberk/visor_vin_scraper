@@ -62,7 +62,7 @@ def get_relevant_entries(
     stripped_safe_model = safe_model.replace("-", "")
 
     for key, entry in entries.items():
-        url: str = entry.get("msrp_source", "").lower()
+        url: str = entry.get("natl_source", "").lower()
         if not url:
             continue
 
@@ -81,7 +81,7 @@ def get_relevant_entries(
                 elif not url_year:
                     # Sometimes the source will not have a year because it is the current
                     # year, so we check the pricing timestamp as a precaution
-                    timestamp: str = entry.get("pricing_timestamp", "")
+                    timestamp: str = entry.get("natl_timestamp", "")
                     if timestamp and timestamp.startswith(year):
                         relevant_entries[key] = entry
             else:
