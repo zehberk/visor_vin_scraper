@@ -12,7 +12,7 @@ from analysis.scoring import (
     compute_condition_distribution_total,
     deviation_pct,
     rate_deal,
-    rate_risk,
+    rate_risk_level1,
     rate_uncertainty,
 )
 from analysis.utils import (
@@ -129,7 +129,7 @@ async def create_level1_file(listings: list[dict], metadata: dict):
 
         deal = rate_deal(price, delta, best_value, fpp_local, fmr_low, fmr_high)
         uncertainty = rate_uncertainty(listing)
-        risk = rate_risk(listing, price, best_value)
+        risk = rate_risk_level1(listing, price, best_value)
 
         car_listing = CarListing(
             id=listing["id"],

@@ -319,6 +319,12 @@ class StructuralStatus(str, Enum):
     CONFIRMED = "confirmed"
 
 
+class DamageSeverity(str, Enum):
+    MINOR = "minor"
+    MODERATE = "moderate"
+    SEVERE = "severe"
+
+
 @dataclass
 class CarfaxData:
     summary: dict[str, str]
@@ -364,6 +370,17 @@ class CarfaxData:
         return False
 
     @property
+    def accident_count(self) -> int:
+        count = 0
+        # Check accident / damage history
+        for event in self.accident_damage.values():
+            event_summary = event.get("summary", "").lower()
+            if "reported:" in event_summary:
+                count += 1
+
+        return count
+
+    @property
     def has_damage(self) -> bool:
         # Check summary first
         summary_text = self.summary.get("accident_status", "").lower()
@@ -387,6 +404,19 @@ class CarfaxData:
             return True
 
         return False
+
+    @property
+    def damage_severities(self) -> list[DamageSeverity]:
+        damages: list[DamageSeverity] = []
+        for event in self.accident_damage.values():
+            event_summary = event.get("summary", "").lower()
+            if "minor damage" in event_summary:
+                damages.append(DamageSeverity.MINOR)
+            if "moderate damage" in event_summary:
+                damages.append(DamageSeverity.MODERATE)
+            if "severe damage" in event_summary:
+                damages.append(DamageSeverity.SEVERE)
+        return damages
 
     @property
     def is_total_loss(self) -> bool:
@@ -459,8 +489,8 @@ class CarfaxData:
         return False
 
     @property
-    def is_warranty_active(self) -> bool:
-        if self.has_damage or self.has_damage:
+    def is_basic_warranty_active(self) -> bool:
+        if self.has_accident or self.has_damage:
             return False
 
         # Match phrases like: "estimated to have 20 months or 24,135 miles remaining"
@@ -470,6 +500,25 @@ class CarfaxData:
         basic_warranty = self.additional_history.get("Basic Warranty", "").lower()
         match = pattern.search(basic_warranty)
         return bool(match)
+
+    @property
+    def remaining_warranty(self) -> tuple[int, int]:
+        months = 0
+        miles = 0
+
+        if self.is_basic_warranty_active:
+            basic_warranty = self.additional_history.get("Basic Warranty", "").lower()
+            month_pattern = re.compile(r"(\d+)\s+month")
+            match = month_pattern.search(basic_warranty)
+            if match:
+                months = int(match[0].replace("month", "").strip())
+
+            mile_pattern = re.compile(r"([\d,]+)\s+mile")
+            match = mile_pattern.search(basic_warranty)
+            if match:
+                miles = int(match[0].replace("mile", "").replace(",", "").strip())
+
+        return months, miles
 
     @property
     def service_record_count(self) -> int:
@@ -499,6 +548,7 @@ class CarfaxData:
 
     @property
     def last_odometer_reading(self) -> int:
+        # Check Summary
         odometer = self.summary.get("odometer")
         if odometer:
             numbers_only = re.sub(r"\D", "", odometer)
@@ -506,6 +556,14 @@ class CarfaxData:
                 return int(numbers_only)
             except ValueError:
                 print("Unable to cast odometer to integer:", odometer)
-                return -1
-        # Carfax may not have records
-        return 0
+
+        # Check last entry in the detailed history
+        last_reading = 0
+        for _, mileage, _, _ in self.detailed_history:
+            if not mileage:
+                continue
+
+            numbers_only = re.sub(r"\D", "", mileage)
+            last_reading = int(numbers_only)
+
+        return last_reading
