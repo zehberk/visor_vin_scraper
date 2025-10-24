@@ -104,25 +104,32 @@ async def create_level1_file(listings: list[dict], metadata: dict):
         year = item["year"]
         base_trim = item["base_trim"]
 
+        msrp = cache_entries[cache_key].get("msrp")
         fpp_natl = cache_entries[cache_key].get("fpp_natl", None)
         fpp_local = cache_entries[cache_key].get("fpp_local", None)
+        fmr_low = cache_entries[cache_key].get("fmr_low", None)
+        fmr_high = cache_entries[cache_key].get("fmr_high", None)
         fmv = cache_entries[cache_key].get("fmv", None)
         best_value = (
-            (fpp_local if fpp_local else fpp_natl) if fpp_natl else fmv if fmv else 0
+            0
+            if listing.get("price") is None
+            else (
+                fpp_local
+                if fpp_local
+                else fpp_natl if fpp_natl else fmv if fmv else msrp
+            )
         )
         if listing.get("price"):
             price = listing["price"]
             delta = price - best_value
-            compare_price = best_value
         else:
             # Listings with no price can't be compared
             price = 0
             delta = 0
-            compare_price = 0
 
-        deal = rate_deal(price, delta, compare_price)
+        deal = rate_deal(price, delta, best_value, fpp_local, fmr_low, fmr_high)
         uncertainty = rate_uncertainty(listing)
-        risk = rate_risk(listing, price, compare_price)
+        risk = rate_risk(listing, price, best_value)
 
         car_listing = CarListing(
             id=listing["id"],
@@ -141,8 +148,8 @@ async def create_level1_file(listings: list[dict], metadata: dict):
             uncertainty=uncertainty,
             risk=risk,
             deal_rating=deal,
-            compare_price=compare_price,
-            msrp=cache_entries[cache_key]["msrp"],
+            compare_price=best_value,
+            msrp=msrp,
             fpp=fpp_local,
             fmv=fmv,
             deviation_pct=deviation_pct(price, best_value),

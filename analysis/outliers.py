@@ -6,7 +6,7 @@ from utils.models import CarListing
 
 UNDER = -10.0  # ≤ -10% = strong underpriced
 OVER = 10.0  # ≥ +10% = strong overpriced
-DROP = 2000  # ≥ $2,000 price whiplash
+DROP = 0.07  # ≥ $2,000 price whiplash
 LOW_PCTL = 0.15
 HIGH_PCTL = 0.85
 EXAMPLE_LIMIT = 3
@@ -87,7 +87,9 @@ def summarize_outliers(listings: list[CarListing]):
     tension = mileage_price_tension(listings)
 
     # Price whiplash (big recent change)
-    whiplash = [l for l in listings if abs(l.price_delta or 0) >= DROP]
+    whiplash = [
+        l for l in listings if l.price and abs(l.price_delta or 0) / l.price >= DROP
+    ]
 
     # High-risk bargains (cheap but risky)
     highrisk_barg = [
