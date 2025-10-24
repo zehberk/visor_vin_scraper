@@ -1,4 +1,7 @@
+import re
+
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any, Dict, Optional
 
 from utils.constants import (
@@ -292,6 +295,12 @@ class TrimProfile:
         return " ".join(parts).lower()
 
 
+class StructuralStatus(str, Enum):
+    NONE = "none"
+    POSSIBLE = "possible"
+    CONFIRMED = "confirmed"
+
+
 @dataclass
 class CarfaxData:
     summary: dict[str, str]
@@ -299,3 +308,186 @@ class CarfaxData:
     additional_history: dict[str, str]
     ownership_history: dict[str, dict[str, str]]
     detailed_history: list[tuple[str, str, str, str]]
+
+    @property
+    def is_branded(self) -> bool:
+        # Check summary first
+        summary_text = self.summary.get("accident_status", "").lower()
+        if "branded title" in summary_text:
+            return True
+
+        # Scan detailed history
+        for _, _, _, comments in self.detailed_history:
+            if not comments:
+                continue
+
+            if any(
+                phrase in comments
+                for phrase in ("TITLE/CERTIFICATE ISSUED", "TITLE ISSUED")
+            ):
+                return True
+
+        return False
+
+    @property
+    def has_accident(self) -> bool:
+        # Check summary first
+        summary_text = self.summary.get("accident_status", "").lower()
+        # important to include the ':'
+        if "accident reported:" in summary_text:
+            return True
+
+        # Check accident / damage history
+        for event in self.accident_damage.values():
+            event_summary = event.get("summary", "").lower()
+            if "accident reported" in event_summary:
+                return True
+
+        return False
+
+    @property
+    def has_damage(self) -> bool:
+        # Check summary first
+        summary_text = self.summary.get("accident_status", "").lower()
+        if any(
+            damage in summary_text
+            for damage in ("minor damage", "moderate damage", "severe damage")
+        ):
+            return True
+
+        # Check accident / damage history
+        for event in self.accident_damage.values():
+            event_summary = event.get("summary", "").lower()
+            if "damage" in event_summary:
+                return True
+
+        # Check additional history
+        # value will always contain 'total loss', so look for specific date format
+        pattern = re.compile(r"\b\d{2}/\d{2}/\d{4}\b")
+        total_loss = self.additional_history.get("Accident / Damage", "").lower()
+        if pattern.search(total_loss):
+            return True
+
+        return False
+
+    @property
+    def is_total_loss(self) -> bool:
+        # Check summary first
+        summary_text = self.summary.get("accident_status", "").lower()
+        if "total loss" in summary_text:
+            return True
+
+        # Check accident / damage history
+        for event in self.accident_damage.values():
+            event_summary = event.get("summary", "").lower()
+            if "total loss vehicle" in event_summary:
+                return True
+
+        # Check additional history
+        # value will always contain 'total loss', so look for specific date format
+        pattern = re.compile(r"\b\d{2}/\d{2}/\d{4}\b")
+        total_loss = self.additional_history.get("Total Loss", "").lower()
+        if pattern.search(total_loss):
+            return True
+
+        # Scan detailed history
+        for _, _, _, comments in self.detailed_history:
+            if comments and "TOTAL LOSS VEHICLE" in comments:
+                return True
+
+        return False
+
+    @property
+    def structural_status(self) -> StructuralStatus:
+        # Logic is backwards because I haven't found a report that has structural damage
+        status = self.additional_history.get("Structural Damage", "")
+        if status == "No structural damage reported to CARFAX.":
+            return StructuralStatus.NONE
+
+        if (
+            status
+            == "CARFAX recommends that you have this vehicle inspected by a collision repair specialist."
+        ):
+            return StructuralStatus.POSSIBLE
+
+        return StructuralStatus.CONFIRMED
+
+    @property
+    def airbags_deployed(self) -> bool:
+        # Check additional history
+        # value will always contain 'total loss', so look for specific date format
+        pattern = re.compile(r"\b\d{2}/\d{2}/\d{4}\b")
+        deployed = self.additional_history.get("Total Loss", "").lower()
+        if pattern.search(deployed):
+            return True
+
+        return False
+
+    @property
+    def has_recall(self) -> bool:
+        # Logic is backwards because I haven't found a report that has structural damage
+        status = self.additional_history.get("Manufacturer Recall", "")
+        if status == "No open recalls reported to CARFAX.":
+            return False
+
+        return True
+
+    @property
+    def has_odometer_problem(self) -> bool:
+        text = self.additional_history.get("Odometer Check", "")
+        if text == "DMV title problems reported.":
+            return True
+
+        return False
+
+    @property
+    def is_warranty_active(self) -> bool:
+        if self.has_damage or self.has_damage:
+            return False
+
+        # Match phrases like: "estimated to have 20 months or 24,135 miles remaining"
+        pattern = re.compile(
+            r"estimated to have\s+(\d+)\s+months?\s+or\s+([\d,]+)\s+miles?\s+remaining"
+        )
+        basic_warranty = self.additional_history.get("Basic Warranty", "").lower()
+        match = pattern.search(basic_warranty)
+        return bool(match)
+
+    @property
+    def service_record_count(self) -> int:
+        repairs = self.summary.get("repairs")
+        if repairs:
+            numbers_only = re.sub(r"\D", "", repairs)
+            try:
+                return int(numbers_only)
+            except ValueError:
+                print("Unable to cast repair record count to integer:", repairs)
+                return -1
+        # Carfax may not have records
+        return 0
+
+    @property
+    def owner_count(self) -> int:
+        owner_text = self.summary.get("owners")
+        if owner_text:
+            numbers_only = re.sub(r"\D", "", owner_text)
+            try:
+                return int(numbers_only)
+            except ValueError:
+                print("Unable to cast owner count to integer:", owner_text)
+                return -1
+        # Carfax may not have records
+        return 0
+
+    @property
+    def last_odometer_reading(self) -> int:
+        odometer = self.summary.get("odometer")
+        if odometer:
+            numbers_only = re.sub(r"\D", "", odometer)
+            try:
+                return int(numbers_only)
+            except ValueError:
+                print("Unable to cast odometer to integer:", odometer)
+                return -1
+        # Carfax may not have records
+        return 0
