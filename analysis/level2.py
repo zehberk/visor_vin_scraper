@@ -1,12 +1,15 @@
 import asyncio, glob, json, os
 
+from pathlib import Path
+
 from analysis.cache import load_cache
 from analysis.kbb import get_pricing_data
 from analysis.normalization import filter_valid_listings, get_variant_map
 
+from utils.carfax_parser import get_carfax_data
 from utils.constants import *
 from utils.download import download_files, download_report_pdfs
-from utils.models import TrimValuation
+from utils.models import CarfaxData, StructuralStatus, TrimValuation
 
 
 def get_vehicle_dir(listing: dict) -> Path | None:
@@ -16,6 +19,12 @@ def get_vehicle_dir(listing: dict) -> Path | None:
         return None
     path = Path(DOC_PATH) / title / vin
     return path if path.is_dir() else None
+
+
+def get_report_dir(listing: dict) -> Path | None:
+    dir = get_vehicle_dir(listing)
+    # TODO: add auto-check
+    return dir / "carfax.html" if dir else None
 
 
 def check_missing_docs(listings: list[dict]):
@@ -70,21 +79,25 @@ async def start_level2_analysis(metadata: dict, listings: list[dict]):
     # Check for missings documents (pdfs, html)
     check_missing_docs(listings)
 
-    # Filter out only the listings that have a carfax report
-    # TODO: add auto-check
+    # Filter out only the listings that have a valid report
     filtered_listings = []
     for l in listings:
-        dir = get_vehicle_dir(l)
-        if dir is None:
-            continue
-        html = dir / "carfax.html"
-        if html.exists():
+        report = get_report_dir(l)
+        if report and report.exists():
             filtered_listings.append(l)
 
     # Check for missing fmv/fpp
     valid_listings, trim_valuations = await get_valid_pricing(
         make, model, filtered_listings
     )
+
+    # Extract Carfax report
+    for l in valid_listings:
+        report = get_report_dir(l)
+        if report is None or not report.exists():
+            continue
+
+        carfax: CarfaxData = get_carfax_data(report)
 
     if len(valid_listings) == 0:
         print("Unable to perform level2 analysis: no valid listings found")
