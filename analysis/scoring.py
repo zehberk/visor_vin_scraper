@@ -21,21 +21,44 @@ def rate_uncertainty(listing) -> str:
         return "Low"
 
 
-def rate_deal(price, delta, compare_price) -> str:
+def rate_deal(
+    price: int,
+    delta: int,
+    compare_price: int,
+    fpp_local: int,
+    fmr_low: int,
+    fmr_high: int,
+) -> str:
     if price == 0:
         return "No price"
 
-    if delta <= -2000 or price <= compare_price * 0.93:
+    # --- Case 1: Use fair-market range if available ---
+    if compare_price == fpp_local:
+        increment = fmr_high - fpp_local
+
+        if price < fmr_low - increment:
+            return "Great"
+        elif fmr_low - increment <= price < fmr_low:
+            return "Good"
+        elif fmr_low <= price <= fmr_high:
+            return "Fair"
+        elif fmr_high + increment >= price > fmr_high:
+            return "Poor"
+        else:
+            return "Bad"
+
+    # --- Case 2: Fall back to delta/ratio logic ---
+    if delta < -2000 or price <= compare_price * 0.93:
         return "Great"
-    elif (-2000 < delta <= -1000) or (
+    elif (-2000 <= delta < -1000) or (
         compare_price * 0.93 < price <= compare_price * 0.97
     ):
         return "Good"
-    elif (-999 <= delta <= 999) or (
+    elif (-1000 <= delta <= 1000) or (
         compare_price * 0.97 < price < compare_price * 1.03
     ):
         return "Fair"
-    elif (2000 > delta >= 1000) or (
+    elif (2000 >= delta > 1000) or (
         compare_price * 1.03 <= price < compare_price * 1.07
     ):
         return "Poor"
