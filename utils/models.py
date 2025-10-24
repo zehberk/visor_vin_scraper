@@ -17,35 +17,47 @@ from utils.constants import (
 class TrimValuation:
     model: str
     kbb_trim: str
-    fmv: int
-    fmv_source: str
+
+    # Values pulled from the model-level page (national baseline)
     msrp: int
-    msrp_source: str
-    fpp: int
-    fpp_source: str
+    fpp_natl: int
+
+    # Values pulled from the trim-level page (localized)
+    fmr_low: int
+    fmr_high: int
+    fpp_local: int
+    fmv: int
+
+    # Only two sources — one for each page type
+    model_source: str
+    trim_source: str
 
     def __repr__(self):
         return (
             f"TrimValuation(model={self.model}, "
             f"kbb_trim={self.kbb_trim!r}, "
-            f"fmv={self.fmv}, "
-            f"fmv_source={self.fmv_source!r})"
             f"msrp={self.fmv}, "
-            f"msrp_source={self.msrp_source!r})"
-            f"fpp={self.fpp}, "
-            f"fpp_source={self.fpp_source!r})"
+            f"fpp_natl={self.fpp_natl}, "
+            f"fmr_low={self.fmr_low}, "
+            f"fmr_high={self.fmr_high}, "
+            f"fpp_local={self.fpp_local}, "
+            f"fmv={self.fmv}, "
+            f"model_source={self.model_source!r})"
+            f"trim_source={self.trim_source!r})"
         )
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "model": self.model,
             "kbb_trim": self.kbb_trim,
-            "fmv": self.fmv,
-            "fmv_source": self.fmv_source,
             "msrp": self.msrp,
-            "msrp_source": self.msrp_source,
-            "fpp": self.fpp,
-            "fpp_source": self.fpp_source,
+            "fpp_natl": self.fpp_natl,
+            "fmr_low": self.fmr_low,
+            "fmr_high": self.fmr_high,
+            "fpp_local": self.fpp_local,
+            "fmv": self.fmv,
+            "model_source": self.model_source,
+            "trim_source": self.trim_source,
         }
 
     @classmethod
@@ -53,12 +65,14 @@ class TrimValuation:
         return cls(
             model=data["model"],
             kbb_trim=data["kbb_trim"],
-            fmv=data["fmv"],
-            fmv_source=data["fmv_source"],
             msrp=data["msrp"],
-            msrp_source=data["msrp_source"],
-            fpp=data["fpp"],
-            fpp_source=data["fpp_source"],
+            fpp_natl=data["fpp_natl"],
+            fmr_low=data["fmr_low"],
+            fmr_high=data["fmr_high"],
+            fpp_local=data["fpp_local"],
+            fmv=data["fmv"],
+            model_source=data["model_source"],
+            trim_source=data["trim_source"],
         )
 
 
