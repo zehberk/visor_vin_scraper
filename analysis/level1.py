@@ -9,9 +9,9 @@ from analysis.outliers import summarize_outliers
 from analysis.reporting import to_level1_json, render_pdf
 from analysis.scoring import (
     build_bins_and_crosstab,
+    classify_deal_rating,
     compute_condition_distribution_total,
     deviation_pct,
-    rate_deal,
     rate_risk_level1,
     rate_uncertainty,
 )
@@ -110,6 +110,13 @@ async def create_level1_file(listings: list[dict], metadata: dict):
         fmr_low = cache_entries[cache_key].get("fmr_low", None)
         fmr_high = cache_entries[cache_key].get("fmr_high", None)
         fmv = cache_entries[cache_key].get("fmv", None)
+
+        if listing.get("price"):
+            price = listing["price"]
+        else:
+            # Listings with no price can't be compared
+            price = 0
+
         best_value = (
             0
             if listing.get("price") is None
@@ -119,17 +126,12 @@ async def create_level1_file(listings: list[dict], metadata: dict):
                 else fpp_natl if fpp_natl else fmv if fmv else msrp
             )
         )
-        if listing.get("price"):
-            price = listing["price"]
-            delta = price - best_value
-        else:
-            # Listings with no price can't be compared
-            price = 0
-            delta = 0
 
-        deal = rate_deal(price, delta, best_value, fpp_local, fmr_low, fmr_high)
+        deal, midpoint = classify_deal_rating(
+            price, best_value, fmv, fpp_local, fmr_low, fmr_high
+        )
         uncertainty = rate_uncertainty(listing)
-        risk = rate_risk_level1(listing, price, best_value)
+        risk = rate_risk_level1(listing, price, midpoint)
 
         car_listing = CarListing(
             id=listing["id"],
@@ -144,16 +146,16 @@ async def create_level1_file(listings: list[dict], metadata: dict):
             condition=listing["condition"],
             miles=listing["mileage"],
             price=price,
-            price_delta=delta,
+            price_delta=price - midpoint if price else 0,
             uncertainty=uncertainty,
             risk=risk,
             deal_rating=deal,
-            compare_price=best_value,
+            compare_price=midpoint,
             msrp=msrp,
             fpp_natl=fpp_natl,
             fpp_local=fpp_local,
             fmv=fmv,
-            deviation_pct=deviation_pct(price, best_value),
+            deviation_pct=deviation_pct(price, midpoint),
         )
 
         if deal == "No price":
