@@ -1,4 +1,4 @@
-import re
+import math, re
 
 from datetime import datetime
 from typing import Optional
@@ -42,52 +42,85 @@ def rate_uncertainty(listing) -> str:
         return "Low"
 
 
-def rate_deal(
-    price: int,
-    delta: int,
-    compare_price: int,
-    fpp_local: int,
-    fmr_low: int,
-    fmr_high: int,
-) -> str:
+def determine_best_price(
+    price: int, fpp_local: int, fpp_natl: int, fmv: int, msrp: int
+) -> int:
     if price == 0:
-        return "No price"
+        return 0
 
-    # --- Case 1: Use fair-market range if available ---
+    # Get the lower of the FPP
+    if fpp_local and fpp_natl:
+        if fpp_local < fpp_natl:
+            return fpp_local
+        return fpp_natl
+
+    if fpp_natl:
+        return fpp_natl
+
+    return fmv if fmv else msrp
+
+
+def classify_deal_rating(
+    price: int,
+    compare_price: int,
+    fmv: int,
+    fpp_local: int,
+    fmr_high: int,
+) -> tuple[str, int]:
+    """
+    Returns a deal rating and the midpoint comparison for the provided price
+    """
+    if price == 0:
+        return "No price", 0
+
+    increment = 1000  # baseline
+    compare_pct = compare_price != fpp_local
+
+    if compare_price == fmv:
+        return categorize_price_tier(price, fmv, increment, compare_pct, 0.04), fmv
+
     if compare_price == fpp_local:
-        increment = fmr_high - fpp_local
+        increment = math.floor((fmr_high - fpp_local) / 3)
 
-        if price < fmr_low - increment:
-            return "Great"
-        elif fmr_low - increment <= price < fmr_low:
-            return "Good"
-        elif fmr_low <= price <= fmr_high:
-            return "Fair"
-        elif fmr_high + increment >= price > fmr_high:
-            return "Poor"
-        else:
-            return "Bad"
-
-    # --- Case 2: Fall back to delta/ratio logic ---
-    if delta < -2000 or price <= compare_price * 0.93:
-        return "Great"
-    elif (-2000 <= delta < -1000) or (
-        compare_price * 0.93 < price <= compare_price * 0.97
-    ):
-        return "Good"
-    elif (-1000 <= delta <= 1000) or (
-        compare_price * 0.97 < price < compare_price * 1.03
-    ):
-        return "Fair"
-    elif (2000 >= delta > 1000) or (
-        compare_price * 1.03 <= price < compare_price * 1.07
-    ):
-        return "Poor"
-    else:
-        return "Bad"
+    # Shift the fpp midpoint from "Good" to "Fair"
+    midpoint = compare_price + increment * 2
+    return categorize_price_tier(price, midpoint, increment, compare_pct), midpoint
 
 
-def rate_risk_level1(listing, price, fmv) -> str:
+def categorize_price_tier(
+    price: int, midpoint: int, increment: int, compare_pct: bool, pct: float = 0.03
+) -> str:
+
+    # absolute ranges (min, max)
+    abs_ranges = {
+        "Great": (float("-inf"), midpoint - increment * 2),
+        "Good": (midpoint - increment * 2, midpoint - increment),
+        "Fair": (midpoint - increment, midpoint + increment),
+        "Poor": (midpoint + increment, midpoint + increment * 2),
+    }
+
+    # percentage ranges (min, max)
+    pct_ranges = {
+        "Great": (float("-inf"), midpoint * (1 - pct * 2)),
+        "Good": (midpoint * (1 - pct * 2), midpoint * (1 - pct)),
+        "Fair": (midpoint * (1 - pct), midpoint * (1 + pct)),
+        "Poor": (midpoint * (1 + pct), midpoint * (1 + pct * 2)),
+    }
+
+    for label in abs_ranges.keys():
+        abs_min, abs_max = abs_ranges[label]
+        pct_min, pct_max = pct_ranges[label]
+
+        abs_match = abs_min <= price <= abs_max
+        pct_match = compare_pct and (pct_min <= price < pct_max)
+
+        if abs_match or pct_match:
+            return label
+
+    return "Bad"
+
+
+def rate_risk_level1(listing, price, compare_value) -> str:
     year = int(listing["title"][:4])
     avg_miles_per_day = 13500 / 365
     est_days_since_manufacture = (datetime.now() - datetime(year, 1, 1)).days
@@ -96,10 +129,10 @@ def rate_risk_level1(listing, price, fmv) -> str:
     if price == 0:
         return "Unknown"
     if (mileage >= expected_miles * 1.35) or (
-        mileage >= expected_miles * 1.2 and price >= fmv * 1.1
+        mileage >= expected_miles * 1.2 and price >= compare_value * 1.1
     ):
         return "High"
-    elif (mileage >= expected_miles * 1.2) or (price >= fmv * 1.1):
+    elif (mileage >= expected_miles * 1.2) or (price >= compare_value * 1.1):
         return "Some"
     else:
         return "Low"
@@ -171,7 +204,6 @@ def get_branded_score(
     """
     Returns a scaled title score depending on the vehicle's damage. Values range from 0-9.
 
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    Scoring logic:
     - No title issues, no damage: 0
     - No title issues with damage present: 2.25 → 7.5 (nonlinear)
     - Title issues, no damage: 7
@@ -253,10 +285,10 @@ def score_mileage_use(carfax: CarfaxData, listing: dict) -> float:
     - > +40% → 2.0
 
     Parameters:
-            carfax: CarfaxData
-                    Vehicle Carfax data object, used for odometer readings and flags.
-            listing: dict
-                    Listing data containing at least "year" and "mileage" fields.
+                            carfax: CarfaxData
+                                                            Vehicle Carfax data object, used for odometer readings and flags.
+                            listing: dict
+                                                            Listing data containing at least "year" and "mileage" fields.
 
     Returns:
             float: A continuous risk modifier between -1.0 and 2.0.
