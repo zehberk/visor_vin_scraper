@@ -285,7 +285,8 @@
 			<ul>
 				{% for kbb_trim, trim_val in cache_entries.items() %}
 					{% set listings_count = count_for_trim(trim_val.kbb_trim, [great_bin, good_bin, fair_bin, poor_bin, bad_bin, no_price_bin]) | int %}
-					{% set fpp = trim_val.fpp_local or trim_val.fpp_natl %}
+					{% set fpp_values = [trim_val.fpp_local, trim_val.fpp_natl] | select('ne', 0) | list %}
+					{% set fpp = (fpp_values | min if fpp_values else 0) %}
 					{% set fmv = trim_val.fmv %}
 					{% if listings_count > 0 %}
 						<li>
@@ -298,8 +299,12 @@
 							</a>
 							<span class="count"> ({{ listings_count }} listings) </span>
 							<span class="fmv"
-								>– {{ "${:,.0f}".format(trim_val.msrp) }} /
-								{{ "${:,.0f}".format(fpp) }}{% if not trim_val.fpp_local %}(natl){% endif %}
+								>– {{ "${:,.0f}".format(trim_val.msrp) }}
+								{% if fpp %}
+									/ {{ "${:,.0f}".format(fpp) }}
+								{% else %}
+									/ (no FPP)
+								{% endif %}
 								{% if fmv %}
 									/ {{ "${:,.0f}".format(fmv) }}
 								{% else %}

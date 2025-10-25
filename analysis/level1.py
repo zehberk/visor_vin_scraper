@@ -11,6 +11,7 @@ from analysis.scoring import (
     build_bins_and_crosstab,
     classify_deal_rating,
     compute_condition_distribution_total,
+    determine_best_price,
     deviation_pct,
     rate_risk_level1,
     rate_uncertainty,
@@ -104,31 +105,17 @@ async def create_level1_file(listings: list[dict], metadata: dict):
         year = item["year"]
         base_trim = item["base_trim"]
 
-        msrp = cache_entries[cache_key].get("msrp")
-        fpp_natl = cache_entries[cache_key].get("fpp_natl", None)
-        fpp_local = cache_entries[cache_key].get("fpp_local", None)
-        fmr_low = cache_entries[cache_key].get("fmr_low", None)
-        fmr_high = cache_entries[cache_key].get("fmr_high", None)
-        fmv = cache_entries[cache_key].get("fmv", None)
+        msrp = int(cache_entries[cache_key].get("msrp"))
+        fpp_natl = int(cache_entries[cache_key].get("fpp_natl", 0))
+        fpp_local = int(cache_entries[cache_key].get("fpp_local", 0))
+        fmr_high = int(cache_entries[cache_key].get("fmr_high", 0))
+        fmv = int(cache_entries[cache_key].get("fmv", 0))
 
-        if listing.get("price"):
-            price = listing["price"]
-        else:
-            # Listings with no price can't be compared
-            price = 0
-
-        best_value = (
-            0
-            if listing.get("price") is None
-            else (
-                fpp_local
-                if fpp_local
-                else fpp_natl if fpp_natl else fmv if fmv else msrp
-            )
-        )
+        price = int(listing.get("price", 0))
+        best_comparison = determine_best_price(price, fpp_local, fpp_natl, fmv, msrp)
 
         deal, midpoint = classify_deal_rating(
-            price, best_value, fmv, fpp_local, fmr_low, fmr_high
+            price, best_comparison, fmv, fpp_local, fmr_high
         )
         uncertainty = rate_uncertainty(listing)
         risk = rate_risk_level1(listing, price, midpoint)
