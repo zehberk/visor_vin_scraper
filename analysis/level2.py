@@ -5,6 +5,7 @@ from pathlib import Path
 from analysis.cache import load_cache
 from analysis.kbb import get_pricing_data
 from analysis.normalization import filter_valid_listings, get_variant_map
+from analysis.scoring import rate_risk_level2
 
 from utils.carfax_parser import get_carfax_data
 from utils.constants import *
@@ -98,6 +99,7 @@ async def start_level2_analysis(metadata: dict, listings: list[dict]):
             continue
 
         carfax: CarfaxData = get_carfax_data(report)
+        risk = rate_risk_level2(carfax, l)
 
     if len(valid_listings) == 0:
         print("Unable to perform level2 analysis: no valid listings found")
