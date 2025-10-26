@@ -1,7 +1,13 @@
 from collections import defaultdict
 from difflib import SequenceMatcher
 
-from analysis.utils import find_variant_key, get_relevant_entries, is_trim_version_valid
+from analysis.utils import (
+    bool_from_url,
+    find_variant_key,
+    get_relevant_entries,
+    is_trim_version_valid,
+    to_int,
+)
 from utils.constants import *
 from utils.models import TrimProfile
 
@@ -300,3 +306,55 @@ def filter_valid_listings(
         )
 
     return valid_entries, skipped_listings, skip_summary
+
+
+def normalize_listing(listing: dict) -> dict:
+    """Convert a raw listing into the minimal Level-1 schema."""
+
+    addl = listing.get("additional_docs", {}) or {}
+    carfax_present: bool = bool_from_url(addl.get("carfax_url"))
+    autocheck_present: bool = bool_from_url(addl.get("autocheck_url"))
+    sticker_present: bool = bool_from_url(addl.get("window_sticker_url"))
+
+    specs: dict = listing.get("specs", {})
+    fuel_type: str = specs.get("Fuel Type", "").strip().lower()
+    listing_url: str = listing.get("listing_url", "").lower()
+    if not listing_url:
+        print(f"Listing URL invalid for {listing.get("id")}")
+
+    is_hybrid = False
+    is_plugin = False
+    if "hybrid" in fuel_type or "hybrid" in listing_url:
+        is_hybrid = True
+        if "plug" in fuel_type or "plug" in listing_url:
+            is_plugin = True
+    elif fuel_type == "" or fuel_type == "not specified":
+        is_hybrid = None  # unknown
+        is_plugin = None  # unknown
+
+    war = listing.get("warranty", {}) or {}
+    # Treat "present" as: either a non-unknown overall_status or any coverages listed
+    warranty_present = bool(war.get("coverages")) or (
+        str(war.get("overall_status", "")).strip().lower()
+        not in {"", "unknown", "n/a", "none"}
+    )
+
+    tv = specs.get("Trim Version", "")
+    valid_tv = tv if is_trim_version_valid(tv) else ""
+
+    return {
+        "id": listing.get("id"),
+        "vin": listing.get("vin"),
+        "title": listing.get("title"),
+        "year": listing.get("year"),
+        "trim": listing.get("trim"),
+        "trim_version": valid_tv,
+        "condition": listing.get("condition"),
+        "price": to_int(listing.get("price")),
+        "mileage": to_int(listing.get("mileage")),
+        "is_hybrid": is_hybrid,
+        "is_plugin": is_plugin,
+        "report_present": carfax_present or autocheck_present,
+        "window_sticker_present": sticker_present,
+        "warranty_info_present": warranty_present,
+    }
