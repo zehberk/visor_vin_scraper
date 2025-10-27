@@ -4,8 +4,17 @@ from pathlib import Path
 
 from analysis.cache import load_cache
 from analysis.kbb import get_pricing_data
-from analysis.normalization import filter_valid_listings, get_variant_map
-from analysis.scoring import rate_risk_level2
+from analysis.normalization import (
+    filter_valid_listings,
+    get_variant_map,
+    normalize_listing,
+)
+from analysis.scoring import (
+    adjust_deal_for_risk,
+    classify_deal_rating,
+    determine_best_price,
+    rate_risk_level2,
+)
 
 from utils.carfax_parser import get_carfax_data
 from utils.constants import *
@@ -53,25 +62,13 @@ def check_missing_docs(listings: list[dict]):
         download_report_pdfs(missing_reports)
 
 
-async def get_valid_pricing(
-    make: str, model: str, listings: list[dict]
-) -> tuple[list[dict], list[TrimValuation]]:
-    cache = load_cache(PRICING_CACHE)
-    cache_entries: dict = cache.setdefault("entries", {})
-    variant_map = await get_variant_map(make, model, listings)
-
-    trim_valuations = await get_pricing_data(make, model, listings, cache)
-
-    valid_data, skipped_listings, skip_summary = filter_valid_listings(
-        make, model, listings, cache_entries, variant_map
-    )
-
-    return [item["listing"] for item in valid_data], trim_valuations
-
-
 async def start_level2_analysis(metadata: dict, listings: list[dict]):
     make = metadata["vehicle"]["make"]
     model = metadata["vehicle"]["model"]
+
+    cache = load_cache(PRICING_CACHE)
+    cache_entries: dict = cache.setdefault("entries", {})
+    variant_map = await get_variant_map(make, model, listings)
 
     # Ensure all folders exist, and if not, save the documents
     if not all(get_vehicle_dir(l) for l in listings):
@@ -85,11 +82,12 @@ async def start_level2_analysis(metadata: dict, listings: list[dict]):
     for l in listings:
         report = get_report_dir(l)
         if report and report.exists():
-            filtered_listings.append(l)
+            filtered_listings.append(normalize_listing(l))
 
-    # Check for missing fmv/fpp
-    valid_listings, trim_valuations = await get_valid_pricing(
-        make, model, filtered_listings
+    trim_valuations = await get_pricing_data(make, model, listings, cache)
+
+    valid_listings, skipped_listings, skip_summary = filter_valid_listings(
+        make, model, filtered_listings, cache_entries, variant_map
     )
 
     # Extract Carfax report
@@ -98,8 +96,32 @@ async def start_level2_analysis(metadata: dict, listings: list[dict]):
         if report is None or not report.exists():
             continue
 
+        narrative: list[str] = []
         carfax: CarfaxData = get_carfax_data(report)
         risk = rate_risk_level2(carfax, l)
+
+        listing = l["listing"]
+        cache_key = l["cache_key"]
+        year = l["year"]
+        base_trim = l["base_trim"]
+
+        msrp = int(cache_entries[cache_key].get("msrp"))
+        fpp_natl = int(cache_entries[cache_key].get("fpp_natl", 0))
+        fpp_local = int(cache_entries[cache_key].get("fpp_local", 0))
+        fmr_high = int(cache_entries[cache_key].get("fmr_high", 0))
+        fmv = int(cache_entries[cache_key].get("fmv", 0))
+
+        price = int(listing.get("price", 0))
+        best_comparison = determine_best_price(price, fpp_local, fpp_natl, fmv, msrp)
+
+        deal, midpoint, increment = classify_deal_rating(
+            price, best_comparison, fmv, fpp_local, fmr_high
+        )
+
+        if deal == "Great" and midpoint and price < midpoint - increment * 3:
+            deal = "Suspicious"
+
+        deal = adjust_deal_for_risk(deal, risk, narrative)
 
     if len(valid_listings) == 0:
         print("Unable to perform level2 analysis: no valid listings found")

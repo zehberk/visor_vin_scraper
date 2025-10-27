@@ -63,25 +63,33 @@ def classify_deal_rating(
     fmv: int,
     fpp_local: int,
     fmr_high: int,
-) -> tuple[str, int]:
+) -> tuple[str, int, int]:
     """
     Returns a deal rating and the midpoint comparison for the provided price
     """
     if price == 0:
-        return "No price", 0
+        return "No price", 0, 0
 
     increment = 1000  # baseline
     compare_pct = compare_price != fpp_local
 
     if compare_price == fmv:
-        return categorize_price_tier(price, fmv, increment, compare_pct, 0.04), fmv
+        return (
+            categorize_price_tier(price, fmv, increment, compare_pct, 0.04),
+            fmv,
+            increment,
+        )
 
     if compare_price == fpp_local:
         increment = math.floor((fmr_high - fpp_local) / 3)
 
     # Shift the fpp midpoint from "Good" to "Fair"
     midpoint = compare_price + increment * 2
-    return categorize_price_tier(price, midpoint, increment, compare_pct), midpoint
+    return (
+        categorize_price_tier(price, midpoint, increment, compare_pct),
+        midpoint,
+        increment,
+    )
 
 
 def categorize_price_tier(
@@ -133,6 +141,29 @@ def rate_risk_level1(listing, price, compare_value) -> str:
         return "Some"
     else:
         return "Low"
+
+
+def adjust_deal_for_risk(
+    base_bin: str, risk: float, narrative: list[str] | None = None
+) -> str:
+    if base_bin == "Suspicious":
+        if risk >= 6:
+            return "Bad"
+        return "Suspicious"
+
+    idx = DEAL_ORDER.index(base_bin)
+    if risk <= 2:
+        shift = 0
+    elif risk <= 4:
+        shift = 1
+    elif risk <= 6:
+        shift = 2
+    elif risk <= 8:
+        shift = 3
+    else:
+        return "Bad"
+
+    return DEAL_ORDER[min(idx + shift, len(DEAL_ORDER) - 1)]
 
 
 def rate_risk_level2(carfax: CarfaxData, listing: dict) -> float:
@@ -283,7 +314,7 @@ def score_warranty_status(carfax: CarfaxData, listing: dict) -> float:
     """
     basic_months: int = 0
     basic_miles: int = 0
-    coverages: list[dict] = listing.get("warranty", {}).get("coverages", [])
+    coverages: list[dict] = listing["coverages"]
 
     if carfax.has_accident or carfax.has_damage:
         return 0.0
@@ -350,7 +381,7 @@ def score_mileage_use(carfax: CarfaxData, listing: dict) -> float:
     if carfax.has_odometer_problem:
         return 2.5
 
-    production_year = int(listing.get("year", 0))
+    production_year = int(listing["year"])
     if not production_year:
         return 0.0
 
@@ -360,9 +391,7 @@ def score_mileage_use(carfax: CarfaxData, listing: dict) -> float:
         return 0.0
 
     expected = years_difference * 13500
-    actual = max(
-        carfax.last_odometer_reading, int(re.sub(r"\D", "", listing["mileage"]))
-    )
+    actual = max(carfax.last_odometer_reading, int(listing["mileage"]))
     deviation = (actual - expected) / expected
 
     # Continuous scaling: mild penalty below -10%, neutral zone, then 0 → 2 curve above +10%

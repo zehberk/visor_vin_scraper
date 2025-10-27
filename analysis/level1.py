@@ -61,7 +61,7 @@ async def create_level1_file(listings: list[dict], metadata: dict):
         price = int(listing.get("price", 0))
         best_comparison = determine_best_price(price, fpp_local, fpp_natl, fmv, msrp)
 
-        deal, midpoint = classify_deal_rating(
+        deal, midpoint, _ = classify_deal_rating(
             price, best_comparison, fmv, fpp_local, fmr_high
         )
         uncertainty = rate_uncertainty(listing)

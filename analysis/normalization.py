@@ -357,4 +357,5 @@ def normalize_listing(listing: dict) -> dict:
         "report_present": carfax_present or autocheck_present,
         "window_sticker_present": sticker_present,
         "warranty_info_present": warranty_present,
+        "coverages": listing.get("warranty", {}).get("coverages", []),  # Level 2
     }
