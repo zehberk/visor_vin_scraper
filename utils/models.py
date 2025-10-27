@@ -329,6 +329,7 @@ class DamageSeverity(str, Enum):
 class CarfaxData:
     summary: dict[str, str]
     accident_damage: dict[str, dict[str, str]]
+    reliability_section: dict[str, str | list[str]]
     additional_history: dict[str, str]
     ownership_history: dict[str, dict[str, str]]
     detailed_history: list[tuple[str, str, str, str]]
