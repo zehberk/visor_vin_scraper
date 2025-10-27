@@ -41,3 +41,7 @@ BODY_STYLE_RE = re.compile(
     re.IGNORECASE,
 )
 BODY_STYLE_ALIASES = {"SUV 4D": "Sport Utility Vehicle 4D"}
+
+
+DEAL_ORDER = ["Great", "Good", "Fair", "Poor", "Bad"]
+COND_ORDER = ["New", "Certified", "Used"]
