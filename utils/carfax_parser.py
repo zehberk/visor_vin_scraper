@@ -4,6 +4,7 @@ from pathlib import Path
 from utils.models import CarfaxData
 
 REPAIRS = "cfx-icon__toolsColor"
+RECALLS = "cfx-icon__envelopeOpenColor"
 LAST_OWNED = "cfx-icon__earthColor"
 ODOMETER = "cfx-icon__odometer"
 DETAILED_RECORDS = "cfx-icon__folderNotesColor"
@@ -14,6 +15,7 @@ ACCIDENT_STATUS = [
     "cfx-icon__infoCircleColor",
     "cfx-icon__alertDiamondColor",
     "cfx-icon__alertTriangleDownColor",
+    "cfx-icon__carSearchColor",
 ]
 OWNERS = [
     "cfx-icon__scallopedCircleOneColor",
@@ -26,8 +28,13 @@ USE_TYPE = [
     "cfx-icon__carColor",
     "cfx-icon__briefcaseColor",
     "cfx-icon__boxTruckColor",
+    "cfx-icon__clipboardCarColor",
 ]
-
+RELIABILITY_LEVELS = [
+    "cfx-icon__shieldThumbsUpLightColor",  # Assumption for Fair Reliability
+    "cfx-icon__shieldThumbsUpColor",
+    "cfx-icon__shieldThumbsUpDarkColor",
+]
 
 DAMAGE_BRANDS = ["Salvage", "Junk", "Rebuilt", "Fire", "Flood", "Hail", "Lemon"]
 ODOMETER_BRANDS = ["Not Actual Mileage", "Exceeds Mechanical Limits"]
@@ -75,8 +82,12 @@ def classify_svg(svg: Tag) -> str:
             return "owners"
         elif classes.intersection(USE_TYPE):
             return "use_type"
+        elif classes.intersection(RELIABILITY_LEVELS):
+            return "reliability_level"
         elif REPAIRS in classes:
             return "repairs"
+        elif RECALLS in classes:
+            return "recalls"
         elif LAST_OWNED in classes:
             return "last_owned"
         elif ODOMETER in classes:
@@ -134,6 +145,34 @@ def get_accident_damage_section(soup: BeautifulSoup) -> dict[str, dict[str, str]
     for record in records:
         get_accident_damage_record(record, data)
     # print(json.dumps(data, indent=4))
+    return data
+
+
+def get_reliability_section(soup: BeautifulSoup) -> dict[str, str | list[str]]:
+    data: dict[str, str | list[str]] = {}
+    section = soup.find("section", id="reliability-section")
+    if section is None:
+        return {}
+
+    forecast = section.select_one("div.reliability-foxpert span")
+    if forecast:
+        data["forecast"] = forecast.get_text()
+
+    factors: list[str] = []
+    for impact_factor in section.select("div.reliablity-impact-factor-row"):
+        factor = impact_factor.select("div.reliablity-impact-factor-text-container div")
+        # Each factor has a div with the text, and a second div with subtext
+        factor_text = factor[0].get_text()
+        subtext = factor[1].get_text()
+
+        if factor_text:
+            if subtext:
+                factors.append(f"{factor_text} ({subtext})")
+            else:
+                factors.append(f"{factor_text}")
+    data["factors"] = factors
+    # print(json.dumps(data, indent=4))
+
     return data
 
 
@@ -254,6 +293,7 @@ def get_carfax_data(path: Path) -> CarfaxData:
     return CarfaxData(
         summary=get_summary_section(soup),
         accident_damage=get_accident_damage_section(soup),
+        reliability_section=get_reliability_section(soup),
         additional_history=get_additional_history_section(soup),
         ownership_history=get_ownership_history_section(soup),
         detailed_history=get_detailed_history_section(soup),
