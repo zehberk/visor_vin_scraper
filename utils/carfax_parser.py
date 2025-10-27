@@ -28,6 +28,7 @@ USE_TYPE = [
     "cfx-icon__carColor",
     "cfx-icon__briefcaseColor",
     "cfx-icon__boxTruckColor",
+    "cfx-icon__clipboardCarColor",
 ]
 RELIABILITY_LEVELS = [
     "cfx-icon__shieldThumbsUpLightColor",  # Assumption for Fair Reliability
