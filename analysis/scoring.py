@@ -146,6 +146,9 @@ def rate_risk_level1(listing, price, compare_value) -> str:
 def adjust_deal_for_risk(
     base_bin: str, risk: float, narrative: list[str] | None = None
 ) -> str:
+    """
+    Adjusts deal grading for level 2 based on the risk.
+    """
     if base_bin == "Suspicious":
         if risk >= 6:
             return "Bad"

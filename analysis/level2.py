@@ -79,10 +79,10 @@ async def start_level2_analysis(metadata: dict, listings: list[dict]):
 
     # Filter out only the listings that have a valid report
     filtered_listings = []
-    for l in listings:
-        report = get_report_dir(l)
+    for vl in listings:
+        report = get_report_dir(vl)
         if report and report.exists():
-            filtered_listings.append(normalize_listing(l))
+            filtered_listings.append(normalize_listing(vl))
 
     trim_valuations = await get_pricing_data(make, model, listings, cache)
 
@@ -91,27 +91,31 @@ async def start_level2_analysis(metadata: dict, listings: list[dict]):
     )
 
     # Extract Carfax report
-    for l in valid_listings:
-        report = get_report_dir(l)
+    for vl in valid_listings:
+        listing = vl["listing"]
+        cache_key = vl["cache_key"]
+        year = vl["year"]
+        base_trim = vl["base_trim"]
+
+        full_listing = next(l for l in listings if l.get("id") == listing.get("id"))
+        report = get_report_dir(full_listing)
         if report is None or not report.exists():
             continue
 
         narrative: list[str] = []
         carfax: CarfaxData = get_carfax_data(report)
-        risk = rate_risk_level2(carfax, l)
+        risk = rate_risk_level2(carfax, listing)
 
-        listing = l["listing"]
-        cache_key = l["cache_key"]
-        year = l["year"]
-        base_trim = l["base_trim"]
+        if listing.get("price") is None:
+            continue
 
+        price = int(listing.get("price"))
         msrp = int(cache_entries[cache_key].get("msrp"))
         fpp_natl = int(cache_entries[cache_key].get("fpp_natl", 0))
         fpp_local = int(cache_entries[cache_key].get("fpp_local", 0))
         fmr_high = int(cache_entries[cache_key].get("fmr_high", 0))
         fmv = int(cache_entries[cache_key].get("fmv", 0))
 
-        price = int(listing.get("price", 0))
         best_comparison = determine_best_price(price, fpp_local, fpp_natl, fmv, msrp)
 
         deal, midpoint, increment = classify_deal_rating(
@@ -122,6 +126,9 @@ async def start_level2_analysis(metadata: dict, listings: list[dict]):
             deal = "Suspicious"
 
         deal = adjust_deal_for_risk(deal, risk, narrative)
+        print(f"{listing["title"]} - {listing["vin"]}:")
+        print(f"  Risk: {risk}")
+        print(f"  Deal: {deal}")
 
     if len(valid_listings) == 0:
         print("Unable to perform level2 analysis: no valid listings found")
