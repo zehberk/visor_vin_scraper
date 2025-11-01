@@ -1,10 +1,12 @@
-import base64, json, os, platform, requests, shutil, subprocess, time
+import asyncio, base64, glob, hashlib, json, os, platform, re, requests, shutil, subprocess, time, urllib.parse
 
 from pathlib import Path
+from playwright._impl._errors import TimeoutError as PlaywrightTimeout
+from playwright.async_api import async_playwright, Browser, Playwright
+from tqdm import tqdm
 from typing import Iterable
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse, unquote
 from websocket import create_connection
-from playwright.async_api import async_playwright
 
 from utils.constants import DOC_PATH
 
@@ -13,6 +15,9 @@ USER_DATA_DIR = str(
     f"{os.path.abspath(os.getcwd())}/.chrome_profile"
 )  # dedicated profile for Carfax auth, must use absolute path
 DEVTOOLS_PORT = 9223
+
+CARFAX_PAT = re.compile(r"(carfax\.com/vehiclehistory)", re.I)
+AUTOCHECK_PAT = re.compile(r"(autocheck\.web\.dealer\.com|autocheck\.aspx)", re.I)
 
 PROVIDERS = {
     "carfax": {
@@ -32,6 +37,181 @@ PROVIDERS = {
         "ready": lambda t, href, ready, marker=None: (ready == "complete" and marker),
     },
 }
+
+
+async def get_stable_html(page, retries=5, delay=0.8):
+    last_hash = None
+    for _ in range(retries):
+        try:
+            html = await page.content()
+            h = hashlib.md5(html.encode()).hexdigest()
+            if h == last_hash:
+                return html  # DOM stopped changing
+            last_hash = h
+            await asyncio.sleep(delay)
+        except Exception:
+            await asyncio.sleep(delay)
+    return await page.content()  # return last known snapshot
+
+
+async def get_report_link(
+    browser: Browser, url: str, wait_time: int = 5
+) -> tuple[str, str]:
+    context = await browser.new_context(
+        user_agent=(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/125.0.0.0 Safari/537.36"
+        ),
+        viewport={"width": 1280, "height": 800},
+        java_script_enabled=True,
+        ignore_https_errors=True,
+    )
+    page = await context.new_page()
+
+    try:
+        await page.goto(url, wait_until="commit", timeout=8000)
+
+        try:
+            await page.wait_for_selector(
+                "a[href*='carfax'], iframe[src*='carfax'], img.carfax-snapshot-hover, "
+                "a[href*='autocheck'], iframe[src*='autocheck'], img[alt*='autocheck']",
+                timeout=3000,
+            )
+        except Exception:
+            pass  # If not found yet, continue into the normal polling loop
+
+    except PlaywrightTimeout:
+        await context.close()
+        return "NAV_TIMEOUT", "Unavailable"
+
+    # Wait for dynamic content (poll for carfax appearances)
+    start_url = url
+    start = time.time()
+    while time.time() - start < wait_time:
+        # quickly detect navigations/soft-redirects
+        current = page.url
+        if current.rstrip("/") != start_url.rstrip("/"):
+            await context.close()
+            return "REMOVED_OR_SOLD", "Unavailable"
+
+        # Some sites have a badge that requires a hover event to populate the carfax snapshot
+        try:
+            badge = await page.query_selector(
+                "img.carfax-snapshot-hover, img[alt*='carfax i'], img[alt*='Show me carfax']"
+            )
+            if badge:
+                await badge.hover()
+                await asyncio.sleep(1)  # allow iframe/link to load
+        except Exception as e:
+            continue
+
+        try:
+            html = await get_stable_html(page)
+        except Exception:
+            # Last ditch effort
+            await asyncio.sleep(0.5)
+            try:
+                html = await page.content()  # fallback
+            except Exception:
+                continue
+
+        hrefs = re.findall(r'href=["\']([^"\']+)["\']', html)
+        for href in hrefs:
+            if CARFAX_PAT.search(href):
+                await context.close()
+                return href, "carfax_url"
+            if AUTOCHECK_PAT.search(href):
+                await context.close()
+                return extract_autocheck_url(url, href), "autocheck_url"
+        await asyncio.sleep(0.5)
+
+    # assume there is no report
+    await context.close()
+    return "NO_REPORT", "Unavailable"
+
+
+def normalize_history_url(listing_url: str, href: str) -> str:
+    """
+    Resolve and clean a relative AutoCheck or Carfax link.
+    Example:
+      listing_url = "https://www.drivedirectcars.com/used-Columbus-2020-Subaru-Outback..."
+      href = "autocheck.aspx?sv=...&ac=..."
+    → "https://www.drivedirectcars.com/autocheck.aspx?sv=...&ac=..."
+    """
+    if not href:
+        return ""
+
+    href = unquote(href)  # just in case it's HTML-encoded
+    full = urljoin(listing_url, href)
+    return full
+
+
+def extract_autocheck_url(url: str, href: str) -> str:
+    """
+    Extracts and decodes the actual AutoCheck URL from a dealer iframe wrapper.
+    Example input:
+    /iframe.htm?src=https%3A%2F%2Fautocheck.web.dealer.com%2F%3Fdata%3DU2FsdGVkX18...
+    Returns:
+    https://autocheck.web.dealer.com/?data=U2FsdGVkX18...
+    """
+    if not href:
+        return ""
+
+    # Find the 'src=' parameter value
+    match = re.search(r"src=([^&]+)", href)
+    if not match:
+        match = re.search(r"aspx", href)
+        if not match:
+            return ""
+        return normalize_history_url(url, href)
+
+    encoded_src = match.group(1)
+    decoded_src = urllib.parse.unquote(encoded_src)
+    return decoded_src
+
+
+async def worker(semaphore: asyncio.Semaphore, browser: Browser, listing: dict):
+    async with semaphore:
+        url = listing["listing_url"]
+
+        carfax_url = listing["additional_docs"]["carfax_url"]
+        autocheck_url = listing["additional_docs"]["autocheck_url"]
+
+        # Skip cars already processed or new
+        if (
+            listing["condition"] == "New"
+            or carfax_url != "Unavailable"
+            or autocheck_url != "Unavailable"
+        ):
+            return
+
+        link, source = await get_report_link(browser, url)
+        if link in ["NAV_TIMEOUT"]:  # , "NO_REPORT"
+            # Try one last time, just in case there was a timeout or something unexpected happened
+            link, source = await get_report_link(browser, url)
+
+        if source != "Unavailable":
+            listing["additional_docs"][source] = link
+
+
+async def get_missing_urls(listings: list[dict], p: Playwright) -> None:
+    semaphore = asyncio.Semaphore(5)  # <-- Max 5 listings in parallel
+
+    browser = await p.chromium.launch(
+        headless=True, args=["--disable-blink-features=AutomationControlled"]
+    )
+
+    tasks = [worker(semaphore, browser, l) for l in listings]
+    for f in tqdm(
+        asyncio.as_completed(tasks),
+        total=len(tasks),
+        desc="Searching for report links",
+        unit="link",
+    ):
+        await f
+
+    await browser.close()
 
 
 def save_listing_json(listing: dict, folder: str) -> str:
@@ -296,45 +476,45 @@ def _collect_report_jobs(listings: Iterable[dict]):
     return jobs
 
 
-def download_report_pdfs(listings: Iterable[dict]) -> None:
+def _is_chrome_installed():
+    # First check PATH names
+    candidates = [
+        "google-chrome",
+        "google-chrome-stable",
+        "chrome",
+        "chrome.exe",
+        "chromium",
+        "chromium-browser",
+    ]
+    for name in candidates:
+        path = shutil.which(name)
+        if path:
+            return path
 
-    def _is_chrome_installed():
-        # First check PATH names
-        candidates = [
-            "google-chrome",
-            "google-chrome-stable",
-            "chrome",
-            "chrome.exe",
-            "chromium",
-            "chromium-browser",
+    # OS-specific checks
+    system = platform.system()
+    if system == "Darwin":  # macOS
+        path = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+        if os.path.exists(path):
+            return path
+    elif system == "Windows":
+        # common install locations
+        program_files = os.environ.get("PROGRAMFILES", r"C:\Program Files")
+        program_files_x86 = os.environ.get(
+            "PROGRAMFILES(X86)", r"C:\Program Files (x86)"
+        )
+        paths = [
+            os.path.join(program_files, "Google/Chrome/Application/chrome.exe"),
+            os.path.join(program_files_x86, "Google/Chrome/Application/chrome.exe"),
         ]
-        for name in candidates:
-            path = shutil.which(name)
-            if path:
-                return path
-
-        # OS-specific checks
-        system = platform.system()
-        if system == "Darwin":  # macOS
-            path = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+        for path in paths:
             if os.path.exists(path):
                 return path
-        elif system == "Windows":
-            # common install locations
-            program_files = os.environ.get("PROGRAMFILES", r"C:\Program Files")
-            program_files_x86 = os.environ.get(
-                "PROGRAMFILES(X86)", r"C:\Program Files (x86)"
-            )
-            paths = [
-                os.path.join(program_files, "Google/Chrome/Application/chrome.exe"),
-                os.path.join(program_files_x86, "Google/Chrome/Application/chrome.exe"),
-            ]
-            for path in paths:
-                if os.path.exists(path):
-                    return path
 
-        return None
+    return None
 
+
+def download_report_pdfs(listings: Iterable[dict]) -> None:
     if not _is_chrome_installed():
         print("Chrome not installed, cannot save documents")
         return
@@ -350,7 +530,12 @@ def download_report_pdfs(listings: Iterable[dict]) -> None:
     ws = None
     try:
         ws = _browser_connect(_browser_ws_url(DEVTOOLS_PORT))
-        for provider, raw_url, out_path in jobs:
+        for provider, raw_url, out_path in tqdm(
+            jobs,
+            total=len(jobs),
+            desc="Downloading reports",
+            unit="listing",
+        ):
             if out_path.exists() and out_path.stat().st_size > 0:
                 continue
             url = _to_https(raw_url)
@@ -406,15 +591,70 @@ def download_report_pdfs(listings: Iterable[dict]) -> None:
                 pass
 
 
-async def download_files(listings: list[dict], include_reports: bool = True) -> None:
+async def download_files(
+    listings: list[dict], filename: str, include_reports: bool = True
+) -> None:
     """
     Saves listing.json, downloads window stickers, and (optionally) Carfax/AutoCheck reports.
     Matches output structure: output/{title}/{vin}/...
     """
-    async with async_playwright() as pw:
-        req = await pw.request.new_context()
+    async with async_playwright() as p:
+        if include_reports:
+            missing = [
+                l
+                for l in listings
+                if l["additional_docs"].get("carfax_url") == "Unavailable"
+                and l["additional_docs"].get("autocheck_url") == "Unavailable"
+            ]
+
+            if missing:
+                print(f"Searching for missing report links ({len(missing)} listings)")
+                await get_missing_urls(missing, p)
+
+            # Retry misses on a new batch (covers timeouts)
+            missing = [
+                l
+                for l in listings
+                if l["additional_docs"].get("carfax_url") == "Unavailable"
+                and l["additional_docs"].get("autocheck_url") == "Unavailable"
+            ]
+            if missing:
+                print(f"Retrying for ({len(missing)} listings)")
+                await get_missing_urls(missing, p)
+
+            leftover = [
+                l
+                for l in listings
+                if l["additional_docs"].get("carfax_url") == "Unavailable"
+                and l["additional_docs"].get("autocheck_url") == "Unavailable"
+            ]
+            recovered = len(missing) - len(leftover)
+
+            print(
+                f"Recovered {recovered} urls"
+                if recovered != 1
+                else f"Recovered {recovered} url"
+            )
+
+            # Save the updated listings back to the file
+            # Must do a read first so we don't overwrite the metadata
+            with open(filename, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
+            data["listings"] = listings  # update only this section
+
+            with open(filename, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+
+        req = await p.request.new_context()
         try:
-            for lst in listings:
+            sticker_count = 0
+            for lst in tqdm(
+                listings,
+                total=len(listings),
+                desc="Saving window stickers",
+                unit="listing",
+            ):
                 title = lst.get("title")
                 vin = lst.get("vin")
                 if not title or not vin:
@@ -424,10 +664,26 @@ async def download_files(listings: list[dict], include_reports: bool = True) -> 
                 os.makedirs(folder, exist_ok=True)
 
                 save_listing_json(lst, folder)
-                await download_sticker(req, lst, folder)
+                success = await download_sticker(req, lst, folder)
+                if success:
+                    sticker_count += 1
+
+            if sticker_count:
+                print(f"{sticker_count} stickers saved")
         finally:
             await req.dispose()
 
-    # Carfax pass (single Chrome via CDP, no Playwright)
-    if include_reports:
-        download_report_pdfs(listings)
+        # Carfax pass (single Chrome via CDP, no Playwright)
+        if include_reports:
+            download_report_pdfs(listings)
+
+
+if __name__ == "__main__":
+    json_files = glob.glob(os.path.join("output/raw", "*.json"))
+    latest_json_file = max(json_files, key=os.path.getmtime)
+    data: dict = {}
+    with open(latest_json_file, "r") as file:
+        data = json.load(file)
+    metadata = data.get("metadata", {})
+    listings = data.get("listings", {})
+    asyncio.run(download_files(listings, latest_json_file))

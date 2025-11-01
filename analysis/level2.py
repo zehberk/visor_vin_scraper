@@ -62,7 +62,7 @@ def check_missing_docs(listings: list[dict]):
         download_report_pdfs(missing_reports)
 
 
-async def start_level2_analysis(metadata: dict, listings: list[dict]):
+async def start_level2_analysis(metadata: dict, listings: list[dict], filename: str):
     make = metadata["vehicle"]["make"]
     model = metadata["vehicle"]["model"]
 
@@ -72,7 +72,7 @@ async def start_level2_analysis(metadata: dict, listings: list[dict]):
 
     # Ensure all folders exist, and if not, save the documents
     if not all(get_vehicle_dir(l) for l in listings):
-        await download_files(listings)
+        await download_files(listings, filename)
 
     # Check for missings documents (pdfs, html)
     check_missing_docs(listings)
@@ -145,4 +145,4 @@ if __name__ == "__main__":
     metadata = data.get("metadata", {})
     listings = data.get("listings", {})
     if metadata and listings:
-        asyncio.run(start_level2_analysis(metadata, listings))
+        asyncio.run(start_level2_analysis(metadata, listings, latest_json_file))
