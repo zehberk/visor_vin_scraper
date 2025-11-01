@@ -132,7 +132,7 @@ async def get_trim_options_for_year(
     url = KBB_LOOKUP_STYLES_URL.format(make=safe_make, model=model_slug, year=year)
     while True:
         try:
-            await page.goto(url, wait_until="networkidle")
+            await page.goto(url, wait_until="commit")
             break
         except TimeoutError as t:
             pass
@@ -418,7 +418,7 @@ async def get_price_advisor_values(
 
             await svg_page.close()
     except TimeoutError as t:
-        print("Timeout waiting for FMR an local FPP")
+        print("Timeout waiting for FMR and local FPP")
         print(t.message)
 
     if price_values:
