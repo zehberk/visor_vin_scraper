@@ -646,16 +646,16 @@ async def run_analysis(listings: list, metadata: dict, args, timestamp: str):
 
 async def scrape(args):
     # Try cache before touching the browser
-    cached_file = try_get_cached_filename(args)
-    if not args.force and cached_file and Path(cached_file).exists():
-        print(f"Using cached listings file for today: {cached_file}")
-        with open(cached_file, encoding="utf-8") as f:
+    filename = try_get_cached_filename(args)
+    if not args.force and filename and Path(filename).exists():
+        print(f"Using cached listings file for today: {filename}")
+        with open(filename, encoding="utf-8") as f:
             payload = json.load(f)
         listings, metadata = payload["listings"], payload["metadata"]
 
-        timestamp = Path(cached_file).stem.split("_")[-1]
+        timestamp = Path(filename).stem.split("_")[-1]
         if args.save_docs:
-            await download_files(listings)
+            await download_files(listings, filename)
         await run_analysis(listings, metadata, args, timestamp)
         return
 
@@ -693,8 +693,10 @@ async def scrape(args):
         )
         put_cached_filename(args, filename)
         await browser.close()  # pragma: no cover
+
     if args.save_docs:
-        await download_files(listings)
+        await download_files(listings, filename)
+
     await run_analysis(listings, metadata, args, timestamp)
 
 
