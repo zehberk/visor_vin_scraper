@@ -302,7 +302,8 @@ async def populate_pricing_for_year(
         entry = cache_entries.setdefault(kbb_trim_option, {})
 
         natl_val = None
-        if natl_fpp and natl_fpp.upper() != "TBD":
+        # FPP is saved as an int, unless the FPP was never saved or doesn't have a value
+        if natl_fpp and isinstance(natl_fpp, str) and natl_fpp.upper() != "TBD":
             natl_val = to_int(natl_fpp)
 
         entry["model"] = model
