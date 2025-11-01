@@ -4,9 +4,11 @@ from pathlib import Path
 from utils.models import CarfaxData
 
 REPAIRS = "cfx-icon__toolsColor"
+DAMAGE_REPAIRS = "cfx-icon__carWrenchColor"
 RECALLS = "cfx-icon__envelopeOpenColor"
 LAST_OWNED = "cfx-icon__earthColor"
 ODOMETER = "cfx-icon__odometer"
+ODOMETER_ROLLBACK = "cfx-icon__odometerAlertColor"
 DETAILED_RECORDS = "cfx-icon__folderNotesColor"
 OIL_CHANGES = "cfx-icon__shieldOilCanColor"
 CERTIFIED = "cfx-icon__starCircleColor"
@@ -16,6 +18,7 @@ ACCIDENT_STATUS = [
     "cfx-icon__alertDiamondColor",
     "cfx-icon__alertTriangleDownColor",
     "cfx-icon__carSearchColor",
+    "cfx-icon__searchColor",
 ]
 OWNERS = [
     "cfx-icon__scallopedCircleOneColor",
@@ -29,6 +32,7 @@ USE_TYPE = [
     "cfx-icon__briefcaseColor",
     "cfx-icon__boxTruckColor",
     "cfx-icon__clipboardCarColor",
+    "cfx-icon__taxiCarColor",
 ]
 RELIABILITY_LEVELS = [
     "cfx-icon__shieldThumbsUpLightColor",  # Assumption for Fair Reliability
@@ -86,10 +90,14 @@ def classify_svg(svg: Tag) -> str:
             return "reliability_level"
         elif REPAIRS in classes:
             return "repairs"
+        elif DAMAGE_REPAIRS in classes:
+            return "damage_repairs"
         elif RECALLS in classes:
             return "recalls"
         elif LAST_OWNED in classes:
             return "last_owned"
+        elif ODOMETER_ROLLBACK:
+            return "odometer_rollback"
         elif ODOMETER in classes:
             return "odometer"
         elif DETAILED_RECORDS in classes:
