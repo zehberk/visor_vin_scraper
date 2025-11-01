@@ -130,7 +130,12 @@ async def get_trim_options_for_year(
     safe_make = make_string_url_safe(make)
 
     url = KBB_LOOKUP_STYLES_URL.format(make=safe_make, model=model_slug, year=year)
-    await page.goto(url)
+    while True:
+        try:
+            await page.goto(url, wait_until="networkidle")
+            break
+        except TimeoutError as t:
+            pass
     raw = await page.inner_text("script#__NEXT_DATA__")
     data = json.loads(raw)
     apollo = data.get("props", {}).get("apolloState", {})
@@ -180,7 +185,7 @@ async def get_or_fetch_national_pricing(
                 (
                     e["kbb_trim"],
                     e["msrp"],
-                    e["natl_fpp"],
+                    e["fpp_natl"],
                     e["natl_source"],
                     e["natl_timestamp"],
                 )
@@ -404,10 +409,10 @@ async def get_price_advisor_values(
             price_values = await svg_page.eval_on_selector_all(
                 "g#RangeBox > text",
                 """
-                nodes => nodes
-                    .map(n => n.textContent.trim())
-                    .filter(t => t.includes('$'))
-                """,
+				nodes => nodes
+					.map(n => n.textContent.trim())
+					.filter(t => t.includes('$'))
+				""",
             )
 
             await svg_page.close()
