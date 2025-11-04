@@ -49,3 +49,4 @@ samples/*
 evalutation_instructions.md
 test.bat
 test.py
+*_output.txt

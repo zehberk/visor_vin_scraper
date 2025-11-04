@@ -90,8 +90,10 @@ async def start_level2_analysis(metadata: dict, listings: list[dict], filename: 
         make, model, filtered_listings, cache_entries, variant_map
     )
 
+    # os.remove("level2_output.txt")
+
     # Extract Carfax report
-    for vl in valid_listings:
+    for vl in sorted(valid_listings, key=lambda x: x["listing"]["id"]):
         listing = vl["listing"]
         cache_key = vl["cache_key"]
         year = vl["year"]
@@ -125,10 +127,15 @@ async def start_level2_analysis(metadata: dict, listings: list[dict], filename: 
         if deal == "Great" and midpoint and price < midpoint - increment * 3:
             deal = "Suspicious"
 
+        # with open("level2_output.txt", "a") as file:
         deal = adjust_deal_for_risk(deal, risk, narrative)
         print(f"{listing["title"]} - {listing["vin"]}:")
         print(f"  Risk: {risk}")
         print(f"  Deal: {deal}")
+        # file.write(f"{listing["title"]} - {listing["vin"]}:\n")
+        # file.write(f"  Risk: {risk}\n")
+        # file.write(f"  Deal: {deal}\n")
+        # file.write("\n")
 
     if len(valid_listings) == 0:
         print("Unable to perform level2 analysis: no valid listings found")
