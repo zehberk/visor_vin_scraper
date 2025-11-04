@@ -62,7 +62,7 @@ def check_missing_docs(listings: list[dict]):
         download_report_pdfs(missing_reports)
 
 
-async def start_level2_analysis(metadata: dict, listings: list[dict]):
+async def start_level2_analysis(metadata: dict, listings: list[dict], filename: str):
     make = metadata["vehicle"]["make"]
     model = metadata["vehicle"]["model"]
 
@@ -72,7 +72,7 @@ async def start_level2_analysis(metadata: dict, listings: list[dict]):
 
     # Ensure all folders exist, and if not, save the documents
     if not all(get_vehicle_dir(l) for l in listings):
-        await download_files(listings)
+        await download_files(listings, filename)
 
     # Check for missings documents (pdfs, html)
     check_missing_docs(listings)
@@ -90,8 +90,10 @@ async def start_level2_analysis(metadata: dict, listings: list[dict]):
         make, model, filtered_listings, cache_entries, variant_map
     )
 
+    # os.remove("level2_output.txt")
+
     # Extract Carfax report
-    for vl in valid_listings:
+    for vl in sorted(valid_listings, key=lambda x: x["listing"]["id"]):
         listing = vl["listing"]
         cache_key = vl["cache_key"]
         year = vl["year"]
@@ -125,10 +127,15 @@ async def start_level2_analysis(metadata: dict, listings: list[dict]):
         if deal == "Great" and midpoint and price < midpoint - increment * 3:
             deal = "Suspicious"
 
+        # with open("level2_output.txt", "a") as file:
         deal = adjust_deal_for_risk(deal, risk, narrative)
         print(f"{listing["title"]} - {listing["vin"]}:")
         print(f"  Risk: {risk}")
         print(f"  Deal: {deal}")
+        # file.write(f"{listing["title"]} - {listing["vin"]}:\n")
+        # file.write(f"  Risk: {risk}\n")
+        # file.write(f"  Deal: {deal}\n")
+        # file.write("\n")
 
     if len(valid_listings) == 0:
         print("Unable to perform level2 analysis: no valid listings found")
@@ -145,4 +152,4 @@ if __name__ == "__main__":
     metadata = data.get("metadata", {})
     listings = data.get("listings", {})
     if metadata and listings:
-        asyncio.run(start_level2_analysis(metadata, listings))
+        asyncio.run(start_level2_analysis(metadata, listings, latest_json_file))

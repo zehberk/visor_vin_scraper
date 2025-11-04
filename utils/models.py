@@ -484,7 +484,10 @@ class CarfaxData:
     @property
     def has_odometer_problem(self) -> bool:
         text = self.additional_history.get("Odometer Check", "")
-        if text == "DMV title problems reported.":
+        if (
+            text == "DMV title problems reported."
+            or text == "Potential odometer rollback indicated."
+        ):
             return True
 
         return False

@@ -634,29 +634,31 @@ def save_results(listings, metadata, args, output_path=LISTINGS_PATH):
     return ts
 
 
-async def run_analysis(listings: list, metadata: dict, args, timestamp: str):
+async def run_analysis(
+    listings: list, metadata: dict, args, timestamp: str, filename: str
+):
     if listings:
         if args.level1:
             await start_level1_analysis(listings, metadata, args, timestamp)
         elif args.level2:
-            await start_level2_analysis(metadata, listings)
+            await start_level2_analysis(metadata, listings, filename)
         elif args.level3:
             print("Level 3")
 
 
 async def scrape(args):
     # Try cache before touching the browser
-    cached_file = try_get_cached_filename(args)
-    if not args.force and cached_file and Path(cached_file).exists():
-        print(f"Using cached listings file for today: {cached_file}")
-        with open(cached_file, encoding="utf-8") as f:
+    filename = try_get_cached_filename(args)
+    if not args.force and filename and Path(filename).exists():
+        print(f"Using cached listings file for today: {filename}")
+        with open(filename, encoding="utf-8") as f:
             payload = json.load(f)
         listings, metadata = payload["listings"], payload["metadata"]
 
-        timestamp = Path(cached_file).stem.split("_")[-1]
+        timestamp = Path(filename).stem.split("_")[-1]
         if args.save_docs:
-            await download_files(listings)
-        await run_analysis(listings, metadata, args, timestamp)
+            await download_files(listings, filename)
+        await run_analysis(listings, metadata, args, timestamp, filename)
         return
 
     metadata = build_metadata(args)
@@ -693,9 +695,11 @@ async def scrape(args):
         )
         put_cached_filename(args, filename)
         await browser.close()  # pragma: no cover
+
     if args.save_docs:
-        await download_files(listings)
-    await run_analysis(listings, metadata, args, timestamp)
+        await download_files(listings, filename)
+
+    await run_analysis(listings, metadata, args, timestamp, filename)
 
 
 def save_preset_if_requested(args):

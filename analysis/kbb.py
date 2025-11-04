@@ -130,7 +130,12 @@ async def get_trim_options_for_year(
     safe_make = make_string_url_safe(make)
 
     url = KBB_LOOKUP_STYLES_URL.format(make=safe_make, model=model_slug, year=year)
-    await page.goto(url)
+    while True:
+        try:
+            await page.goto(url, wait_until="commit")
+            break
+        except TimeoutError as t:
+            pass
     raw = await page.inner_text("script#__NEXT_DATA__")
     data = json.loads(raw)
     apollo = data.get("props", {}).get("apolloState", {})
@@ -180,7 +185,7 @@ async def get_or_fetch_national_pricing(
                 (
                     e["kbb_trim"],
                     e["msrp"],
-                    e["natl_fpp"],
+                    e["fpp_natl"],
                     e["natl_source"],
                     e["natl_timestamp"],
                 )
@@ -297,7 +302,8 @@ async def populate_pricing_for_year(
         entry = cache_entries.setdefault(kbb_trim_option, {})
 
         natl_val = None
-        if natl_fpp and natl_fpp.upper() != "TBD":
+        # FPP is saved as an int, unless the FPP was never saved or doesn't have a value
+        if natl_fpp and isinstance(natl_fpp, str) and natl_fpp.upper() != "TBD":
             natl_val = to_int(natl_fpp)
 
         entry["model"] = model
@@ -404,15 +410,15 @@ async def get_price_advisor_values(
             price_values = await svg_page.eval_on_selector_all(
                 "g#RangeBox > text",
                 """
-                nodes => nodes
-                    .map(n => n.textContent.trim())
-                    .filter(t => t.includes('$'))
-                """,
+				nodes => nodes
+					.map(n => n.textContent.trim())
+					.filter(t => t.includes('$'))
+				""",
             )
 
             await svg_page.close()
     except TimeoutError as t:
-        print("Timeout waiting for FMR an local FPP")
+        print("Timeout waiting for FMR and local FPP")
         print(t.message)
 
     if price_values:
