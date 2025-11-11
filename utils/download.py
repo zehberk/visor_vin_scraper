@@ -603,8 +603,8 @@ async def download_files(
             missing = [
                 l
                 for l in listings
-                if l["additional_docs"].get("carfax_url") == "Unavailable"
-                and l["additional_docs"].get("autocheck_url") == "Unavailable"
+                if l.get("additional_docs", {}).get("carfax_url") == "Unavailable"
+                and l.get("additional_docs", {}).get("autocheck_url") == "Unavailable"
             ]
 
             if missing:
@@ -615,8 +615,8 @@ async def download_files(
             missing = [
                 l
                 for l in listings
-                if l["additional_docs"].get("carfax_url") == "Unavailable"
-                and l["additional_docs"].get("autocheck_url") == "Unavailable"
+                if l.get("additional_docs", {}).get("carfax_url") == "Unavailable"
+                and l.get("additional_docs", {}).get("autocheck_url") == "Unavailable"
             ]
             if missing:
                 print(f"Retrying for ({len(missing)} listings)")
@@ -625,8 +625,8 @@ async def download_files(
             leftover = [
                 l
                 for l in listings
-                if l["additional_docs"].get("carfax_url") == "Unavailable"
-                and l["additional_docs"].get("autocheck_url") == "Unavailable"
+                if l.get("additional_docs", {}).get("carfax_url") == "Unavailable"
+                and l.get("additional_docs", {}).get("autocheck_url") == "Unavailable"
             ]
             recovered = len(missing) - len(leftover)
 
