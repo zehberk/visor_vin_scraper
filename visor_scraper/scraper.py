@@ -10,7 +10,7 @@ from analysis.level1 import start_level1_analysis
 from analysis.level2 import start_level2_analysis
 from utils.constants import *
 from utils.download import download_files
-from visor_scraper.utils import *
+from visor_scraper.helpers import *
 
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 
