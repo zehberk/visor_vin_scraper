@@ -163,7 +163,13 @@ async def render_pdf(
     async with async_playwright() as p:
         browser = await p.chromium.launch()
         page = await browser.new_page()
+
+        css_path = Path("templates/report.css").resolve()
+        # css_link = f'<link rel="stylesheet" href="file:///{css_path.as_posix()}">'
+        # html_out = html_out.replace("<head>", f"<head>\n    {css_link}")
+
         await page.set_content(html_out, wait_until="load")
+        await page.add_style_tag(path=str(css_path))  # applies immediately
         await page.pdf(path=str(out_file), format="A4", print_background=True)
         await browser.close()
 
