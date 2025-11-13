@@ -413,10 +413,13 @@ class CarfaxData:
             event_summary = event.get("summary", "").lower()
             if "minor damage" in event_summary:
                 damages.append(DamageSeverity.MINOR)
-            if "moderate damage" in event_summary:
+            elif "moderate damage" in event_summary:
                 damages.append(DamageSeverity.MODERATE)
-            if "severe damage" in event_summary:
+            elif "severe damage" in event_summary:
                 damages.append(DamageSeverity.SEVERE)
+            else:
+                # Catch all, in case accident is reported but damage not listed
+                damages.append(DamageSeverity.MINOR)
         return damages
 
     @property
