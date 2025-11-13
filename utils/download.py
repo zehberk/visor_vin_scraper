@@ -199,7 +199,12 @@ async def get_missing_urls(listings: list[dict], p: Playwright) -> None:
     semaphore = asyncio.Semaphore(5)  # <-- Max 5 listings in parallel
 
     browser = await p.chromium.launch(
-        headless=True, args=["--disable-blink-features=AutomationControlled"]
+        headless=True,
+        args=[
+            "--disable-blink-features=AutomationControlled",
+            "--ignore-https-errors",
+            "--disable-http2",
+        ],
     )
 
     tasks = [worker(semaphore, browser, l) for l in listings]
