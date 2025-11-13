@@ -10,7 +10,7 @@ from analysis.normalization import (
     normalize_listing,
 )
 from analysis.outliers import summarize_outliers
-from analysis.reporting import to_level1_json, render_pdf
+from analysis.reporting import to_level1_json, render_level1_pdf
 from analysis.scoring import (
     build_bins_and_crosstab,
     classify_deal_rating,
@@ -144,7 +144,7 @@ async def create_level1_file(listings: list[dict], metadata: dict):
             # print(f"  - {title}: {reason} ({count})")
             skip_messages.append(f"{title}: {reason} ({count})")
 
-    await render_pdf(
+    await render_level1_pdf(
         make,
         model,
         visible_entries,

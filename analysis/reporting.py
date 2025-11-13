@@ -103,7 +103,7 @@ def create_report_parameter_summary(metadata: dict) -> str:
     return summary.format(condition_summary=condition_summary, sort_method=sort_method)
 
 
-async def render_pdf(
+async def render_level1_pdf(
     make: str,
     model: str,
     cache_entries: dict[str, TrimValuation],
