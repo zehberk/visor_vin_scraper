@@ -90,26 +90,22 @@ async def start_level2_analysis(metadata: dict, listings: list[dict], filename: 
         make, model, filtered_listings, cache_entries, variant_map
     )
 
-    # os.remove("level2_output.txt")
+    if os.path.exists("level2_output.txt"):
+        os.remove("level2_output.txt")
 
     # Extract Carfax report
     for vl in sorted(valid_listings, key=lambda x: x["listing"]["id"]):
         listing = vl["listing"]
         cache_key = vl["cache_key"]
-        year = vl["year"]
-        base_trim = vl["base_trim"]
+        # year = vl["year"]
+        # base_trim = vl["base_trim"]
 
         full_listing = next(l for l in listings if l.get("id") == listing.get("id"))
         report = get_report_dir(full_listing)
-        if report is None or not report.exists():
+        if report is None or not report.exists() or listing.get("price") is None:
             continue
 
         narrative: list[str] = []
-        carfax: CarfaxData = get_carfax_data(report)
-        risk = rate_risk_level2(carfax, listing)
-
-        if listing.get("price") is None:
-            continue
 
         price = int(listing.get("price"))
         msrp = int(cache_entries[cache_key].get("msrp"))
@@ -118,29 +114,44 @@ async def start_level2_analysis(metadata: dict, listings: list[dict], filename: 
         fmr_high = int(cache_entries[cache_key].get("fmr_high", 0))
         fmv = int(cache_entries[cache_key].get("fmv", 0))
 
-        best_comparison = determine_best_price(price, fpp_local, fpp_natl, fmv, msrp)
+        if not (fpp_natl and fpp_local and fmv):
+            narrative.append(
+                "Unable to provide ratings for this vehicle: no pricing data is available for this vehicle."
+            )
+            continue
 
-        deal, midpoint, increment = classify_deal_rating(
-            price, best_comparison, fmv, fpp_local, fmr_high
+        narrative.append(f"This vehicle is being listed at ${price}.")
+
+        best_comparison = determine_best_price(
+            price, fpp_local, fpp_natl, fmv, narrative
         )
 
+        deal, midpoint, increment, percent = classify_deal_rating(
+            price, best_comparison, fmv, fpp_local, fmr_high
+        )
+        narrative.append(
+            f"Deal bins are set at ${increment * 2} ({percent * 200}%) in size, placing the Fair midpoint at ${midpoint}."
+        )
         if deal == "Great" and midpoint and price < midpoint - increment * 3:
             deal = "Suspicious"
 
-        # with open("level2_output.txt", "a") as file:
+        carfax: CarfaxData = get_carfax_data(report)
+        risk = rate_risk_level2(carfax, listing, narrative)
+
         deal = adjust_deal_for_risk(deal, risk, narrative)
-        print(f"{listing["title"]} - {listing["vin"]}:")
-        print(f"  Risk: {risk}")
-        print(f"  Deal: {deal}")
-        # file.write(f"{listing["title"]} - {listing["vin"]}:\n")
-        # file.write(f"  Risk: {risk}\n")
-        # file.write(f"  Deal: {deal}\n")
-        # file.write("\n")
+        with open("level2_output.txt", "a") as file:
+            file.write(f"{listing["title"]} - {listing["vin"]}:\n")
+            file.write(f"  Risk: {risk}\n")
+            file.write(f"  Deal: {deal}\n")
+            file.write(f"Narrative:\n")
+            file.write(json.dumps(narrative, indent=4))
+            file.write("\n\n")
 
     if len(valid_listings) == 0:
         print("Unable to perform level2 analysis: no valid listings found")
     else:
         print(f"{len(valid_listings)} valid listings found.")
+        print(f"Saved to .\\level2_output.txt")
 
 
 if __name__ == "__main__":
@@ -152,4 +163,5 @@ if __name__ == "__main__":
     metadata = data.get("metadata", {})
     listings = data.get("listings", {})
     if metadata and listings:
+        print(f"Loading {latest_json_file} - {len(listings)} found")
         asyncio.run(start_level2_analysis(metadata, listings, latest_json_file))

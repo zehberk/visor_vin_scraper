@@ -1,4 +1,4 @@
-import math, re
+import re
 
 from datetime import datetime
 from typing import Optional
@@ -40,21 +40,40 @@ def rate_uncertainty(listing) -> str:
 
 
 def determine_best_price(
-    price: int, fpp_local: int, fpp_natl: int, fmv: int, msrp: int
+    price: int, fpp_local: int, fpp_natl: int, fmv: int, narrative: list[str]
 ) -> int:
+    source: str = ""
+    reason: str = ""
+    value: int
     if price == 0:
-        return 0
+        value = 0
+        source = "None"
+        reason = "sale price vcould not be found"
 
-    # Get the lower of the FPP
-    if fpp_local and fpp_natl:
-        if fpp_local < fpp_natl:
-            return fpp_local
-        return fpp_natl
+    # Local -> National -> FMV
+    # FMV is basically a catch all, but is discouraged because it will lead to wonky ratings
+    if fpp_local:
+        value = fpp_local
+        source = "Local FPP"
+        reason = "it provides the most accurate local pricing data available"
+    elif fpp_natl:
+        value = fpp_natl
+        source = "National FPP"
+        reason = "it provides the next most accurate pricing data available"
+    else:
+        value = fmv
+        source = "FMV"
+        reason = "no national or local FPP could be found"
 
-    if fpp_natl:
-        return fpp_natl
+    narrative.append(
+        f"{source} (${value}) was used as the comparison value because {reason}."
+    )
+    if source == "FMV":
+        narrative.append(
+            "As FMV is a measure of how much a car would be sold privately, the following ratings may be inaccurate."
+        )
 
-    return fmv if fmv else msrp
+    return value
 
 
 def classify_deal_rating(
@@ -63,12 +82,12 @@ def classify_deal_rating(
     fmv: int,
     fpp_local: int,
     fmr_high: int,
-) -> tuple[str, int, int]:
+) -> tuple[str, int, int, float]:
     """
     Returns a deal rating and the midpoint comparison for the provided price
     """
     if price == 0:
-        return "No price", 0, 0
+        return "No price", 0, 0, 0.0
 
     increment = 1000  # baseline
     compare_pct = compare_price != fpp_local
@@ -78,10 +97,11 @@ def classify_deal_rating(
             categorize_price_tier(price, fmv, increment, compare_pct, 0.04),
             fmv,
             increment,
+            0.04,
         )
 
     if compare_price == fpp_local:
-        increment = math.floor((fmr_high - fpp_local) / 3)
+        increment = round((fmr_high - fpp_local) / 3)
 
     # Shift the fpp midpoint from "Good" to "Fair"
     midpoint = compare_price + increment * 2
@@ -89,6 +109,7 @@ def classify_deal_rating(
         categorize_price_tier(price, midpoint, increment, compare_pct),
         midpoint,
         increment,
+        0.03,  # Get calculated value
     )
 
 
@@ -97,19 +118,22 @@ def categorize_price_tier(
 ) -> str:
 
     # absolute ranges (min, max)
+    # Each bin is two increments
     abs_ranges = {
-        "Great": (float("-inf"), midpoint - increment * 2),
-        "Good": (midpoint - increment * 2, midpoint - increment),
+        "Great": (float("-inf"), midpoint - increment * 3),
+        "Good": (midpoint - increment * 3, midpoint - increment),
         "Fair": (midpoint - increment, midpoint + increment),
-        "Poor": (midpoint + increment, midpoint + increment * 2),
+        "Poor": (midpoint + increment, midpoint + increment * 3),
+        "Bad": (midpoint + increment * 3, float("inf")),
     }
 
     # percentage ranges (min, max)
     pct_ranges = {
-        "Great": (float("-inf"), midpoint * (1 - pct * 2)),
-        "Good": (midpoint * (1 - pct * 2), midpoint * (1 - pct)),
+        "Great": (float("-inf"), midpoint * (1 - pct * 3)),
+        "Good": (midpoint * (1 - pct * 3), midpoint * (1 - pct)),
         "Fair": (midpoint * (1 - pct), midpoint * (1 + pct)),
-        "Poor": (midpoint * (1 + pct), midpoint * (1 + pct * 2)),
+        "Poor": (midpoint * (1 + pct), midpoint * (1 + pct * 3)),
+        "Bad": (midpoint * (1 + pct * 3), float("inf")),
     }
 
     for label in abs_ranges.keys():
@@ -122,6 +146,7 @@ def categorize_price_tier(
         if abs_match or pct_match:
             return label
 
+    # Default to Bad in case math is off
     return "Bad"
 
 
@@ -143,15 +168,17 @@ def rate_risk_level1(listing, price, compare_value) -> str:
         return "Low"
 
 
-def adjust_deal_for_risk(
-    base_bin: str, risk: float, narrative: list[str] | None = None
-) -> str:
+def adjust_deal_for_risk(base_bin: str, risk: float, narrative: list[str]) -> str:
     """
     Adjusts deal grading for level 2 based on the risk.
     """
     if base_bin == "Suspicious":
-        if risk >= 6:
+        if risk > 5:
+            narrative.append(
+                "Deal rating has been downgraded to Bad due to risk and suspicious pricing."
+            )
             return "Bad"
+        narrative.append("Deal is set as Suspicious due to extreme pricing.")
         return "Suspicious"
 
     idx = DEAL_ORDER.index(base_bin)
@@ -164,12 +191,26 @@ def adjust_deal_for_risk(
     elif risk <= 8:
         shift = 3
     else:
+        narrative.append(
+            f"Originally rated {base_bin} based on price alone, but shifted to Bad due to extreme risk."
+        )
         return "Bad"
 
-    return DEAL_ORDER[min(idx + shift, len(DEAL_ORDER) - 1)]
+    new_deal = DEAL_ORDER[min(idx + shift, len(DEAL_ORDER) - 1)]
+
+    if shift == 0:
+        narrative.append(
+            f"Deal rating is fixed at {base_bin} based on price and no risk factors."
+        )
+    else:
+        narrative.append(
+            f"Originally rated {base_bin} based on price alone, but is now {new_deal} due to risk factors."
+        )
+
+    return new_deal
 
 
-def rate_risk_level2(carfax: CarfaxData, listing: dict) -> float:
+def rate_risk_level2(carfax: CarfaxData, listing: dict, narrative: list[str]) -> float:
     """
     Scores multiple areas of the carfax report to return a risk level
 
@@ -182,13 +223,13 @@ def rate_risk_level2(carfax: CarfaxData, listing: dict) -> float:
     Returns:
         float: A continuous risk modifier between 0.0 and 10.0.
     """
-    score: float = score_title_status(carfax)
-    score += score_mileage_use(carfax, listing)
-    score += score_warranty_status(carfax, listing)
-    return score
+    score: float = score_title_status(carfax, narrative)
+    score += score_mileage_use(carfax, listing, narrative)
+    score += score_warranty_status(carfax, listing, narrative)
+    return round(max(min(score, 10.0), 0.0))
 
 
-def score_title_status(carfax: CarfaxData) -> float:
+def score_title_status(carfax: CarfaxData, narrative: list[str]) -> float:
     """
     Computes a composite title risk score on a 0-10 scale based on title type, structural status,
     damage history, and key risk factors (airbags, odometer).
@@ -202,23 +243,28 @@ def score_title_status(carfax: CarfaxData) -> float:
     """
     score = 0.0
 
-    # 1. Base damage severity (non-linear, cumulative
-    damage_score = get_cumulative_damage_score(carfax.damage_severities)
+    # 1. Base damage severity (non-linear, cumulative)
+    damage_score = get_cumulative_damage_score(carfax.damage_severities, narrative)
 
     # 2. Title-related risk (clean vs branded/total loss)
-    score = get_branded_score(carfax.is_branded, carfax.is_total_loss, damage_score)
+    score = get_branded_score(
+        carfax.is_branded, carfax.is_total_loss, damage_score, narrative
+    )
 
     # 3. Structural risk, scaled down to reduce overlap with title weighting
-    score += get_structure_score(carfax.structural_status, damage_score)
+    score += get_structure_score(carfax.structural_status, damage_score, narrative)
 
     # 4. Airbag deployment: hidden safety concern, flat addition
     if carfax.airbags_deployed:
+        narrative.append("Air bags have been deployed at least once.")
         score += 2.5
 
     return min(max(score, 0.0), 10.0)
 
 
-def get_cumulative_damage_score(severities: list[DamageSeverity]) -> float:
+def get_cumulative_damage_score(
+    severities: list[DamageSeverity], narrative: list[str]
+) -> float:
     """
     Returns a cumulative score for a list of damages. Subsequent damages are multipled by 10%,
     with an additional 5% for each after the second damage event. This will return a max of 10
@@ -235,10 +281,14 @@ def get_cumulative_damage_score(severities: list[DamageSeverity]) -> float:
         base: float = SEVERITY_SCORES.get(damage, 0.0)
         multiplier = 1 if i == 0 else 1.1 + (0.05 * (i - 1))
         score += base * multiplier
+    if score:
+        narrative.append(f"{len(severities)} damage records found.")
     return min(score, 10.0)
 
 
-def get_structure_score(status: StructuralStatus, damage_score: float) -> float:
+def get_structure_score(
+    status: StructuralStatus, damage_score: float, narrative: list[str]
+) -> float:
     """
     Returns a structure score modified by the likelihood of damage on a non-linear scale.
     Values typically range from ~0.25 to 2.5 before scaling.
@@ -260,12 +310,22 @@ def get_structure_score(status: StructuralStatus, damage_score: float) -> float:
         scale = (damage_score / 10) ** 1.2
         score = 0.1 + scale * (2.5 - 0.1)
 
+    if score:
+        if status == StructuralStatus.CONFIRMED:
+            narrative.append(
+                "At least one damage report confirmed structural problems."
+            )
+        if status == StructuralStatus.POSSIBLE:
+            narrative.append(
+                "At least one damage report alluded to possible structural problems."
+            )
+
     # Scale down to give more breathing room with the title
     return score * 0.7
 
 
 def get_branded_score(
-    is_branded: bool, is_total_loss: bool, damage_score: float
+    is_branded: bool, is_total_loss: bool, damage_score: float, narrative: list[str]
 ) -> float:
     """
     Returns a scaled title score depending on the vehicle's damage.
@@ -286,12 +346,21 @@ def get_branded_score(
     Returns:
         float: the scaled title score, ranging from 0.0 to 9.0
     """
+
     if not (is_branded or is_total_loss):
         if damage_score <= 0:
             return 0.0
         else:
             scale = (damage_score / 10) ** 0.78
             return 2.0 + scale * 5.5  # clean-title curve: 2.25 → 7.5
+    elif is_branded and is_total_loss:
+        narrative.append(
+            "Title has been branded and vehicle was considered a total loss vehicle."
+        )
+    elif is_branded:
+        narrative.append("Title has been branded.")
+    else:
+        narrative.append("Vehicle was declared a total loss.")
 
     if damage_score <= 0:
         return 7.0  # suspicious: title issue with no visible damage
@@ -300,7 +369,9 @@ def get_branded_score(
     return 4.0 + min(scale, 1.0) * 5.0  # branded curve: 4 → 9
 
 
-def score_warranty_status(carfax: CarfaxData, listing: dict) -> float:
+def score_warranty_status(
+    carfax: CarfaxData, listing: dict, narrative: list[str]
+) -> float:
     """
     Finds the rating score for a vehicle's warranty status. Range is -2 to 0.
     Having the original bumper-to-bumper/basic warranty still active will reward the highest score.
@@ -320,10 +391,14 @@ def score_warranty_status(carfax: CarfaxData, listing: dict) -> float:
     coverages: list[dict] = listing["coverages"]
 
     if carfax.has_accident or carfax.has_damage:
+        narrative.append("The basic warranty on this vehicle has been voided.")
         return 0.0
 
-    if carfax.is_basic_warranty_active:
-        basic_months, basic_miles = carfax.remaining_warranty
+    if not carfax.is_basic_warranty_active:
+        narrative.append("The basic warranty on this vehicle has expired.")
+        return 0.0
+
+    basic_months, basic_miles = carfax.remaining_warranty
 
     if basic_months == 0 or basic_miles == 0:
         basic = next((c for c in coverages if c.get("type") == "Basic"), None)
@@ -352,10 +427,15 @@ def score_warranty_status(carfax: CarfaxData, listing: dict) -> float:
     else:
         rating = 0.0
 
+    if rating:
+        narrative.append(
+            f"Basic warranty is active with {basic_months} months left and {basic_miles} miles left."
+        )
+
     return rating
 
 
-def score_mileage_use(carfax: CarfaxData, listing: dict) -> float:
+def score_mileage_use(carfax: CarfaxData, listing: dict, narrative: list[str]) -> float:
     """
     Calculates a mileage-based risk modifier on a -1.0 to 2.0 scale.
 
@@ -382,6 +462,7 @@ def score_mileage_use(carfax: CarfaxData, listing: dict) -> float:
     """
     # Odometer inconsistency: fraud/mechanical risk
     if carfax.has_odometer_problem:
+        narrative.append("An odometer inconsistency has been found for this vehicle.")
         return 2.5
 
     production_year = int(listing["year"])
@@ -396,18 +477,32 @@ def score_mileage_use(carfax: CarfaxData, listing: dict) -> float:
     expected = years_difference * 13500
     actual = max(carfax.last_odometer_reading, int(listing["mileage"]))
     deviation = (actual - expected) / expected
+    percent_diff = deviation * 100
 
     # Continuous scaling: mild penalty below -10%, neutral zone, then 0 → 2 curve above +10%
     if deviation <= -0.20:
+        narrative.append(
+            f"Vehicle has been driven significantly less than expected for it's age ({percent_diff:.1f}%)."
+        )
         score = -1.0
     elif deviation <= -0.10:
+        narrative.append(
+            f"Vehicle has been driven less than expected for it's age ({percent_diff:.1f}%)."
+        )
         score = -1.0 + (deviation + 0.20) * 5  # smooth ramp -1 → -0.5
     elif deviation < 0.10:
+        narrative.append(f"Vehicle has been driven an expected amount for it's age.")
         score = 0.0
     elif deviation < 0.40:
+        narrative.append(
+            f"Vehicle has been driven more than expected for it's age ({percent_diff:.1f}%)."
+        )
         # from +10% → +40%, interpolate 0 → 2.0
         score = ((deviation - 0.10) / 0.30) * 2.0
     else:
+        narrative.append(
+            f"Vehicle has been driven much more than expected for it's age ({percent_diff:.1f}%)."
+        )
         score = 2.0
 
     return score
