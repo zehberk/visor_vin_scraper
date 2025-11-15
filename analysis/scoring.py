@@ -210,7 +210,7 @@ def adjust_deal_for_risk(base_bin: str, risk: float, narrative: list[str]) -> st
     return new_deal
 
 
-def rate_risk_level2(carfax: CarfaxData, listing: dict, narrative: list[str]) -> float:
+def rate_risk_level2(carfax: CarfaxData, listing: dict, narrative: list[str]) -> int:
     """
     Scores multiple areas of the carfax report to return a risk level
 
