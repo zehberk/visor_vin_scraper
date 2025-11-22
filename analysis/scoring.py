@@ -48,14 +48,14 @@ def determine_best_price(
     if price == 0:
         value = 0
         source = "None"
-        reason = "sale price vcould not be found"
+        reason = "sale price could not be found"
 
     # Local -> National -> FMV
     # FMV is basically a catch all, but is discouraged because it will lead to wonky ratings
     if fpp_local:
         value = fpp_local
         source = "Local FPP"
-        reason = "it provides the most accurate local pricing data available"
+        reason = "it provides the most accurate pricing data available"
     elif fpp_natl:
         value = fpp_natl
         source = "National FPP"
@@ -204,7 +204,7 @@ def adjust_deal_for_risk(base_bin: str, risk: float, narrative: list[str]) -> st
         )
     else:
         narrative.append(
-            f"Originally rated {base_bin} based on price alone, but is now {new_deal} due to risk factors."
+            f"Originally rated {base_bin} based on price alone, but is now downgraded to {new_deal} due to risk factors."
         )
 
     return new_deal
