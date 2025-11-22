@@ -10,7 +10,7 @@ from analysis.normalization import (
     normalize_listing,
 )
 from analysis.outliers import summarize_outliers
-from analysis.reporting import to_level1_json, render_pdf
+from analysis.reporting import to_level1_json, render_level1_pdf
 from analysis.scoring import (
     build_bins_and_crosstab,
     classify_deal_rating,
@@ -59,9 +59,11 @@ async def create_level1_file(listings: list[dict], metadata: dict):
         fmv = int(cache_entries[cache_key].get("fmv", 0))
 
         price = int(listing.get("price", 0))
-        best_comparison = determine_best_price(price, fpp_local, fpp_natl, fmv, msrp)
+        best_comparison = determine_best_price(price, fpp_local, fpp_natl, fmv, [])
+        if not best_comparison:
+            best_comparison = msrp  # It's okay to use MSRP for level 1
 
-        deal, midpoint, _ = classify_deal_rating(
+        deal, midpoint, _, _ = classify_deal_rating(
             price, best_comparison, fmv, fpp_local, fmr_high
         )
         uncertainty = rate_uncertainty(listing)
@@ -142,7 +144,7 @@ async def create_level1_file(listings: list[dict], metadata: dict):
             # print(f"  - {title}: {reason} ({count})")
             skip_messages.append(f"{title}: {reason} ({count})")
 
-    await render_pdf(
+    await render_level1_pdf(
         make,
         model,
         visible_entries,
