@@ -136,23 +136,39 @@ def build_metadata(args):
         logging.error("--model is required and cannot be empty.")
         exit(1)
 
+    filters = vars(args).copy()
+
+    # Move the core vehicle fields out of filters
+    vehicle_fields = ("make", "model", "trim", "year")
+    preset_fields = ("preset", "save_preset")
+    standalone_args = ("force", "save_docs", "level1", "level2", "level3")
+
+    for k in (*vehicle_fields, *preset_fields, *standalone_args):
+        filters.pop(k, None)
+
+    # Remove empty/null entries
+    filters = remove_null_entries(filters)
+
+    # Attach extra URL filters if present
+    if getattr(args, "extra_filters", None):
+        filters["other"] = args.extra_filters
+
     metadata = {
         "vehicle": {
             "make": args.make,
             "model": args.model,
-            "trim": args.trim,
+            "trim": args.trim if args.trim else "",
             "year": normalize_years(args.year) if args.year else [],
         },
-        "filters": remove_null_entries(vars(args).copy()),
+        "filters": filters,
         "site_info": {},  # filled later
-        "runtime": {"timestamp": current_timestamp()},
+        "runtime": {
+            "timestamp": current_timestamp(),
+            "url": args.url if args.url else "",
+            "search_source": "url" if args.url else "flags",
+        },
         "warnings": [],
     }
-
-    filters = vars(args).copy()
-    for k in ("make", "model", "trim", "year", "preset", "save_preset"):
-        filters.pop(k, None)
-    metadata["filters"] = remove_null_entries(filters)
 
     return metadata
 
