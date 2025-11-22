@@ -15,11 +15,12 @@ from analysis.scoring import (
     determine_best_price,
     rate_risk_level2,
 )
+from analysis.reporting import render_level2_pdf
 
 from utils.carfax_parser import get_carfax_data
 from utils.constants import *
 from utils.download import download_files, download_report_pdfs
-from utils.models import CarfaxData, StructuralStatus, TrimValuation
+from utils.models import CarfaxData
 
 
 def get_vehicle_dir(listing: dict) -> Path | None:
@@ -84,21 +85,19 @@ async def start_level2_analysis(metadata: dict, listings: list[dict], filename: 
         if report and report.exists():
             filtered_listings.append(normalize_listing(vl))
 
-    trim_valuations = await get_pricing_data(make, model, listings, cache)
+    await get_pricing_data(make, model, listings, cache)
 
-    valid_listings, skipped_listings, skip_summary = filter_valid_listings(
+    valid_listings, _, _ = filter_valid_listings(
         make, model, filtered_listings, cache_entries, variant_map
     )
 
-    if os.path.exists("level2_output.txt"):
-        os.remove("level2_output.txt")
+    # listing, deal, risk, narrative
+    ratings: list[tuple[dict, str, int, list[str]]] = []
 
     # Extract Carfax report
     for vl in sorted(valid_listings, key=lambda x: x["listing"]["id"]):
-        listing = vl["listing"]
+        listing: dict = vl["listing"]
         cache_key = vl["cache_key"]
-        # year = vl["year"]
-        # base_trim = vl["base_trim"]
 
         full_listing = next(l for l in listings if l.get("id") == listing.get("id"))
         report = get_report_dir(full_listing)
@@ -107,8 +106,7 @@ async def start_level2_analysis(metadata: dict, listings: list[dict], filename: 
 
         narrative: list[str] = []
 
-        price = int(listing.get("price"))
-        msrp = int(cache_entries[cache_key].get("msrp"))
+        price = int(listing.get("price", 0))
         fpp_natl = int(cache_entries[cache_key].get("fpp_natl", 0))
         fpp_local = int(cache_entries[cache_key].get("fpp_local", 0))
         fmr_high = int(cache_entries[cache_key].get("fmr_high", 0))
@@ -139,19 +137,11 @@ async def start_level2_analysis(metadata: dict, listings: list[dict], filename: 
         risk = rate_risk_level2(carfax, listing, narrative)
 
         deal = adjust_deal_for_risk(deal, risk, narrative)
-        with open("level2_output.txt", "a") as file:
-            file.write(f"{listing["title"]} - {listing["vin"]}:\n")
-            file.write(f"  Risk: {risk}\n")
-            file.write(f"  Deal: {deal}\n")
-            file.write(f"Narrative:\n")
-            file.write(json.dumps(narrative, indent=4))
-            file.write("\n\n")
+        ratings.append((listing, deal, risk, narrative))
 
-    if len(valid_listings) == 0:
-        print("Unable to perform level2 analysis: no valid listings found")
-    else:
-        print(f"{len(valid_listings)} valid listings found.")
-        print(f"Saved to .\\level2_output.txt")
+    await render_level2_pdf(
+        make, model, len(listings), len(valid_listings), ratings, metadata
+    )
 
 
 if __name__ == "__main__":

@@ -44,13 +44,13 @@ def to_level1_json(
     }
 
 
-def create_report_parameter_summary(metadata: dict) -> str:
+def create_report_filter_summary(metadata: dict) -> str:
     """
     Creates a summary header for the level 1 analysis report that briefly goes over which parameters that were used in the search.
     This include condition, price filters, mileage filters, and the sort method
     """
 
-    summary = "This report reflects{condition_summary}listings retrieved using the {sort_method} sort option"
+    summary = "This report reflects{condition_summary}listings retrieved using the <i>{sort_method}</i> sort option"
     condition_summary = " "
     price_summary = ""
     miles_summary = ""
@@ -129,7 +129,7 @@ async def render_level1_pdf(
     report_title = f"{make} {model} Market Overview — Level 1"
     generated_at = datetime.now().strftime("%B %d, %Y %I:%M %p")
 
-    summary = create_report_parameter_summary(metadata)
+    summary = create_report_filter_summary(metadata)
 
     html_out = template.render(
         report_title=report_title,
@@ -164,10 +164,94 @@ async def render_level1_pdf(
         browser = await p.chromium.launch()
         page = await browser.new_page()
 
-        css_path = Path("templates/report.css").resolve()
-        # css_link = f'<link rel="stylesheet" href="file:///{css_path.as_posix()}">'
-        # html_out = html_out.replace("<head>", f"<head>\n    {css_link}")
+        css_path = Path("templates/level1.css").resolve()
 
+        await page.set_content(html_out, wait_until="load")
+        await page.add_style_tag(path=str(css_path))  # applies immediately
+        await page.pdf(path=str(out_file), format="A4", print_background=True)
+        await browser.close()
+
+    print(f"✅ PDF created at: {out_file.resolve()}")
+
+
+def build_level2_bins(ratings: list) -> tuple[list, list, list, int, int, int]:
+    great_bin = []
+    good_bin = []
+    fair_bin = []
+    poor_count = 0
+    bad_count = 0
+    suspicious_count = 0
+
+    # 0 - listing, 1 - deal, 2 - risk, 3 - narrative
+    for rating in ratings:
+        if rating[1] == "Great":
+            great_bin.append(rating)
+        elif rating[1] == "Good":
+            good_bin.append(rating)
+        elif rating[1] == "Fair":
+            fair_bin.append(rating)
+        elif rating[1] == "Poor":
+            poor_count += 1
+        elif rating[1] == "Bad":
+            bad_count += 1
+        else:
+            suspicious_count += 1
+
+    # Re-order bins by risk score
+    great_bin = sorted(great_bin, key=lambda rating: rating[2])
+    good_bin = sorted(good_bin, key=lambda rating: rating[2])
+    fair_bin = sorted(fair_bin, key=lambda rating: rating[2])
+
+    return great_bin, good_bin, fair_bin, poor_count, bad_count, suspicious_count
+
+
+async def render_level2_pdf(
+    make: str,
+    model: str,
+    total_count: int,
+    valid_count: int,
+    ratings: list,
+    metadata: dict,
+):
+    env = Environment(loader=FileSystemLoader("templates"))
+    template = env.get_template("level2.html")
+
+    report_title = f"{make} {model} Market Overview — Level 2"
+    generated_at = datetime.now().strftime("%B %d, %Y %I:%M %p")
+
+    great_bin, good_bin, fair_bin, poor_count, bad_count, sus_count = build_level2_bins(
+        ratings
+    )
+
+    summary = create_report_filter_summary(metadata)
+    html_out = template.render(
+        make=make,
+        model=model,
+        report_title=report_title,
+        generated_at=generated_at,
+        summary=summary,
+        total_count=total_count,
+        valid_count=valid_count,
+        great_bin=great_bin,
+        good_bin=good_bin,
+        fair_bin=fair_bin,
+        poor_count=poor_count,
+        bad_count=bad_count,
+        sus_count=sus_count,
+    )
+
+    out_dir = Path("output") / "level2"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_file = out_dir / f"{make}_{model}_level2_analysis_report.pdf".replace(" ", "_")
+
+    # Render PDF with Playwright
+    async with async_playwright() as p:
+        browser = await p.chromium.launch()
+        page = await browser.new_page()
+
+        css_path = Path("templates/level2.css").resolve()
+
+        await page.emulate_media(media="screen")
         await page.set_content(html_out, wait_until="load")
         await page.add_style_tag(path=str(css_path))  # applies immediately
         await page.pdf(path=str(out_file), format="A4", print_background=True)
