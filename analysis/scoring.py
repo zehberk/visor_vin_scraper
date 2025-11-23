@@ -71,9 +71,7 @@ def determine_best_price(
         source = "FMV"
         reason = "no national or local FPP could be found"
 
-    narrative.append(
-        f"{source} (${value}) was used as the comparison value because {reason}."
-    )
+    narrative.append(f"{source} was used as the comparison value because {reason}.")
     if source == "FMV":
         narrative.append(
             "As FMV is a measure of how much a car would be sold privately, the following ratings may be inaccurate."
