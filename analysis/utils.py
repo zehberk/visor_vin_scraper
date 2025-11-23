@@ -41,9 +41,16 @@ def is_trim_version_valid(trim_version: str) -> bool:
 
 
 def find_variant_key(variant_map: dict[str, list[dict]], listing: dict) -> str | None:
-    for key, listings in variant_map.items():
-        if listing in listings:
-            return key
+    target_id = listing.get("id")
+    if not target_id:
+        return None
+
+    for key, entries in variant_map.items():
+        for entry in entries:
+            entry_id = entry.get("id")
+            if entry_id == target_id:
+                return key
+
     return None
 
 
