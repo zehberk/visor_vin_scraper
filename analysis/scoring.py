@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Optional
 
 from analysis.utils import to_int
+from itertools import groupby
 from utils.constants import *
 from utils.models import (
     CarfaxData,
@@ -18,6 +19,11 @@ SEVERITY_SCORES: dict[DamageSeverity, float] = {
     DamageSeverity.MINOR: 1.0,
     DamageSeverity.MODERATE: 2.5,
     DamageSeverity.SEVERE: 5.0,
+}
+SEVERITY_LABELS = {
+    DamageSeverity.MINOR: "minor",
+    DamageSeverity.MODERATE: "moderate",
+    DamageSeverity.SEVERE: "severe",
 }
 STRUCTURAL_SCORES: dict[StructuralStatus, float] = {
     StructuralStatus.NONE: 0.0,
@@ -282,7 +288,15 @@ def get_cumulative_damage_score(
         multiplier = 1 if i == 0 else 1.1 + (0.05 * (i - 1))
         score += base * multiplier
     if score:
-        narrative.append(f"{len(severities)} damage records found.")
+        severity_groups = [list(s) for k, s in groupby(severities)]
+        totals = []
+        for group in severity_groups:
+            count = len(group)
+            label = SEVERITY_LABELS.get(group[0], "unknown")
+            totals.append(f"{count} {label}")
+        narrative.append(
+            f"{len(severities)} damage record{"s" if len(totals) > 1 else "" } found: {', '.join(totals)}."
+        )
     return min(score, 10.0)
 
 
