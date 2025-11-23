@@ -1,6 +1,7 @@
 # utils.py
 import argparse, json, logging, math, os, re
 
+from argparse import Namespace
 from datetime import datetime
 from playwright.async_api import Page
 
@@ -136,28 +137,42 @@ def build_metadata(args):
         logging.error("--model is required and cannot be empty.")
         exit(1)
 
+    filters = vars(args).copy()
+
+    # Move the core vehicle fields or standalones out of filters
+    vehicle_fields = ("make", "model", "trim", "year")
+    preset_fields = ("preset", "save_preset")
+    standalone_args = ("force", "save_docs", "level1", "level2", "level3")
+    url_fields = ("url", "extra_filters")
+    for k in (*vehicle_fields, *preset_fields, *standalone_args, *url_fields):
+        filters.pop(k, None)
+
+    if getattr(args, "extra_filters", None):
+        filters["other"] = args.extra_filters
+
+    # Remove empty/null entries
+    filters = remove_null_entries(filters)
+
     metadata = {
         "vehicle": {
             "make": args.make,
             "model": args.model,
-            "trim": args.trim,
+            "trim": args.trim if args.trim else "",
             "year": normalize_years(args.year) if args.year else [],
         },
-        "filters": remove_null_entries(vars(args).copy()),
+        "filters": filters,
         "site_info": {},  # filled later
-        "runtime": {"timestamp": current_timestamp()},
+        "runtime": {
+            "timestamp": current_timestamp(),
+            "search_source": "url" if args.url else "flags",
+        },
         "warnings": [],
     }
-
-    filters = vars(args).copy()
-    for k in ("make", "model", "trim", "year", "preset", "save_preset"):
-        filters.pop(k, None)
-    metadata["filters"] = remove_null_entries(filters)
 
     return metadata
 
 
-def build_query_params(args, metadata):
+def build_query_params(args: Namespace, metadata: dict) -> dict:
     if args.miles:
         if args.min_miles or args.max_miles:
             logging.warning("--miles overrides --min_miles and --max_miles.")
@@ -187,7 +202,14 @@ def build_query_params(args, metadata):
         "condition": lambda values: ",".join(v.lower() for v in values),
         "year": normalize_years if args.year else [],
     }
+
+    # If we are passing along the url, we already have the 'correct' sort
+    if args.sort in SORT_OPTIONS.values():
+        REMAPPING_RULES.pop("sort", None)
+
     IGNORE_ARGS = {
+        "url",
+        "extra_filters",
         "max_listings",
         "price",
         "miles",
@@ -237,6 +259,12 @@ def build_query_params(args, metadata):
         if v in (None, "") or (isinstance(v, list) and not any(v)):
             continue  # value was empty and optional; no need to warn
         cleaned[k] = v
+
+    # Clean and validate other filters if a url was provided already
+    other = metadata["filters"].get("other")
+    if other:
+        for k, v in other.items():
+            cleaned[k] = ",".join(v) if isinstance(v, list) else v
 
     return cleaned
 

@@ -1,10 +1,11 @@
 import argparse, asyncio, json, logging, os, sys
 
+from argparse import Namespace
 from datetime import date
 from pathlib import Path
 from playwright.async_api import async_playwright, Browser, Page, TimeoutError
 from tqdm import tqdm
-from urllib.parse import urlencode
+from urllib.parse import parse_qs, urlencode, urlparse
 
 from analysis.level1 import start_level1_analysis
 from analysis.level2 import start_level2_analysis
@@ -100,7 +101,7 @@ async def extract_numbers_from_sidebar(page, metadata):
                 match.group(1).replace(",", "")
             )
             logging.info(
-                f"Total for sale nationwide: {metadata["site_info"]['total_for_sale']}"
+                f"Total for sale nationwide: {metadata["site_info"]["total_for_sale"]}"
             )
 
 
@@ -646,7 +647,7 @@ async def run_analysis(
             print("Level 3")
 
 
-async def scrape(args):
+async def scrape(args: Namespace):
     # Try cache before touching the browser
     filename = try_get_cached_filename(args)
     if not args.force and filename and Path(filename).exists():
@@ -665,7 +666,7 @@ async def scrape(args):
     query_params = build_query_params(args, metadata)
     url = f"{BASE_URL}?{urlencode(query_params)}"
     metadata["runtime"]["url"] = url
-    listings = None
+    listings = []
 
     async with async_playwright() as pw:
         browser = await pw.chromium.launch(headless=True)
@@ -745,7 +746,72 @@ def save_preset_if_requested(args):
     logging.info(f"Preset '{preset_name}' saved.")
 
 
-def resolve_args(args):
+def apply_url_to_args(args: Namespace):
+    if not args.url:
+        return args
+
+    if args.preset:
+        logging.error("You cannot use --url together with --preset.")
+        exit(1)
+
+    if args.make or args.model:
+        logging.info("Make and model already provided in URL, overwriting.")
+
+    qs = parse_qs(urlparse(args.url).query)
+
+    # Required core fields
+    args.make = qs.get("make", [""])[0].strip()
+    args.model = qs.get("model", [""])[0].strip()
+
+    # Standardized filters: only apply if user didn’t override via CLI
+    if "trim" in qs:
+        args.trim = qs["trim"][0].split(",")
+
+    if "year" in qs:
+        args.year = qs["year"][0].split(",")
+
+    if "car_type" in qs:
+        args.condition = qs["car_type"][0].split(",")
+
+    if "price_min" in qs:
+        args.min_price = int(qs["price_min"][0])
+        args.price = None
+
+    if "price_max" in qs:
+        args.max_price = int(qs["price_max"][0])
+        args.price = None
+
+    if "miles_min" in qs:
+        args.min_miles = int(qs["miles_min"][0])
+        args.miles = None
+
+    if "miles_max" in qs:
+        args.max_miles = int(qs["miles_max"][0])
+        args.miles = None
+
+    if "sort" in qs:
+        args.sort = qs.get("sort", [""])[0].strip()
+
+    # Anything not mapped explicitly becomes an "extra_filter"
+    known = {
+        "make",
+        "model",
+        "trim",
+        "year",
+        "price_min",
+        "price_max",
+        "miles_min",
+        "miles_max",
+        "car_type",  # Condition
+        "sort",
+    }
+
+    args.extra_filters = {k: v for k, v in qs.items() if k not in known}
+
+    return args
+
+
+def resolve_args(args: Namespace):
     if args.preset and args.save_preset:
         logging.error("You cannot use --preset and --save-preset together.")
         exit(1)
@@ -786,6 +852,7 @@ def main():  # pragma: no cover
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
 
+    url = parser.add_argument_group("Direct URL")
     presets = parser.add_argument_group("Preset profiles")
     docs = parser.add_argument_group("Documents")
     required = parser.add_argument_group("Required arguments")
@@ -794,31 +861,10 @@ def main():  # pragma: no cover
     sorting = parser.add_argument_group("Sorting options")
     analysis = parser.add_mutually_exclusive_group()
 
-    presets.add_argument(
-        "--preset", type=str, help="Optional preset name from presets.json"
-    )
-    presets.add_argument(
-        "--save-preset", action="store_true", help="Save this search as a preset"
-    )
-
-    docs.add_argument(
-        "--save_docs",
-        action="store_true",
-        help="Save the documents retrieved from the listings",
-    )
+    url.add_argument("--url", type=str, help="The direct URL to use for filtering")
 
     required.add_argument("--make", type=str, help="Vehicle make (e.g., Jeep)")
     required.add_argument("--model", type=str, help="Vehicle model (e.g., Wrangler)")
-
-    behavior.add_argument(
-        "--max_listings",
-        type=capped_max_listings,
-        default=50,
-        help="Maximum number of listings to retrieve (default: 50, max: 500)",
-    )
-    behavior.add_argument(
-        "--force", action="store_true", help="Overrides the cache for this search"
-    )
 
     filters.add_argument(
         "--trim",
@@ -853,6 +899,29 @@ def main():  # pragma: no cover
         help="Sort order for results",
     )
 
+    behavior.add_argument(
+        "--max_listings",
+        type=capped_max_listings,
+        default=50,
+        help="Maximum number of listings to retrieve (default: 50, max: 500)",
+    )
+    behavior.add_argument(
+        "--force", action="store_true", help="Overrides the cache for this search"
+    )
+
+    presets.add_argument(
+        "--preset", type=str, help="Optional preset name from presets.json"
+    )
+    presets.add_argument(
+        "--save-preset", action="store_true", help="Save this search as a preset"
+    )
+
+    docs.add_argument(
+        "--save_docs",
+        action="store_true",
+        help="Save the documents retrieved from the listings",
+    )
+
     analysis.add_argument(
         "--level1", action="store_true", help="Creates a level 1 analysis report"
     )
@@ -863,7 +932,9 @@ def main():  # pragma: no cover
         "--level3", action="store_true", help="Creates a level 3 analysis report"
     )
 
-    args = resolve_args(parser.parse_args())
+    args = parser.parse_args()
+    args = apply_url_to_args(args)
+    args = resolve_args(args)
     asyncio.run(scrape(args))
 
 
