@@ -11,7 +11,7 @@ KBB_LOOKUP_TRIM_URL = KBB_LOOKUP_BASE_URL + "/{trim}/"
 
 
 KBB_VARIANT_CACHE = cache_path = Path("cache") / "kbb.cache"
-PRICING_CACHE = Path("cache") / "level1_pricing.cache"
+PRICING_CACHE = Path("cache") / "pricing.cache"
 CACHE_TTL = timedelta(days=7)
 
 BAD_STRINGS = {"", "unavailable", "n/a", "none", "null", "-", "not specified"}
