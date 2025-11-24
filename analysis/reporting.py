@@ -198,9 +198,9 @@ def build_level2_bins(ratings: list) -> tuple[list, list, list, int, int, int]:
             suspicious_count += 1
 
     # Re-order bins by risk score
-    great_bin = sorted(great_bin, key=lambda rating: rating[2])
-    good_bin = sorted(good_bin, key=lambda rating: rating[2])
-    fair_bin = sorted(fair_bin, key=lambda rating: rating[2])
+    great_bin = sorted(great_bin, key=lambda r: (r[2], r[0].get("price")))
+    good_bin = sorted(good_bin, key=lambda r: (r[2], r[0].get("price")))
+    fair_bin = sorted(fair_bin, key=lambda r: (r[2], r[0].get("price")))
 
     return great_bin, good_bin, fair_bin, poor_count, bad_count, suspicious_count
 
