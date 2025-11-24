@@ -321,7 +321,9 @@ class StructuralStatus(str, Enum):
 
 class DamageSeverity(str, Enum):
     MINOR = "minor"
+    MINOR_TO_MODERATE = "minor to moderate"
     MODERATE = "moderate"
+    MODERATE_TO_SEVERE = "moderate to severe"
     SEVERE = "severe"
 
 
@@ -413,8 +415,12 @@ class CarfaxData:
             event_summary = event.get("summary", "").lower()
             if "minor damage" in event_summary:
                 damages.append(DamageSeverity.MINOR)
+            elif "minor to moderate" in event_summary:
+                damages.append(DamageSeverity.MINOR_TO_MODERATE)
             elif "moderate damage" in event_summary:
                 damages.append(DamageSeverity.MODERATE)
+            elif "moderate to severe" in event_summary:
+                damages.append(DamageSeverity.MODERATE_TO_SEVERE)
             elif "severe damage" in event_summary:
                 damages.append(DamageSeverity.SEVERE)
             else:

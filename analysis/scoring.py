@@ -17,12 +17,16 @@ from utils.models import (
 
 SEVERITY_SCORES: dict[DamageSeverity, float] = {
     DamageSeverity.MINOR: 1.0,
+    DamageSeverity.MINOR_TO_MODERATE: 1.75,
     DamageSeverity.MODERATE: 2.5,
+    DamageSeverity.MODERATE_TO_SEVERE: 3.75,
     DamageSeverity.SEVERE: 5.0,
 }
 SEVERITY_LABELS = {
     DamageSeverity.MINOR: "minor",
+    DamageSeverity.MINOR_TO_MODERATE: "minor to moderate",
     DamageSeverity.MODERATE: "moderate",
+    DamageSeverity.MODERATE_TO_SEVERE: "moderate to severe",
     DamageSeverity.SEVERE: "severe",
 }
 STRUCTURAL_SCORES: dict[StructuralStatus, float] = {
@@ -286,7 +290,7 @@ def get_cumulative_damage_score(
         multiplier = 1 if i == 0 else 1.1 + (0.05 * (i - 1))
         score += base * multiplier
     if score:
-        severity_groups = [list(s) for k, s in groupby(severities)]
+        severity_groups = [list(s) for _, s in groupby(severities)]
         totals = []
         for group in severity_groups:
             count = len(group)
