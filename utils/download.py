@@ -18,7 +18,7 @@ DEVTOOLS_PORT = 9223
 
 CARFAX_PAT = re.compile(r"(carfax\.com/vehiclehistory)", re.I)
 AUTOCHECK_PAT = re.compile(r"(autocheck\.web\.dealer\.com|autocheck\.aspx)", re.I)
-UNAVAIL_PAT = re.compile(r"*unavailable*", re.I)
+UNAVAIL_PAT = re.compile(r"unavailable", re.I)
 
 PROVIDERS = {
     "carfax": {
@@ -473,9 +473,8 @@ def _collect_report_jobs(listings: Iterable[dict]) -> list[tuple[str, str, Path]
                 continue
             folder = os.path.join(DOC_PATH, title, vin)
             out_path: Path = Path(folder) / meta["file"]
-            unavail = Path(folder) / meta["unavailable"]
 
-            if (out_path.exists() and out_path.stat().st_size > 0) or unavail.exists():
+            if out_path.exists() and out_path.stat().st_size > 0:
                 continue
 
             jobs.append((provider, url, out_path))
