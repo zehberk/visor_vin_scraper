@@ -253,74 +253,92 @@
 				and condition/price mismatches worth a second look.
 			</p>
 			{% set t = outliers.thresholds %}
-			<p>
-				<span class="bold-highlight">Strong Underpriced:</span>
-				{{ outliers.strong_underpriced.count }} (≤ {{ t.under_pct|abs }}% below
-				FMV/FPP)
-				{% if outliers.strong_underpriced.examples %}
-					<div class="example-lines">
-						{% for ex in outliers.strong_underpriced.examples %}
-							<div>— {{ ex }}</div>
-						{% endfor %}
-					</div>
-				{% endif %}
-			</p>
-			<p>
-				<span class="bold-highlight">Strong Overpriced:</span>
-				{{ outliers.strong_overpriced.count }} (≥ {{ t.over_pct }}% above
-				FMV/FPP)
-				{% if outliers.strong_overpriced.examples %}
-					<div class="example-lines">
-						{% for ex in outliers.strong_overpriced.examples %}
-							<div>— {{ ex }}</div>
-						{% endfor %}
-					</div>
-				{% endif %}
-			</p>
-			<p>
-				<span class="bold-highlight">Condition / Price Mismatch:</span>
-				{{ outliers.cond_price_mismatch.count }}
-				{% if outliers.cond_price_mismatch.examples %}
-					<div class="example-lines">
-						{% for ex in outliers.cond_price_mismatch.examples %}
-							<div>— {{ ex }}</div>
-						{% endfor %}
-					</div>
-				{% endif %}
-			</p>
-			<p>
-				<span class="bold-highlight">Mileage / Price Tension:</span>
-				{{ outliers.miles_price_tension.count }}
-				{% if outliers.miles_price_tension.examples %}
-					<div class="example-lines">
-						{% for ex in outliers.miles_price_tension.examples %}
-							<div>— {{ ex }}</div>
-						{% endfor %}
-					</div>
-				{% endif %}
-			</p>
-			<p>
-				<span class="bold-highlight">Price Whiplash:</span>
-				{{ outliers.price_whiplash.count }} (≥ {{ pct(t.drop_usd) }})
-				{% if outliers.price_whiplash.examples %}
-					<div class="example-lines">
-						{% for ex in outliers.price_whiplash.examples %}
-							<div>— {{ ex }}</div>
-						{% endfor %}
-					</div>
-				{% endif %}
-			</p>
-			<p>
-				<span class="bold-highlight">High-Risk Bargains:</span>
-				{{ outliers.highrisk_bargains.count }}
-				{% if outliers.highrisk_bargains.examples %}
-					<div class="example-lines">
-						{% for ex in outliers.highrisk_bargains.examples %}
-							<div>— {{ ex }}</div>
-						{% endfor %}
-					</div>
-				{% endif %}
-			</p>
+			{% if outliers.strong_underpriced.count > 0 %}
+				<p>
+					<span class="bold-highlight">Strong Underpriced:</span>
+					{{ outliers.strong_underpriced.count }} (≤ {{ t.under_pct|abs }}% below
+					FMV/FPP)
+					{% if outliers.strong_underpriced.examples %}
+						<div class="example-lines">
+							{% for ex in outliers.strong_underpriced.examples %}
+								<div>— {{ ex }}</div>
+							{% endfor %}
+						</div>
+					{% endif %}
+				</p>
+			{% endif %}
+			
+			{% if outliers.strong_overpriced.count > 0 %}
+				<p>
+					<span class="bold-highlight">Strong Overpriced:</span>
+					{{ outliers.strong_overpriced.count }} (≥ {{ t.over_pct }}% above
+					FMV/FPP)
+					{% if outliers.strong_overpriced.examples %}
+						<div class="example-lines">
+							{% for ex in outliers.strong_overpriced.examples %}
+								<div>— {{ ex }}</div>
+							{% endfor %}
+						</div>
+					{% endif %}
+				</p>
+			{% endif %}
+
+			{% if outliers.cond_price_mismatch.count > 0 %}
+				<p>
+					<span class="bold-highlight">Condition / Price Mismatch:</span>
+					{{ outliers.cond_price_mismatch.count }}
+					{% if outliers.cond_price_mismatch.examples %}
+						<div class="example-lines">
+							{% for ex in outliers.cond_price_mismatch.examples %}
+								<div>— {{ ex }}</div>
+							{% endfor %}
+						</div>
+					{% endif %}
+				</p>
+			{% endif %}
+
+
+			{% if outliers.miles_price_tension.count > 0 %}
+				<p>
+					<span class="bold-highlight">Mileage / Price Tension:</span>
+					{{ outliers.miles_price_tension.count }}
+					{% if outliers.miles_price_tension.examples %}
+						<div class="example-lines">
+							{% for ex in outliers.miles_price_tension.examples %}
+								<div>— {{ ex }}</div>
+							{% endfor %}
+						</div>
+					{% endif %}
+				</p>
+			{% endif %}
+			
+			{% if outliers.price_whiplash.count > 0 %}
+				<p>
+					<span class="bold-highlight">Price Whiplash:</span>
+					{{ outliers.price_whiplash.count }} (≥ {{ pct(t.drop_usd) }})
+					{% if outliers.price_whiplash.examples %}
+						<div class="example-lines">
+							{% for ex in outliers.price_whiplash.examples %}
+								<div>— {{ ex }}</div>
+							{% endfor %}
+						</div>
+					{% endif %}
+				</p>
+			{% endif %}
+			
+			{% if outliers.highrisk_bargains.count > 0 %}
+				<p>
+					<span class="bold-highlight">High-Risk Bargains:</span>
+					{{ outliers.highrisk_bargains.count }}
+					{% if outliers.highrisk_bargains.examples %}
+						<div class="example-lines">
+							{% for ex in outliers.highrisk_bargains.examples %}
+								<div>— {{ ex }}</div>
+							{% endfor %}
+						</div>
+					{% endif %}
+				</p>
+			{% endif %}
 
 			<!-- #endregion -->
 			<br />
