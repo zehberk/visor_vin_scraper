@@ -357,5 +357,9 @@ def normalize_listing(listing: dict) -> dict:
         "report_present": carfax_present or autocheck_present,
         "window_sticker_present": sticker_present,
         "warranty_info_present": warranty_present,
-        "coverages": listing.get("warranty", {}).get("coverages", []),  # Level 2
+        # Level 2
+        "coverages": listing.get("warranty", {}).get("coverages", []),
+        "seller": listing.get("seller", {}),
+        "visor_listing": f"https://visor.vin/search/listings/{listing.get("vin")}",
+        "dealer_listing": listing.get("listing_url"),
     }
