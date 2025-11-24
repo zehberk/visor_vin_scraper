@@ -160,7 +160,7 @@ def categorize_price_tier(
 
 def rate_risk_level1(listing, price, compare_value) -> str:
     year = int(listing["title"][:4])
-    avg_miles_per_day = 13500 / 365
+    avg_miles_per_day = 15000 / 365
     est_days_since_manufacture = (datetime.now() - datetime(year, 1, 1)).days
     expected_miles = est_days_since_manufacture * avg_miles_per_day
     mileage = int(listing["mileage"])
@@ -490,7 +490,7 @@ def score_mileage_use(carfax: CarfaxData, listing: dict, narrative: list[str]) -
     if years_difference <= 0:
         return 0.0
 
-    expected = years_difference * 13500
+    expected = years_difference * 15000
     actual = max(carfax.last_odometer_reading, int(listing["mileage"]))
     deviation = (actual - expected) / expected
     percent_diff = deviation * 100
