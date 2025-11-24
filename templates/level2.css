@@ -16,52 +16,12 @@ body {
 	margin: 0;
 	/* border-bottom: 2px solid #e5e5e5; */
 }
-h1 {
+body h1 {
 	font-size: 20pt;
 	font-weight: 600;
 	margin-bottom: 0.6em;
 	border-bottom: 2px solid #e5e5e5;
-	/* lighter divider */
 	padding-bottom: 0.3em;
-}
-h2 {
-	font-size: 14pt;
-	font-weight: 500;
-	margin-top: 1.5em;
-	margin-bottom: 0.6em;
-	color: #333;
-	page-break-before: avoid;
-	page-break-after: avoid;
-}
-h3 {
-	font-size: 12pt;
-	font-weight: 400;
-	margin-top: 1.5em;
-	margin-bottom: 0.6em;
-	color: #333;
-	page-break-after: avoid;
-	break-after: avoid-page;
-}
-main h3 {
-	font-size: 12pt;
-	font-weight: 500;
-	border-left: 3px solid #0066cc;
-	padding-left: 0.4em;
-	color: #222;
-}
-
-footer {
-	border-top: 2px solid #e5e5e5;
-	margin-top: 2em;
-	padding-top: 1em;
-}
-footer h3 {
-	font-size: 11pt;
-	font-weight: 600; /* stronger than body but not overpowering */
-	color: #444; /* darker than current #555 */
-	border-bottom: 1px solid #ddd;
-	padding-bottom: 0.2em;
-	margin-top: 1.2em;
 }
 
 .footnote {
@@ -88,9 +48,17 @@ footer h3 {
 	margin-top: 20px;
 	page-break-inside: avoid;
 	break-inside: avoid;
+	border-bottom: 2px solid #e5e5e5;
+	padding-bottom: 2em;
 }
-.filtered-out h2 {
+.filtered-out h3 {
 	margin-top: 0 !important;
+	font-size: 14pt;
+	font-weight: 600;
+	margin-bottom: 0.6em;
+	color: #333;
+	page-break-after: avoid;
+	break-after: avoid-page;
 }
 .no-break {
 	page-break-inside: avoid;

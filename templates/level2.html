@@ -8,8 +8,6 @@
 		<h1>{{ report_title }}</h1>
 		<h3 class="footnote">Generated: {{ generated_at }}</h3>
 		<section class="intro">
-			{# <h3 class="section-label">Report Summary</h3> #}
-			{# <hr /> #}
 			<p class="criteria">{{ summary }}</p>
 			<p class="overview">
 				Building on Level 1 findings, this Level 2 report incorporates verified
@@ -108,7 +106,7 @@
 			{% endfor %}
 			<div class="filtered-out">
 				<div class="no-break">
-					<h2>Filtered out:</h2>
+					<h3>Filtered out:</h3>
 					<div>
 						🟠 {{ poor_count }} Poor Deals, 🔴 {{ bad_count }} Bad Deals, 🕵️
 						{{ sus_count }} Suspicious Deals
@@ -121,7 +119,7 @@
 	</body>
 	<footer>
 		<div style="page-break-before: always;"></div>
-		<div class="methodology">
+		<div>
 			<h2>Methodology</h2>
 			<ul>
 				<li>Listings must have an available Carfax report to qualify.</li>
@@ -145,6 +143,63 @@
 					Bad, Poor, and Suspicious deals are excluded from the main report.
 				</li>
 			</ul>
+		</div>
+		<div>
+			<h2>Definitions and Clarifications</h2>
+			<h4>Deal Bin/Pricing Calculations</h4>
+			<p>
+				When we search Kelley Blue Books for pricing data, we obtain 4 price
+				amounts:
+			</p>
+			<ul>
+				<li>
+					MRSP, the factory-set price (which we do not use for calculations at
+					this stage)
+				</li>
+				<li>
+					National Fair Purchase Price (FPP), the average price this particular
+					year and model are sold nationally
+				</li>
+				<li>Local Fair Purchase Price, which is based on your area</li>
+				<li>
+					Fair Market Value (FMV), which is the price this vehicle would be sold
+					privately and not through a dealership
+				</li>
+			</ul>
+			<p>
+				We use the local FPP first, as it gives us a fair market range to work
+				with. Using that range, we can calculate exactly what a Fair, Good, or
+				Great deal will be. In the absence of a local FPP, we use the national
+				FPP, but we must default to a set dollar amount for calculating deal
+				strength. If that fails, we rely on FMV, following the same rules as the
+				national FPP.
+			</p>
+			<p>
+				These numbers will vary across years and trims, which is why they all
+				have different bin and midpoint values.
+			</p>
+
+			<h4>Mileage Deviations</h4>
+			<p>
+				Mileage deviation refers to the amount of miles a vehicle has been
+				driven more or less than the industry average of 15,000. This number is
+				used by the US Government, Kelley Blue Books, and Carfax.
+			</p>
+			<h4>Structural indicators</h4>
+			<p>
+				When an impact occurs, there is always risk of structural issues. The
+				greater the damage, the more chance there is a problem. We grade it on a
+				scale, with minor damages slightly impacting this part of the risk, and
+				major or severe damage impacting it greatly. This cannot be confirmed
+				through a Carfax report, so an inspection is highly recommended.
+			</p>
+			<h4>Warranty Status</h4>
+			<p>
+				Warranty status only indicates the basic out-of-the-factory warranty.
+				When an accident occurs, that warranty is usually voided. The lack of
+				warranty does not impact the risk, but warranty still in place can lower
+				the risk level.
+			</p>
 		</div>
 	</footer>
 </html>
