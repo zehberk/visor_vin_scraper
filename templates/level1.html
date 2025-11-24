@@ -49,12 +49,14 @@
 		{%- endmacro %}
 
 		{% macro render_bin(emoji, title, bin, cache_entries) -%}
-			<h2>{{ emoji }} {{ title }} Deals</h2>
-			<ul class="deal-bin">
-				{% for listing in bin.listings %}
-					<li>{{ listing_row(listing, cache_entries) }}</li>
-				{% endfor %}
-			</ul>
+			{% if bin|length > 0 %}
+				<h2>{{ emoji }} {{ title }} Deals</h2>
+				<ul class="deal-bin">
+					{% for listing in bin.listings %}
+						<li>{{ listing_row(listing, cache_entries) }}</li>
+					{% endfor %}
+				</ul>
+			{% endif %}
 		{%- endmacro %}
 
 		<!-- #endregion -->
