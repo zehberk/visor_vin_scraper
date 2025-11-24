@@ -143,19 +143,22 @@ footer h3 {
 
 /* Fair */
 .fair-listing {
-	border-left: 6px solid #f1c40f;
+	--accent-color: #f1c40f;
+	border-left: 6px solid var(--accent-color);
 	background: #f1c40f15;
 }
 
 /* Good */
 .good-listing {
-	border-left: 6px solid #3498db;
+	--accent-color: #3498db;
+	border-left: 6px solid var(--accent-color);
 	background: #3498db15;
 }
 
 /* Great */
 .great-listing {
-	border-left: 6px solid #2ecc71;
+	--accent-color: #2ecc71;
+	border-left: 6px solid var(--accent-color);
 	background: #2ecc7115;
 }
 
@@ -165,6 +168,17 @@ footer h3 {
 	font-weight: 600;
 	margin-bottom: 0.3rem;
 	color: #222;
+	position: relative;
+}
+
+.visor-link {
+	color: var(--accent-color);
+	/* font-weight: lighter; */
+	font-size: smaller;
+	text-decoration: none;
+	/* float: right; */
+	position: absolute;
+	right: 20%;
 }
 
 .downgrade-tag {
@@ -184,21 +198,7 @@ footer h3 {
 	width: 80%;
 	height: 3px;
 	margin-bottom: 0.3rem;
-}
-
-/* Color matching for each deal rating */
-.great-listing .listing-title-bar {
-	background: #2ecc71;
-	opacity: 0.35;
-}
-
-.good-listing .listing-title-bar {
-	background: #3498db;
-	opacity: 0.35;
-}
-
-.fair-listing .listing-title-bar {
-	background: #f1c40f;
+	background: var(--accent-color); /* Color matching for each deal rating */
 	opacity: 0.35;
 }
 
@@ -220,9 +220,14 @@ footer h3 {
 	overflow-wrap: break-word;
 }
 
-/* Specs */
 .listing-specs strong {
 	white-space: normal;
+}
+
+.dealer-link {
+	color: var(--accent-color);
+	text-decoration: none;
+	font-weight: 600;
 }
 
 /* Notes block */

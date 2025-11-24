@@ -38,12 +38,17 @@
 			{% set narrative = rating[3] %}
 			{% set last_line = narrative[-1] %}
 			{% set is_downgraded = "downgraded" in last_line.lower() %}
+			{% set seller_name = listing.seller.name if listing.seller.name else "N/A" %}
+			{% set seller_location = listing.seller.location if listing.seller.location else "N/A" %}
 
 			<div class="listing-title">
 				{{ listing.title }}
 				{% if is_downgraded %}
 					<span class="downgrade-tag">Downgraded</span>
 				{% endif %}
+				<a class="visor-link" href="{{ listing.visor_listing }}"
+					>View on Visor ↗</a
+				>
 			</div>
 
 			<div class="listing-title-bar"></div>
@@ -59,6 +64,14 @@
 				</div>
 				<div class="listing-specs-item">
 					Risk Score: <strong>{{ risk }}</strong>
+				</div>
+				<div class="listing-specs-item">
+					Dealer: <strong>{{ seller_name }} - {{ seller_location }}</strong>
+				</div>
+				<div class="listing-specs-item">
+					<a class="dealer-link" href="{{ listing.dealer_listing }}"
+						>View Dealer Listing ↗</a
+					>
 				</div>
 			</div>
 			<div class="listing-notes">
