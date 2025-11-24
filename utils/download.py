@@ -18,6 +18,7 @@ DEVTOOLS_PORT = 9223
 
 CARFAX_PAT = re.compile(r"(carfax\.com/vehiclehistory)", re.I)
 AUTOCHECK_PAT = re.compile(r"(autocheck\.web\.dealer\.com|autocheck\.aspx)", re.I)
+UNAVAIL_PAT = re.compile(r"*unavailable*", re.I)
 
 PROVIDERS = {
     "carfax": {
@@ -459,19 +460,19 @@ def _print_to_pdf(ws, sid: str, out_path: Path):
     out_path.write_bytes(base64.b64decode(data_b64))
 
 
-def _collect_report_jobs(listings: Iterable[dict]):
+def _collect_report_jobs(listings: Iterable[dict]) -> list[tuple[str, str, Path]]:
     jobs = []
     for lst in listings:
         title, vin = lst.get("title"), lst.get("vin")
         if not title or not vin:
             continue
-        doc = lst.get("additional_docs") or {}
+        doc: dict = lst.get("additional_docs") or {}
         for provider, meta in PROVIDERS.items():
-            url = doc.get(meta["key"])
+            url: str = doc.get(meta["key"], "")
             if not url or url == "Unavailable":
                 continue
             folder = os.path.join(DOC_PATH, title, vin)
-            out_path = Path(folder) / meta["file"]
+            out_path: Path = Path(folder) / meta["file"]
             unavail = Path(folder) / meta["unavailable"]
 
             if (out_path.exists() and out_path.stat().st_size > 0) or unavail.exists():
@@ -573,6 +574,11 @@ def download_report_pdfs(listings: Iterable[dict]) -> None:
                     html_path = out_path.with_suffix(".html")
                     html_source = _eval(ws, sid, "document.documentElement.outerHTML")
                     html_path.write_text(html_source, encoding="utf-8")
+
+                    # Clean up old files
+                    for f in out_path.parent.glob("*"):
+                        if f.is_file() and UNAVAIL_PAT.search(f.name):
+                            f.unlink()
             except Exception:
                 try:
                     out_path.parent.mkdir(parents=True, exist_ok=True)
