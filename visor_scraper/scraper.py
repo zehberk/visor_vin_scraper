@@ -276,8 +276,11 @@ async def extract_market_velocity(page, listing, index, metadata):
             demand_el = await sections[2].query_selector(DEMAND_ELEMENT)
             if demand_el:
                 text = await demand_el.inner_text()
-                percent = int(text.strip().replace("% chance", ""))
-                market_velocity["sell_chance_7d"] = round(percent / 100, 2)
+                if text.lower().strip() != "not available":
+                    percent = int(text.strip().replace("% chance", ""))
+                    market_velocity["sell_chance_7d"] = round(percent / 100, 2)
+                else:
+                    market_velocity["sell_chance_7d"] = text
 
         if market_velocity:
             listing["market_velocity"] = market_velocity
