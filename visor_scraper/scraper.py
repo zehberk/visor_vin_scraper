@@ -686,13 +686,14 @@ async def scrape(args: Namespace):
     listings = []
 
     async with async_playwright() as pw:
-        browser = await pw.chromium.launch(headless=True)
+        browser = await pw.chromium.launch(headless=False)
         page = await browser.new_page()
 
         if not await fetch_page(page, url):
             await browser.close()
             return
         await extract_sidebar_data(page, metadata)
+        await asyncio.sleep(30)
         if args.max_listings > 50:
             await auto_scroll_to_load_all(page, metadata, args.max_listings)
         else:
