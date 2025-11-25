@@ -1,0 +1,182 @@
+@page {
+	margin: 0.8in;
+}
+
+html,
+body {
+	-webkit-print-color-adjust: exact;
+	print-color-adjust: exact;
+}
+body {
+	font-family: "Segoe UI", Helvetica, Arial, sans-serif;
+	font-size: 11pt;
+	line-height: 1.5;
+	color: #1e1e1e;
+	background-color: #fff;
+	margin: 0;
+	/* border-bottom: 2px solid #e5e5e5; */
+}
+body h1 {
+	font-size: 20pt;
+	font-weight: 600;
+	margin-bottom: 0.6em;
+	border-bottom: 2px solid #e5e5e5;
+	padding-bottom: 0.3em;
+}
+
+.footnote {
+	font-size: 9pt;
+	font-style: italic;
+	color: #666;
+	margin-top: -0.5em;
+	margin-bottom: 1em;
+	font-weight: 400;
+	border-left: 0;
+	padding-left: 0;
+}
+
+.deal-bin {
+	list-style-type: none;
+	padding-left: 0;
+	margin-bottom: 1em;
+	margin-right: 4px;
+	page-break-inside: auto; /* allow breaks inside the bin */
+	break-inside: auto;
+}
+
+.intro {
+	margin: 1rem 0 1.5rem;
+	padding: 0.6rem 1rem;
+	border-left: 3px solid #999999; /* subtle neutral accent */
+	border-radius: 0;
+	border-top: 0;
+	border-right: 0;
+	border-bottom: 0;
+	background: none;
+}
+.intro p {
+	margin: 0.4rem 0;
+	line-height: 1.5;
+}
+
+.section-header {
+	font-size: 20px;
+	font-weight: 600;
+	margin-top: 28px;
+	margin-bottom: 12px;
+}
+
+/* Entire listing container */
+.listing {
+	padding: 0.6rem 1rem 0.8rem 1.4rem;
+	border-radius: 4px;
+	page-break-inside: avoid;
+	margin-bottom: 20px;
+	box-sizing: border-box;
+}
+
+/* Fair */
+.fair-listing {
+	--accent-color: #f1c40f;
+	border-left: 6px solid var(--accent-color);
+	background: #f1c40f15;
+}
+
+/* Good */
+.good-listing {
+	--accent-color: #3498db;
+	border-left: 6px solid var(--accent-color);
+	background: #3498db15;
+}
+
+/* Great */
+.great-listing {
+	--accent-color: #2ecc71;
+	border-left: 6px solid var(--accent-color);
+	background: #2ecc7115;
+}
+
+/* Title */
+.listing-title {
+	font-size: 12pt;
+	font-weight: 600;
+	margin-bottom: 0.3rem;
+	color: #222;
+	position: relative;
+}
+
+.visor-link {
+	color: var(--accent-color);
+	/* font-weight: lighter; */
+	font-size: smaller;
+	text-decoration: none;
+	/* float: right; */
+	position: absolute;
+	right: 20%;
+}
+
+.downgrade-tag {
+	display: inline-block;
+	background: #ffcccc;
+	color: #a00;
+	font-size: 8.5pt;
+	font-weight: 600;
+	padding: 1px 6px;
+	border-radius: 4px;
+	margin-left: 6px;
+	vertical-align: middle;
+}
+
+/* Title bar under the listing title */
+.listing-title-bar {
+	width: 80%;
+	height: 3px;
+	margin-bottom: 0.3rem;
+	background: var(--accent-color); /* Color matching for each deal rating */
+	opacity: 0.35;
+}
+
+.listing-specs {
+	margin-bottom: 0.3rem;
+}
+
+.compact-grid {
+	display: grid;
+	/* grid-template-columns: repeat(2, 1fr); */
+	grid-template-columns: calc(50% - 0.4rem) calc(50% - 0.4rem);
+	column-gap: 0.8rem;
+	row-gap: 0.15rem;
+	font-size: 9.5pt;
+}
+
+.listing-specs-item {
+	margin-bottom: 0.1rem;
+	overflow-wrap: break-word;
+}
+
+.listing-specs strong {
+	white-space: normal;
+}
+
+.dealer-link {
+	color: var(--accent-color);
+	text-decoration: none;
+	font-weight: 600;
+}
+
+/* Notes block */
+.listing-notes {
+	font-size: 9.5pt;
+}
+
+.listing-notes ul {
+	list-style-type: disc !important;
+	list-style-position: outside !important;
+	margin-left: 1rem !important;
+	padding-left: 0.5rem !important;
+}
+
+.note-line {
+	margin-bottom: 2px;
+	line-height: 0.9rem;
+}
