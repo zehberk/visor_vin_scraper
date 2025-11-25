@@ -362,4 +362,7 @@ def normalize_listing(listing: dict) -> dict:
         "seller": listing.get("seller", {}),
         "visor_listing": f"https://visor.vin/search/listings/{listing.get("vin")}",
         "dealer_listing": listing.get("listing_url"),
+        # Level 3
+        "market_velocity": listing.get("market_velocity", {}),
+        "price_history": listing.get("price_history", []),
     }
