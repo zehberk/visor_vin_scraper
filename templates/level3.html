@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<title>Level 3 Analysis Report - {{ make }} {{ model }}</title>
+	</head>
+
+	<body>
+		<h1>{{ report_title }}</h1>
+		<h3 class="footnote">Generated: {{ generated_at }}</h3>
+
+		<section class="intro"></section>
+        <section class="tactics"></section>
+
+        {% macro miles(n) -%}{{ "{:,}".format(n) }}{%- endmacro %}
+		{% macro money(n) -%}{{ "${:,.0f}".format(n) }}{%- endmacro %}
+
+		{% macro vehicle_row(rating) -%}
+			<!-- 0: listing, 1: deal, 2: risk, 3: narrative -->
+			{% set listing = rating[0] %}
+			{% set deal = rating[1] %}
+			{% set risk = rating[2] %}
+			{% set narrative = rating[3] %}
+			{% set last_line = narrative[-1] %}
+			{% set is_downgraded = "downgraded" in last_line.lower() %}
+			{% set seller_name = listing.seller.name if listing.seller.name else "N/A" %}
+			{% set seller_location = listing.seller.location if listing.seller.location else "N/A" %}
+
+			<div class="listing-title">
+				{{ listing.title }}
+				{% if is_downgraded %}
+					<span class="downgrade-tag">Downgraded</span>
+				{% endif %}
+				<a class="visor-link" href="{{ listing.visor_listing }}"
+					>View on Visor ↗</a
+				>
+			</div>
+
+			<div class="listing-title-bar"></div>
+			<div class="listing-specs compact-grid">
+				<div class="listing-specs-item">
+					VIN: <strong>{{ listing.vin }}</strong>
+				</div>
+				<div class="listing-specs-item">
+					Mileage: <strong>{{ miles(listing.mileage) }}</strong>
+				</div>
+				<div class="listing-specs-item">
+					Listing Price: <strong>{{ money(listing.price) }}</strong>
+				</div>
+				<div class="listing-specs-item">
+					Risk Score: <strong>{{ risk }}</strong>
+				</div>
+				<div class="listing-specs-item">
+					Dealer: <strong>{{ seller_name }} - {{ seller_location }}</strong>
+				</div>
+				<div class="listing-specs-item">
+					<a class="dealer-link" href="{{ listing.dealer_listing }}"
+						>View Dealer Listing ↗</a
+					>
+				</div>
+			</div>
+			<div class="listing-notes">
+				<strong>Notes:</strong>
+				<ul>
+					{% for line in narrative %}
+						<li class="note-line">{{ line }}</li>
+					{% endfor %}
+				</ul>
+			</div>
+		{%- endmacro %}
+
+		{% macro render_bin(emoji, title, cls, bin) -%}
+			{% if bin|length > 0 %}
+				<h2 class="section-header">{{ emoji }} {{ title }} Deals</h2>
+				<div class="deal-bin">
+					{% for rating in bin %}
+						<div class="listing {{ cls }}">{{ vehicle_row(rating) }}</div>
+					{% endfor %}
+				</div>
+			{% endif %}
+		{%- endmacro %}
+		<section>
+			<!-- #region Deal Ratings -->
+			{%
+				set bins = [
+					{"emoji":"🟢","title":"Great","cls":"great-listing","bin":great_bin},
+					{"emoji":"🔵","title":"Good","cls":"good-listing","bin":good_bin},
+					{"emoji":"🟡","title":"Fair","cls":"fair-listing","bin":fair_bin},
+				]
+			%}
+			{% for b in bins %}
+				{{ render_bin(b.emoji, b.title, b.cls, b.bin) }}
+			{% endfor %}
+	</body>
+    <footer>
+    </footer>
+</html>
