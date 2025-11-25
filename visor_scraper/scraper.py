@@ -91,10 +91,10 @@ async def fetch_page(page, url):
         return False
 
 
-async def extract_numbers_from_sidebar(page, metadata):
-    sidebar = await page.query_selector("text=/\\d+ for sale nationwide/")
-    if sidebar:
-        text = await sidebar.inner_text()
+async def extract_sidebar_data(page: Page, metadata: dict):
+    for_sale_count = await page.query_selector("text=/\\d+ for sale nationwide/")
+    if for_sale_count:
+        text = await for_sale_count.inner_text()
         match = TOTAL_NATIONWIDE_REGEX.search(text)
         if match:
             metadata["site_info"]["total_for_sale"] = int(
@@ -103,6 +103,23 @@ async def extract_numbers_from_sidebar(page, metadata):
             logging.info(
                 f"Total for sale nationwide: {metadata["site_info"]["total_for_sale"]}"
             )
+
+    market_data = await page.query_selector("div.grid.grid-cols-2")
+    if market_data:
+        data_fields = await market_data.query_selector_all("div.space-y-2")
+        results = []
+        for field in data_fields:
+            value_el = await field.query_selector("button > div.font-medium")
+            value = await value_el.inner_text() if value_el else None
+            results.append(value)
+
+        if len(results) != 4:
+            logging.info("Unable to get market data for this search.")
+        else:
+            metadata["site_info"]["added_2w"] = results[0]
+            metadata["site_info"]["sold_2w"] = results[1]
+            metadata["site_info"]["avg_list_time"] = results[2]
+            metadata["site_info"]["market_days_supply"] = results[3]
 
 
 async def parse_warranty_coverage(coverage, index, metadata):
@@ -675,7 +692,7 @@ async def scrape(args: Namespace):
         if not await fetch_page(page, url):
             await browser.close()
             return
-        await extract_numbers_from_sidebar(page, metadata)
+        await extract_sidebar_data(page, metadata)
         if args.max_listings > 50:
             await auto_scroll_to_load_all(page, metadata, args.max_listings)
         else:
