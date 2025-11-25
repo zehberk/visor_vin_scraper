@@ -49,7 +49,7 @@
 		{%- endmacro %}
 
 		{% macro render_bin(emoji, title, bin, cache_entries) -%}
-			{% if bin|length > 0 %}
+			{% if bin.listings|length > 0 %}
 				<h2>{{ emoji }} {{ title }} Deals</h2>
 				<ul class="deal-bin">
 					{% for listing in bin.listings %}

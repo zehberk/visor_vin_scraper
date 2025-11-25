@@ -53,12 +53,12 @@ async def create_level1_file(listings: list[dict], metadata: dict):
         base_trim = item["base_trim"]
 
         msrp = int(cache_entries[cache_key].get("msrp"))
-        fpp_natl = int(cache_entries[cache_key].get("fpp_natl", 0))
-        fpp_local = int(cache_entries[cache_key].get("fpp_local", 0))
-        fmr_high = int(cache_entries[cache_key].get("fmr_high", 0))
-        fmv = int(cache_entries[cache_key].get("fmv", 0))
+        fpp_natl = int(cache_entries[cache_key].get("fpp_natl") or 0)
+        fpp_local = int(cache_entries[cache_key].get("fpp_local") or 0)
+        fmr_high = int(cache_entries[cache_key].get("fmr_high") or 0)
+        fmv = int(cache_entries[cache_key].get("fmv") or 0)
 
-        price = int(listing.get("price", 0))
+        price = int(listing.get("price") or 0)
         best_comparison = determine_best_price(price, fpp_local, fpp_natl, fmv, [])
         if not best_comparison:
             best_comparison = msrp  # It's okay to use MSRP for level 1

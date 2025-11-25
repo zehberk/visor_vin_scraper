@@ -269,6 +269,10 @@ def filter_valid_listings(
     skip_summary = defaultdict(lambda: defaultdict(int))
 
     for l in listings:
+        # No analysis for listings with no price
+        if not l.get("price"):
+            continue
+
         year = str(l["year"])
         trim_version = l.get(
             "trim_version", l.setdefault("specs", {}).get("trim_version", "")
