@@ -71,7 +71,7 @@ def put_cached_filename(args, filename: str) -> None:
 
 async def fetch_page(page, url):
     try:
-        await page.goto(url, timeout=60000)
+        await page.goto(url, timeout=30000)
         await page.wait_for_function(
             "(args) => !!(document.querySelector(args.sel) || document.body.innerText.includes(args.empty))",
             arg={"sel": LISTING_CARD_SELECTOR, "empty": NO_LISTINGS_FOUND_TEXT},
@@ -686,7 +686,7 @@ async def scrape(args: Namespace):
     listings = []
 
     async with async_playwright() as pw:
-        browser = await pw.chromium.launch(headless=False)
+        browser = await pw.chromium.launch(headless=True)
         page = await browser.new_page()
 
         if not await fetch_page(page, url):
@@ -792,19 +792,23 @@ def apply_url_to_args(args: Namespace):
         args.condition = qs["car_type"][0].split(",")
 
     if "price_min" in qs:
-        args.min_price = int(qs["price_min"][0])
+        val = qs["price_min"][0].strip('"')
+        args.min_price = int(val)
         args.price = None
 
     if "price_max" in qs:
-        args.max_price = int(qs["price_max"][0])
+        val = qs["price_max"][0].strip('"')
+        args.max_price = int(val)
         args.price = None
 
     if "miles_min" in qs:
-        args.min_miles = int(qs["miles_min"][0])
+        val = qs["miles_min"][0].strip('"')
+        args.min_miles = int(val)
         args.miles = None
 
     if "miles_max" in qs:
-        args.max_miles = int(qs["miles_max"][0])
+        val = qs["miles_max"][0].strip('"')
+        args.max_miles = int(val)
         args.miles = None
 
     if "sort" in qs:
