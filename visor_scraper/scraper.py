@@ -1,4 +1,4 @@
-import argparse, asyncio, json, logging, os, sys
+import argparse, asyncio, json, logging, os, sys, time
 
 from argparse import Namespace
 from datetime import date
@@ -71,7 +71,7 @@ def put_cached_filename(args, filename: str) -> None:
 
 async def fetch_page(page, url):
     try:
-        await page.goto(url, timeout=60000)
+        await page.goto(url, timeout=30000)
         await page.wait_for_function(
             "(args) => !!(document.querySelector(args.sel) || document.body.innerText.includes(args.empty))",
             arg={"sel": LISTING_CARD_SELECTOR, "empty": NO_LISTINGS_FOUND_TEXT},
@@ -92,6 +92,7 @@ async def fetch_page(page, url):
 
 
 async def extract_sidebar_data(page: Page, metadata: dict):
+    # start = time.perf_counter()
     for_sale_count = await page.query_selector("text=/\\d+ for sale nationwide/")
     if for_sale_count:
         text = await for_sale_count.inner_text()
@@ -100,9 +101,9 @@ async def extract_sidebar_data(page: Page, metadata: dict):
             metadata["site_info"]["total_for_sale"] = int(
                 match.group(1).replace(",", "")
             )
-            logging.info(
-                f"Total for sale nationwide: {metadata["site_info"]["total_for_sale"]}"
-            )
+            # logging.info(
+            #     f"Total for sale nationwide: {metadata["site_info"]["total_for_sale"]}"
+            # )
 
     market_data = await page.query_selector("div.grid.grid-cols-2")
     if market_data:
@@ -117,9 +118,11 @@ async def extract_sidebar_data(page: Page, metadata: dict):
             logging.info("Unable to get market data for this search.")
         else:
             metadata["site_info"]["added_2w"] = results[0]
-            metadata["site_info"]["sold_2w"] = results[1]
+            # metadata["site_info"]["sold_2w"] = results[1]     # Cookies disabled, can't read this
             metadata["site_info"]["avg_list_time"] = results[2]
-            metadata["site_info"]["market_days_supply"] = results[3]
+            # metadata["site_info"]["market_days_supply"] = results[3]    # Cookies disabled, can't read this
+    # elapsed = time.perf_counter() - start
+    # print(f"Elapsed: {elapsed:.4f} seconds")
 
 
 async def parse_warranty_coverage(coverage, index, metadata):
@@ -382,9 +385,9 @@ async def extract_spec_details(
             # 2-column row: special handling
             elif len(cells) == 2:
                 label = (await cells[0].inner_text()).strip().rstrip(":")
-                if cookies_valid and label == "Installed Options":
-                    await extract_install_options(page, listing, index, metadata)
-                elif cookies_valid and label == "Additional Documentation":
+                # if cookies_valid and label == "Installed Options":            # Cookies are dead, we cannot extract these anymore
+                #     await extract_install_options(page, listing, index, metadata)
+                if cookies_valid and label == "Additional Documentation":
                     await extract_additional_documents(page, listing, index, metadata)
                 elif label == "Seller":
                     await extract_seller_info(page, listing, index, metadata)
@@ -686,14 +689,14 @@ async def scrape(args: Namespace):
     listings = []
 
     async with async_playwright() as pw:
-        browser = await pw.chromium.launch(headless=False)
+        browser = await pw.chromium.launch(headless=True)
         page = await browser.new_page()
 
         if not await fetch_page(page, url):
             await browser.close()
             return
         await extract_sidebar_data(page, metadata)
-        await asyncio.sleep(30)
+
         if args.max_listings > 50:
             await auto_scroll_to_load_all(page, metadata, args.max_listings)
         else:
@@ -717,6 +720,10 @@ async def scrape(args: Namespace):
 
     if args.save_docs:
         await download_files(listings, filename)
+
+    # print(
+    #     f"Listings with carfax reports: {sum(1 for listing in listings if listing.get("additional_docs", {}).get("carfax_url") != "Unavailable")}"
+    # )
 
     await run_analysis(listings, metadata, args, timestamp, filename)
 
@@ -792,19 +799,23 @@ def apply_url_to_args(args: Namespace):
         args.condition = qs["car_type"][0].split(",")
 
     if "price_min" in qs:
-        args.min_price = int(qs["price_min"][0])
+        val = qs["price_min"][0].strip('"')
+        args.min_price = int(val)
         args.price = None
 
     if "price_max" in qs:
-        args.max_price = int(qs["price_max"][0])
+        val = qs["price_max"][0].strip('"')
+        args.max_price = int(val)
         args.price = None
 
     if "miles_min" in qs:
-        args.min_miles = int(qs["miles_min"][0])
+        val = qs["miles_min"][0].strip('"')
+        args.min_miles = int(val)
         args.miles = None
 
     if "miles_max" in qs:
-        args.max_miles = int(qs["miles_max"][0])
+        val = qs["miles_max"][0].strip('"')
+        args.max_miles = int(val)
         args.miles = None
 
     if "sort" in qs:
