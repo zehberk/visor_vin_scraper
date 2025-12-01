@@ -2,10 +2,15 @@
 import argparse, json, logging, math, os, re
 
 from argparse import Namespace
-from datetime import datetime
+from datetime import date, datetime
 from playwright.async_api import Page
 
-from utils.constants import MAX_LISTINGS, PARAM_NAME_OVERRIDES, SORT_OPTIONS
+from utils.constants import (
+    LISTINGS_CACHE,
+    MAX_LISTINGS,
+    PARAM_NAME_OVERRIDES,
+    SORT_OPTIONS,
+)
 
 
 def format_years(metadata_years: list[str]) -> str:
@@ -103,9 +108,62 @@ def current_timestamp():
     return datetime.now().strftime("%Y%m%d_%H%M%S")
 
 
-async def safe_text(card, selector, label, metadata, default="N/A"):
+def get_today_key() -> str:
+    return date.today().isoformat()
+
+
+def get_fingerprint(args) -> str:
+    sort_key = SORT_OPTIONS.get(args.sort, args.sort)  # normalize
+    parts = [
+        (args.make or "").lower().strip(),
+        (args.model or "").lower().strip(),
+        ",".join(sorted(args.trim)) if getattr(args, "trim", None) else "",
+        ",".join(args.year) if getattr(args, "year", None) else "",
+        sort_key,
+        str(args.max_listings),
+        ",".join(args.condition) if getattr(args, "condition", None) else "",
+        getattr(args, "price", "")
+        or f"{getattr(args,'min_price','')}-{getattr(args,'max_price','')}",
+        getattr(args, "miles", "")
+        or f"{getattr(args,'min_miles','')}-{getattr(args,'max_miles','')}",
+    ]
+    return "|".join(parts)
+
+
+def get_cache_key(args) -> str:
+    return f"{get_today_key()}|{get_fingerprint(args)}"
+
+
+def try_get_cached_filename(args) -> str | None:
+    cache = load_cache()
+    return cache.get(get_cache_key(args))
+
+
+def put_cached_filename(args, filename: str) -> None:
+    cache = load_cache()
+    cache[get_cache_key(args)] = filename
+    save_cache(cache)
+
+
+def load_cache() -> dict:
+    if LISTINGS_CACHE.exists():
+        try:
+            return json.loads(LISTINGS_CACHE.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+    return {}
+
+
+def save_cache(cache: dict) -> None:
+    LISTINGS_CACHE.parent.mkdir(parents=True, exist_ok=True)
+    LISTINGS_CACHE.write_text(
+        json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+
+async def safe_text(element, selector, label, metadata, default="") -> str:
     try:
-        element = await card.query_selector(selector)
+        element = await element.query_selector(selector)
         return await element.inner_text() if element else default
     except Exception as e:
         msg = f"Failed to read {label}: {e}"
@@ -114,12 +172,14 @@ async def safe_text(card, selector, label, metadata, default="N/A"):
         return default
 
 
-async def safe_inner_text(element, label, index, metadata):
+async def safe_inner_text(element, label, index, metadata, default="") -> str:
     try:
         return (await element.inner_text()).strip()
     except Exception as e:
-        metadata["warnings"].append(f"Listing #{index}: Failed to read {label}: {e}")
-        return None
+        msg = f"Listing #{index}: Failed to read {label}: {e}"
+        logging.warning(msg)
+        metadata["warnings"].append(msg)
+        return default
 
 
 def capped_max_listings(value):
@@ -267,73 +327,6 @@ def build_query_params(args: Namespace, metadata: dict) -> dict:
             cleaned[k] = ",".join(v) if isinstance(v, list) else v
 
     return cleaned
-
-
-def convert_browser_cookies_to_playwright(path):
-    # If file missing, just return empty
-    if not os.path.exists(path):
-        return []
-
-    with open(path, "r") as f:
-        content = f.read().strip()
-        if not content:  # empty file
-            return []
-
-    try:
-        raw_cookies = json.loads(content)
-    except Exception:
-        # Invalid JSON
-        return []
-
-    if not isinstance(raw_cookies, list) or not raw_cookies:
-        return []
-
-    playwright_cookies = []
-    for c in raw_cookies:
-        try:
-            playwright_cookie = {
-                "name": c["name"],
-                "value": c["value"],
-                "domain": c["domain"],
-                "path": c.get("path", "/"),
-                "secure": c.get("secure", False),
-                "httpOnly": c.get("httpOnly", False),
-                "sameSite": c.get("sameSite", "Lax").capitalize(),
-            }
-            if "expirationDate" in c:
-                # expirationDate is a float (Chrome), expires must be int (Playwright)
-                playwright_cookie["expires"] = int(math.floor(c["expirationDate"]))
-            playwright_cookies.append(playwright_cookie)
-        except KeyError:
-            continue
-
-    return playwright_cookies
-
-
-def cookies_file_is_empty(path: str = ".session/cookies.json") -> bool:
-    """Quick check: return True if no cookies are stored or file is invalid."""
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return not bool(data)
-    except Exception:
-        return True
-
-
-async def cookies_are_valid(page: Page) -> bool:
-    """
-    Confirm that cookies are still valid by checking for elements that require a subscription.
-    Returns False if cookies are missing/expired.
-    """
-    try:
-        await page.goto(
-            "https://visor.vin/search/listings?make=Mazda&model=Miata&agnostic=false",
-            timeout=3000,
-        )
-        await page.wait_for_selector("div.blur-xs", timeout=3000)
-        return False
-    except Exception:
-        return True
 
 
 async def get_url(page, selector, index, metadata):

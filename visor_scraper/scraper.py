@@ -16,59 +16,6 @@ from visor_scraper.helpers import *
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 
 
-def load_cache() -> dict:
-    if LISTINGS_CACHE.exists():
-        try:
-            return json.loads(LISTINGS_CACHE.read_text(encoding="utf-8"))
-        except Exception:
-            return {}
-    return {}
-
-
-def save_cache(cache: dict) -> None:
-    LISTINGS_CACHE.parent.mkdir(parents=True, exist_ok=True)
-    LISTINGS_CACHE.write_text(
-        json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
-
-
-def _today_key() -> str:
-    return date.today().isoformat()
-
-
-def _fingerprint(args) -> str:
-    sort_key = SORT_OPTIONS.get(args.sort, args.sort)  # normalize
-    parts = [
-        (args.make or "").lower().strip(),
-        (args.model or "").lower().strip(),
-        ",".join(sorted(args.trim)) if getattr(args, "trim", None) else "",
-        ",".join(args.year) if getattr(args, "year", None) else "",
-        sort_key,
-        str(args.max_listings),
-        ",".join(args.condition) if getattr(args, "condition", None) else "",
-        getattr(args, "price", "")
-        or f"{getattr(args,'min_price','')}-{getattr(args,'max_price','')}",
-        getattr(args, "miles", "")
-        or f"{getattr(args,'min_miles','')}-{getattr(args,'max_miles','')}",
-    ]
-    return "|".join(parts)
-
-
-def _cache_key(args) -> str:
-    return f"{_today_key()}|{_fingerprint(args)}"
-
-
-def try_get_cached_filename(args) -> str | None:
-    cache = load_cache()
-    return cache.get(_cache_key(args))
-
-
-def put_cached_filename(args, filename: str) -> None:
-    cache = load_cache()
-    cache[_cache_key(args)] = filename
-    save_cache(cache)
-
-
 async def fetch_page(page, url):
     try:
         await page.goto(url, timeout=30000)
@@ -352,7 +299,7 @@ async def extract_install_options(page, listing, index, metadata):
 
 
 async def extract_spec_details(
-    page: Page, listing: dict, index: int, metadata: dict, cookies_valid: bool
+    page: Page, listing: dict, index: int, metadata: dict
 ) -> bool:
     listing.setdefault("specs", {})
     specs = {}
@@ -387,7 +334,7 @@ async def extract_spec_details(
                 label = (await cells[0].inner_text()).strip().rstrip(":")
                 # if cookies_valid and label == "Installed Options":            # Cookies are dead, we cannot extract these anymore
                 #     await extract_install_options(page, listing, index, metadata)
-                if cookies_valid and label == "Additional Documentation":
+                if label == "Additional Documentation":
                     await extract_additional_documents(page, listing, index, metadata)
                 elif label == "Seller":
                     await extract_seller_info(page, listing, index, metadata)
@@ -462,37 +409,61 @@ async def extract_price_history(page, listing, index, metadata):
     listing["price_history"] = price_history
 
 
+async def extract_core_details(
+    page: Page, listing: dict, index: int, metadata: dict
+) -> None:
+    core_details_element = await page.query_selector(CORE_DETAILS_PARENT_DIV)
+    if not core_details_element:
+        msg = f"Unable to extract core details for {index}"
+        metadata["warnings"].append(msg)
+        return
+
+    title = await safe_text(
+        core_details_element, TITLE_ELEMENT, f"title #{index}", metadata
+    )
+    condition = await safe_text(
+        core_details_element, CONDITION_ELEMENT, f"condition #{index}", metadata
+    )
+
+    info_div = await core_details_element.query_selector(CORE_DETAILS_CHILD_DIV)
+    info_raw = await safe_inner_text(
+        info_div, "price, mileage, and listed days", index, metadata
+    )
+
+    parts = [p.strip() for p in info_raw.split("|")]
+
+    # We may convert to ints in the future
+    mileage = parts[0]
+    price = parts[1]
+    listed = parts[2]  # "Listed 1 day ago"
+
+    year = title[:4]
+    make = metadata["vehicle"]["make"]
+    model = metadata["vehicle"]["model"]
+
+    listing["title"] = title
+    listing["year"] = int(year)
+    listing["trim"] = (
+        title.replace(year, "", 1).replace(make, "", 1).replace(model, "", 1).strip(),
+    )
+    listing["price"] = price
+    listing["condition"] = condition
+    listing["mileage"] = mileage
+    listing["listed"] = listed
+
+    link = await page.query_selector(LISTING_URL_ELEMENT)
+    listing_url = await link.get_attribute("href") if link else None
+
+    listing["listing_url"] = listing_url
+
+
 async def extract_full_listing_details(
     browser: Browser,
     listing: dict,
     index: int,
     metadata: dict,
-    cookies_valid: bool | None = None,
-) -> bool:
-    if cookies_valid is None:
-        if cookies_file_is_empty(".session/cookies.json"):
-            cookies_valid = False
-            metadata["warnings"].append(
-                "Cookies file is empty, skipping subscription fields"
-            )
-        else:
-            context = await browser.new_context()
-            await context.add_cookies(
-                convert_browser_cookies_to_playwright(".session/cookies.json")
-            )
-            page = await context.new_page()
-            cookies_valid = await cookies_are_valid(page)
-            await page.close()
-            await context.close()
-            if not cookies_valid:
-                metadata["warnings"].append(
-                    "Cookies invalid, skipping subscription fields"
-                )
-
+) -> None:
     context = await browser.new_context()
-    await context.add_cookies(
-        convert_browser_cookies_to_playwright(".session/cookies.json")
-    )
     detail_page = await context.new_page()
 
     try:
@@ -501,17 +472,8 @@ async def extract_full_listing_details(
         await detail_page.goto(url, timeout=60000, wait_until="domcontentloaded")
         await detail_page.wait_for_selector(DETAIL_PAGE_ELEMENT, timeout=20000)
 
-        try:
-            link = await detail_page.wait_for_selector(
-                LISTING_URL_ELEMENT, timeout=5000
-            )
-            listing_url = await link.get_attribute("href") if link else None
-        except TimeoutError:
-            metadata["warnings"].append(f"Failed to get listing URL for #{index}")
-            listing_url = "None"
-
-        listing["listing_url"] = listing_url
-        await extract_spec_details(detail_page, listing, index, metadata, cookies_valid)
+        await extract_core_details(detail_page, listing, index, metadata)
+        await extract_spec_details(detail_page, listing, index, metadata)
         await extract_warranty_info(detail_page, listing, index, metadata)
         await extract_market_velocity(detail_page, listing, index, metadata)
         await extract_price_history(detail_page, listing, index, metadata)
@@ -519,7 +481,6 @@ async def extract_full_listing_details(
         listing["error"] = f"Failed to fetch full details: {e}"
     finally:
         await detail_page.close()
-        return cookies_valid
 
 
 async def auto_scroll_to_load_all(page, metadata, max_listings, delay_ms=250):
@@ -566,7 +527,9 @@ async def auto_scroll_to_load_all(page, metadata, max_listings, delay_ms=250):
     metadata["runtime"]["scrolls"] = i
 
 
-async def extract_listings(browser, page, metadata, max_listings=50):
+async def extract_listings(
+    browser: Browser, page: Page, metadata: dict, max_listings=50
+) -> list[dict]:
     listings = []
     cards = await page.query_selector_all(LISTING_CARD_SELECTOR)
 
@@ -580,51 +543,51 @@ async def extract_listings(browser, page, metadata, max_listings=50):
         )
         cards = cards[:max_listings]
 
-    cookies_valid = None
+    tasks = []
+    semaphore = asyncio.Semaphore(5)
 
-    for idx, card in enumerate(tqdm(cards, desc="Extracting listings", unit="car")):
+    for idx, card in enumerate(cards):
         index = idx + 1
         try:
-            title = await safe_text(card, TITLE_ELEMENT, f"title #{index}", metadata)
-            price = await safe_text(card, PRICE_ELEMENT, f"price #{index}", metadata)
-            condition = await safe_text(
-                card, CONDITION_ELEMENT, f"condition #{index}", metadata
-            )
-            mileage = await safe_text(
-                card, MILEAGE_ELEMENT, f"mileage ${index}", metadata
-            )
             vin = await safe_vin(card, index, metadata)
+            if not vin:
+                continue
 
-            year = title[:4]
-            make = metadata["vehicle"]["make"]
-            model = metadata["vehicle"]["model"]
             listing = {
                 "id": index,
-                "title": title,
-                "year": int(year),
-                "trim": title.replace(year, "", 1)
-                .replace(make, "", 1)
-                .replace(model, "", 1)
-                .strip(),
-                "price": price,
-                "condition": condition,
-                "mileage": mileage,
                 "vin": vin,
             }
 
-            try:
-                cookies_valid = await extract_full_listing_details(
-                    browser, listing, index, metadata, cookies_valid=cookies_valid
-                )  # Fetch full details in background
-            except:
-                msg = f"Failed to extract the full details on listing #{index}"
-                metadata["warnings"].append(msg)
-                logging.error(msg)
             listings.append(listing)
-
+            task = asyncio.create_task(
+                detail_worker(semaphore, browser, listing, index, metadata)
+            )
+            tasks.append(task)
         except Exception as e:  # pragma: no cover
             metadata["warnings"].append(f"Skipping listing #{index}: {e}")
-    return listings
+
+    for f in tqdm(
+        asyncio.as_completed(tasks),
+        total=len(tasks),
+        desc="Fetching listing details",
+        unit="listing",
+    ):
+        idx, err = await f
+        if err:
+            msg = f"Failed to extract the full details on listing #{idx}: {err}"
+            metadata["warnings"].append(msg)
+            logging.error(msg)
+
+    return sorted(listings, key=lambda l: l["id"])
+
+
+async def detail_worker(semaphore, browser, listing, index, metadata):
+    async with semaphore:
+        try:
+            await extract_full_listing_details(browser, listing, index, metadata)
+            return index, None
+        except Exception as e:
+            return index, e
 
 
 async def safe_vin(card, index, metadata):
@@ -690,7 +653,25 @@ async def scrape(args: Namespace):
 
     async with async_playwright() as pw:
         browser = await pw.chromium.launch(headless=True)
-        page = await browser.new_page()
+        context = await browser.new_context(
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+            ),
+            locale="en-US",
+            extra_http_headers={
+                "Sec-CH-UA": '"Not A(Brand";v="99", "Google Chrome";v="128", "Chromium";v="128"',
+                "Sec-CH-UA-Mobile": "?0",
+                "Sec-CH-UA-Platform": '"Windows"',
+                "Accept-Language": "en-US,en;q=0.9",
+                "Sec-Fetch-Site": "none",
+                "Sec-Fetch-Mode": "navigate",
+                "Sec-Fetch-User": "?1",
+                "Sec-Fetch-Dest": "document",
+            },
+        )
+
+        page = await context.new_page()
 
         if not await fetch_page(page, url):
             await browser.close()

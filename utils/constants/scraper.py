@@ -31,16 +31,16 @@ MAX_LISTINGS = 500  # Maximum listings to retrieve
 # HTML element selectors for main listing page
 NO_LISTINGS_FOUND_TEXT = "No listings to see"
 LISTING_CARD_SELECTOR = "a[href^='/search/listings/']"
-TITLE_ELEMENT = "h2"
-PRICE_ELEMENT = "div.absolute.bottom-2.left-2 > span"
-CONDITION_ELEMENT = (
-    "div.inline-flex.items-center.border.font-semibold.transition-colors.text-white"
-)
-MILEAGE_ELEMENT = "div.flex.flex-row.gap-x-2 > div.text-sm"
 SCROLL_CONTAINER_SELECTOR = "div.h-dvh.overflow-y-auto"
 
 # HTML element selector for detail page
 DETAIL_PAGE_ELEMENT = "div.h-dvh.w-full.space-y-3.overflow-y-auto"
+CORE_DETAILS_PARENT_DIV = "div.space-y-1.px-4.text-foreground.md\\:space-y-2\\.5"
+CORE_DETAILS_CHILD_DIV = "div.hidden.md\\:flex > div:nth-of-type(2)"
+TITLE_ELEMENT = "h2"
+CONDITION_ELEMENT = (
+    "div.inline-flex.items-center.border.font-semibold.transition-colors.text-white"
+)
 # HTML element selectors for warranty
 WARRANTY_STATUS_TEXT_ELEMENT = "div.text-base.text-black"
 COVERAGE_ELEMENTS = "div.grid.grid-cols-1.gap-6 div.bg-\\[\\#F6F6F6\\].p-3.space-y-3"
