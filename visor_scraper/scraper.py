@@ -444,8 +444,9 @@ async def extract_core_details(
     listing["title"] = title
     listing["year"] = int(year)
     listing["trim"] = (
-        title.replace(year, "", 1).replace(make, "", 1).replace(model, "", 1).strip(),
+        title.replace(year, "", 1).replace(make, "", 1).replace(model, "", 1).strip()
     )
+
     listing["price"] = price
     listing["condition"] = condition
     listing["mileage"] = mileage
