@@ -1,9 +1,12 @@
-import hashlib, json
+import hashlib
 
 from bs4 import BeautifulSoup, Tag
 from pathlib import Path
 
+from utils.cache import load_cache, save_cache
+from utils.constants import ANALYSIS_CACHE
 from utils.models import CarfaxData
+
 
 REPAIRS = "cfx-icon__toolsColor"
 DAMAGE_REPAIRS = "cfx-icon__carWrenchColor"
@@ -296,11 +299,29 @@ def get_detailed_history_section(soup: BeautifulSoup) -> list[tuple]:
     return data
 
 
-def get_carfax_data(path: Path) -> CarfaxData:
-    with open(path, encoding="utf-8") as f:
-        soup = BeautifulSoup(f, "html.parser")
+def hash_text(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
-    return CarfaxData(
+
+def get_carfax_data(path: Path) -> CarfaxData:
+
+    cache = load_cache(ANALYSIS_CACHE)
+
+    html = path.read_text(encoding="utf-8")
+    html_hash = hash_text(html)
+
+    # Get VIN from file structure
+    vin = path.parent.name
+
+    # Cache hit
+    if vin in cache:
+        entry = cache[vin]
+        if entry.get("hash") == html_hash:
+            return CarfaxData(**entry["data"])
+
+    # Cache miss
+    soup = BeautifulSoup(html, "html.parser")
+    parsed = CarfaxData(
         summary=get_summary_section(soup),
         accident_damage=get_accident_damage_section(soup),
         reliability_section=get_reliability_section(soup),
@@ -308,3 +329,12 @@ def get_carfax_data(path: Path) -> CarfaxData:
         ownership_history=get_ownership_history_section(soup),
         detailed_history=get_detailed_history_section(soup),
     )
+
+    # Save cache
+    cache[vin] = {
+        "hash": html_hash,
+        "data": parsed.__dict__,  # Everything inside CarfaxData is JSON-safe
+    }
+    save_cache(cache, ANALYSIS_CACHE)
+
+    return parsed
