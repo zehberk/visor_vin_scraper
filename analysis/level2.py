@@ -18,19 +18,9 @@ from analysis.scoring import (
 from analysis.reporting import render_level2_pdf
 
 from utils.carfax_parser import get_carfax_data
-from utils.common import stopwatch
 from utils.constants import *
 from utils.download import download_files, download_report_pdfs
 from utils.models import CarfaxData
-
-
-timing = {
-    "total_listing": [],
-    "deal_bins": [],
-    "carfax": [],
-    "risk": [],
-    "narrative": [],
-}
 
 
 def report_stats(label: str, values: list[float]):
@@ -118,9 +108,6 @@ async def start_level2_analysis(metadata: dict, listings: list[dict], filename: 
         listing: dict = vl["listing"]
         cache_key = vl["cache_key"]
 
-        # Total listing timer
-        t_total = time.perf_counter()
-
         full_listing = next(l for l in listings if l.get("id") == listing.get("id"))
         report = get_report_dir(full_listing)
         if report is None or not report.exists() or listing.get("price") is None:
@@ -140,48 +127,25 @@ async def start_level2_analysis(metadata: dict, listings: list[dict], filename: 
             )
             continue
 
-        t_narr = time.perf_counter()
+        # Initial deal ratings
         narrative.append(f"This vehicle is being listed at ${price}.")
-
-        t_bins = time.perf_counter()
         best_comparison = determine_best_price(
             price, fpp_local, fpp_natl, fmv, narrative
         )
         deal, midpoint, increment, percent = classify_deal_rating(
             price, best_comparison, fmv, fpp_local, fmr_high
         )
-        deal_time = time.perf_counter() - t_bins
         narrative.append(
             f"Deal bins are set at ${increment * 2} ({percent * 200}%) in size, placing the Fair midpoint at ${midpoint}."
         )
         if deal == "Great" and midpoint and price < midpoint - increment * 3:
             deal = "Suspicious"
 
-        t_carfax = time.perf_counter()
+        # Risk ratings and deal adjustment
         carfax: CarfaxData = get_carfax_data(report)
-        carfax_time = time.perf_counter() - t_carfax
-
-        t_risk = time.perf_counter()
         risk = rate_risk_level2(carfax, listing, narrative)
-        risk_time = time.perf_counter() - t_risk
-
         deal = adjust_deal_for_risk(deal, risk, narrative)
-        narrative_time = time.perf_counter() - t_narr
         ratings.append((listing, deal, risk, narrative))
-
-        timing["total_listing"].append(time.perf_counter() - t_total)
-        timing["deal_bins"].append(deal_time)
-        timing["carfax"].append(carfax_time)
-        timing["risk"].append(risk_time)
-        timing["narrative"].append(narrative_time)
-
-    print("\n=== Level 2 Timing Summary ===")
-    print(report_stats("Total listing runtime", timing["total_listing"]))
-    print(report_stats("Deal-bin calculations", timing["deal_bins"]))
-    print(report_stats("Carfax parsing", timing["carfax"]))
-    print(report_stats("Risk scoring", timing["risk"]))
-    print(report_stats("Narrative generation", timing["narrative"]))
-    print("================================\n")
 
     await render_level2_pdf(
         make, model, len(listings), len(valid_listings), ratings, metadata
