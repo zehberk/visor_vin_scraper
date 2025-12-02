@@ -208,7 +208,7 @@ def adjust_deal_for_risk(base_bin: str, risk: float, narrative: list[str]) -> st
 
     if shift == 0:
         narrative.append(
-            f"Deal rating is fixed at {base_bin} based on price and no risk factors."
+            f"Deal rating is fixed at {base_bin} based on price and {"low" if risk else "no"} risk factors."
         )
     else:
         narrative.append(
