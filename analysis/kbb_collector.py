@@ -11,7 +11,7 @@ from playwright.async_api import async_playwright, Browser, BrowserContext, Page
 from tqdm import tqdm
 from typing import Tuple
 
-from analysis.cache import load_cache, save_cache
+from utils.cache import load_cache, save_cache
 from utils.common import stopwatch
 from utils.constants import *
 

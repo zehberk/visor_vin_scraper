@@ -5,6 +5,7 @@ from argparse import Namespace
 from datetime import date, datetime
 from playwright.async_api import Page
 
+from utils.cache import load_cache, save_cache
 from utils.constants import (
     LISTINGS_CACHE,
     MAX_LISTINGS,
@@ -135,30 +136,15 @@ def get_cache_key(args) -> str:
 
 
 def try_get_cached_filename(args) -> str | None:
-    cache = load_cache()
-    return cache.get(get_cache_key(args))
+    cache = load_cache(LISTINGS_CACHE)
+    key = get_cache_key(args)
+    return cache.get(key)
 
 
 def put_cached_filename(args, filename: str) -> None:
-    cache = load_cache()
+    cache = load_cache(LISTINGS_CACHE)
     cache[get_cache_key(args)] = filename
-    save_cache(cache)
-
-
-def load_cache() -> dict:
-    if LISTINGS_CACHE.exists():
-        try:
-            return json.loads(LISTINGS_CACHE.read_text(encoding="utf-8"))
-        except Exception:
-            return {}
-    return {}
-
-
-def save_cache(cache: dict) -> None:
-    LISTINGS_CACHE.parent.mkdir(parents=True, exist_ok=True)
-    LISTINGS_CACHE.write_text(
-        json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+    save_cache(cache, LISTINGS_CACHE)
 
 
 async def safe_text(element, selector, label, metadata, default="") -> str:

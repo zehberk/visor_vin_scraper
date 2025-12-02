@@ -1,8 +1,8 @@
-import asyncio, glob, json, os
+import asyncio, glob, json, os, time
 
 from pathlib import Path
 
-from analysis.cache import load_cache
+from utils.cache import load_cache
 from analysis.kbb import get_pricing_data
 from analysis.normalization import (
     filter_valid_listings,
@@ -21,6 +21,21 @@ from utils.carfax_parser import get_carfax_data
 from utils.constants import *
 from utils.download import download_files, download_report_pdfs
 from utils.models import CarfaxData
+
+
+def report_stats(label: str, values: list[float]):
+    if not values:
+        return f"{label}: no data\n"
+    avg = sum(values) / len(values)
+    mn = min(values)
+    mx = max(values)
+    return (
+        f"{label}:\n"
+        f"  avg: {avg:.4f}s\n"
+        f"  min: {mn:.4f}s\n"
+        f"  max: {mx:.4f}s\n"
+        f"  count: {len(values)}\n"
+    )
 
 
 def get_vehicle_dir(listing: dict) -> Path | None:
@@ -112,12 +127,11 @@ async def start_level2_analysis(metadata: dict, listings: list[dict], filename: 
             )
             continue
 
+        # Initial deal ratings
         narrative.append(f"This vehicle is being listed at ${price}.")
-
         best_comparison = determine_best_price(
             price, fpp_local, fpp_natl, fmv, narrative
         )
-
         deal, midpoint, increment, percent = classify_deal_rating(
             price, best_comparison, fmv, fpp_local, fmr_high
         )
@@ -127,9 +141,9 @@ async def start_level2_analysis(metadata: dict, listings: list[dict], filename: 
         if deal == "Great" and midpoint and price < midpoint - increment * 3:
             deal = "Suspicious"
 
+        # Risk ratings and deal adjustment
         carfax: CarfaxData = get_carfax_data(report)
         risk = rate_risk_level2(carfax, listing, narrative)
-
         deal = adjust_deal_for_risk(deal, risk, narrative)
         ratings.append((listing, deal, risk, narrative))
 

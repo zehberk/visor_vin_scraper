@@ -192,7 +192,7 @@ async def get_variant_map(
     make: str, model: str, listings: list[dict]
 ) -> dict[str, list[dict]]:
 
-    from analysis.cache import load_cache
+    from utils.cache import load_cache
     from analysis.kbb_collector import get_missing_models
 
     # Year, Make, list[Models/Variants]

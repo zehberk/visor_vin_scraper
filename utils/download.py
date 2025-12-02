@@ -8,7 +8,8 @@ from typing import Iterable
 from urllib.parse import urljoin, urlparse, unquote
 from websocket import create_connection
 
-from utils.constants import DOC_PATH
+from utils.cache import load_cache, save_cache
+from utils.constants import ANALYSIS_CACHE, DOC_PATH
 
 CHROME_EXE = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
 USER_DATA_DIR = str(
@@ -552,8 +553,8 @@ def download_report_pdfs(listings: Iterable[dict]) -> None:
                     if provider == "carfax":
                         _wait_until_carfax_ready(ws, sid, timeout=60)
                         _set_media(ws, sid, "screen")  # guard against print CSS hiding
-                    else:
-                        _wait_until_selector_ready(ws, sid, provider, timeout=60)
+                    # else:
+                    #     _wait_until_selector_ready(ws, sid, provider, timeout=60)
                 except RuntimeError as e:
                     if "access blocked" in str(e).lower():
                         _cdp(ws, 12, "Page.reload", sid=sid)
@@ -562,8 +563,8 @@ def download_report_pdfs(listings: Iterable[dict]) -> None:
                         if provider == "carfax":
                             _wait_until_carfax_ready(ws, sid, timeout=60)
                             _set_media(ws, sid, "screen")
-                        else:
-                            _wait_until_selector_ready(ws, sid, provider, timeout=60)
+                        # else:
+                        #     _wait_until_selector_ready(ws, sid, provider, timeout=60)
                     else:
                         raise
                 _print_to_pdf(ws, sid, out_path)
@@ -608,6 +609,16 @@ async def download_files(
     Saves listing.json, downloads window stickers, and (optionally) Carfax/AutoCheck reports.
     Matches output structure: output/{title}/{vin}/...
     """
+    # Lookup cache first to avoid extra queries
+    analysis_cache = load_cache(ANALYSIS_CACHE)
+    for l in listings:
+        vin = l.get("vin")
+        url = l.get("additional_docs", {}).get("carfax_url")
+        if vin and url == "Unavailable":
+            cached = analysis_cache.get(vin, {}).get("carfax_url")
+            if cached:
+                l.setdefault("additional_docs", {})["carfax_url"] = cached
+
     async with async_playwright() as p:
         if include_reports:
             missing = [
@@ -656,12 +667,32 @@ async def download_files(
             with open(filename, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
 
+            # Save analysis cache
+            for l in listings:
+                vin = l.get("vin")
+                if vin is None:
+                    continue
+
+                docs = l.get("additional_docs")
+                if docs:
+                    url = docs.get("carfax_url")
+                    if url and url != "Unavailable":
+                        analysis_cache.setdefault(vin, {})["carfax_url"] = url
+
+            save_cache(analysis_cache, ANALYSIS_CACHE)
+
         req = await p.request.new_context()
         try:
+            stickers = [
+                l
+                for l in listings
+                if l.get("additional_docs", {}).get("window_sticker_url")
+                != "Unavailable"
+            ]
             sticker_count = 0
             for lst in tqdm(
-                listings,
-                total=len(listings),
+                stickers,
+                total=len(stickers),
                 desc="Saving window stickers",
                 unit="listing",
             ):
