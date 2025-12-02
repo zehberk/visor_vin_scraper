@@ -459,6 +459,34 @@ async def extract_core_details(
     listing["listing_url"] = listing_url
 
 
+async def extract_images(
+    detail_page: Page, listing: dict, index: int, metadata: dict
+) -> None:
+    image_container = await detail_page.query_selector("div.mx-4.flex")
+    if not image_container:
+        msg = f"Unable to get picture element from #{index}"
+        metadata["warnings"].append(msg)
+        return
+
+    images = await image_container.query_selector_all("img")
+    if not images:
+        listing.setdefault("images", [])
+        return
+
+    urls = []
+    for i in images:
+        src = await i.get_attribute("src")
+        if not src:
+            continue
+
+        # Skip unwanted patterns
+        if src.startswith("/"):
+            urls.append("https://visor.vin/listing/no-image-dark.webp")
+        else:
+            urls.append(src)
+    listing.setdefault("images", urls)
+
+
 async def extract_full_listing_details(
     browser: Browser,
     listing: dict,
@@ -475,6 +503,7 @@ async def extract_full_listing_details(
         await detail_page.wait_for_selector(DETAIL_PAGE_ELEMENT, timeout=20000)
 
         await extract_core_details(detail_page, listing, index, metadata)
+        await extract_images(detail_page, listing, index, metadata)
         await extract_spec_details(detail_page, listing, index, metadata)
         await extract_warranty_info(detail_page, listing, index, metadata)
         await extract_market_velocity(detail_page, listing, index, metadata)

@@ -2,7 +2,12 @@ import asyncio, base64, glob, hashlib, json, os, platform, re, requests, shutil,
 
 from pathlib import Path
 from playwright._impl._errors import TimeoutError as PlaywrightTimeout
-from playwright.async_api import async_playwright, Browser, Playwright
+from playwright.async_api import (
+    APIRequestContext,
+    async_playwright,
+    Browser,
+    Playwright,
+)
 from tqdm import tqdm
 from typing import Iterable
 from urllib.parse import urljoin, urlparse, unquote
@@ -228,7 +233,33 @@ def save_listing_json(listing: dict, folder: str) -> str:
     return path
 
 
-async def download_sticker(req, listing: dict, folder: str) -> bool:
+async def download_images(req: APIRequestContext, listing: dict, folder: str) -> int:
+    imgs: list[str] = listing.get("images") or []
+    if not imgs:
+        return 0
+
+    img_dir = os.path.join(folder, "images")
+    os.makedirs(img_dir, exist_ok=True)
+
+    count = 0
+    for idx, url in enumerate(imgs, start=1):
+        ext = os.path.splitext(url)[1].split("?")[0] or ".jpg"
+        path = os.path.join(img_dir, f"{idx}{ext}")
+
+        # already saved?
+        if os.path.exists(path) and os.path.getsize(path) > 0:
+            continue
+
+        resp = await req.get(url)
+        if resp.ok:
+            with open(path, "wb") as f:
+                f.write(await resp.body())
+            count += 1
+
+    return count
+
+
+async def download_sticker(req: APIRequestContext, listing: dict, folder: str) -> bool:
     url = listing.get("additional_docs", {}).get("window_sticker_url")
     if not url or url == "Unavailable":
         return False
@@ -602,6 +633,15 @@ def download_report_pdfs(listings: Iterable[dict]) -> None:
                 pass
 
 
+def unresolved(listings: list[dict]) -> list[dict]:
+    return [
+        l
+        for l in listings
+        if l.get("additional_docs", {}).get("carfax_url") == "Unavailable"
+        and l.get("additional_docs", {}).get("autocheck_url") == "Unavailable"
+    ]
+
+
 async def download_files(
     listings: list[dict], filename: str, include_reports: bool = True
 ) -> None:
@@ -621,41 +661,22 @@ async def download_files(
 
     async with async_playwright() as p:
         if include_reports:
-            missing = [
-                l
-                for l in listings
-                if l.get("additional_docs", {}).get("carfax_url") == "Unavailable"
-                and l.get("additional_docs", {}).get("autocheck_url") == "Unavailable"
-            ]
+            missing = unresolved(listings)
 
             if missing:
                 print(f"Searching for missing report links ({len(missing)} listings)")
                 await get_missing_urls(missing, p)
 
             # Retry misses on a new batch (covers timeouts)
-            missing = [
-                l
-                for l in listings
-                if l.get("additional_docs", {}).get("carfax_url") == "Unavailable"
-                and l.get("additional_docs", {}).get("autocheck_url") == "Unavailable"
-            ]
-            if missing:
-                print(f"Retrying for ({len(missing)} listings)")
-                await get_missing_urls(missing, p)
+            missing_after_retry = unresolved(listings)
+            if missing_after_retry:
+                print(f"Retrying for ({len(missing_after_retry)} listings)")
+                await get_missing_urls(missing_after_retry, p)
 
-            leftover = [
-                l
-                for l in listings
-                if l.get("additional_docs", {}).get("carfax_url") == "Unavailable"
-                and l.get("additional_docs", {}).get("autocheck_url") == "Unavailable"
-            ]
+            leftover = unresolved(listings)
             recovered = len(missing) - len(leftover)
 
-            print(
-                f"Recovered {recovered} urls"
-                if recovered != 1
-                else f"Recovered {recovered} url"
-            )
+            print(f'Recovered {recovered} url{"" if recovered == 1 else "s"}')
 
             # Save the updated listings back to the file
             # Must do a read first so we don't overwrite the metadata
@@ -683,29 +704,24 @@ async def download_files(
 
         req = await p.request.new_context()
         try:
-            stickers = [
-                l
-                for l in listings
-                if l.get("additional_docs", {}).get("window_sticker_url")
-                != "Unavailable"
-            ]
             sticker_count = 0
-            for lst in tqdm(
-                stickers,
-                total=len(stickers),
-                desc="Saving window stickers",
+            for l in tqdm(
+                listings,
+                total=len(listings),
+                desc="Saving listing info",
                 unit="listing",
             ):
-                title = lst.get("title")
-                vin = lst.get("vin")
+                title = l.get("title")
+                vin = l.get("vin")
                 if not title or not vin:
                     continue
 
                 folder = os.path.join(DOC_PATH, title, vin)
                 os.makedirs(folder, exist_ok=True)
 
-                save_listing_json(lst, folder)
-                success = await download_sticker(req, lst, folder)
+                save_listing_json(l, folder)
+                _ = await download_images(req, l, folder)
+                success = await download_sticker(req, l, folder)
                 if success:
                     sticker_count += 1
 
