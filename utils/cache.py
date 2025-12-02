@@ -2,16 +2,17 @@ import json
 
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from analysis.utils import get_relevant_entries
 from utils.constants import *
 
 
-def load_cache(cache_file: Path = PRICING_CACHE) -> dict[str, dict]:
+def load_cache(cache_file: Path = PRICING_CACHE) -> dict[str, Any]:
     if cache_file.exists():
         with cache_file.open("r", encoding="utf-8") as f:
             return json.load(f)
-    return {"entries": {}}
+    return {}
 
 
 def save_cache(cache: dict, cache_file: Path = PRICING_CACHE):
