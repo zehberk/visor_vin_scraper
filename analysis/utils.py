@@ -1,5 +1,6 @@
 from utils.common import make_string_url_safe
 from utils.constants import *
+from utils.models import TrimValuation
 
 
 def bool_from_url(val: str | None) -> bool:
@@ -95,3 +96,24 @@ def get_relevant_entries(
                 relevant_entries[key] = entry
 
     return relevant_entries
+
+
+def get_trim_valuations_from_cache(
+    make: str, model: str, years: list[str], entries: dict
+) -> list[TrimValuation]:
+    trim_valuations = []
+    for y in years:
+        for entry in get_relevant_entries(entries, make, model, y).values():
+            entry.setdefault("model", None)
+            entry.setdefault("kbb_trim", None)
+            entry.setdefault("msrp", None)
+            entry.setdefault("fpp_natl", None)
+            entry.setdefault("fmr_low", None)
+            entry.setdefault("fmr_high", None)
+            entry.setdefault("fpp_local", None)
+            entry.setdefault("fmv", None)
+            entry.setdefault("natl_source", None)
+            entry.setdefault("local_source", None)
+
+            trim_valuations.append(TrimValuation.from_dict(entry))
+    return trim_valuations

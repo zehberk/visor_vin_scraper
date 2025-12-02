@@ -10,16 +10,15 @@ from playwright.async_api import (
     TimeoutError,
 )
 
-from analysis.cache import (
+from utils.cache import (
     cache_covers_all,
     get_relevant_entries,
-    get_trim_valuations_from_cache,
     is_entry_fresh,
     is_natl_fresh,
     save_cache,
 )
 from analysis.normalization import best_kbb_trim_match, get_variant_map
-from analysis.utils import extract_years, to_int
+from analysis.utils import extract_years, get_trim_valuations_from_cache, to_int
 from utils.common import make_string_url_safe
 from utils.constants import *
 from utils.models import TrimValuation

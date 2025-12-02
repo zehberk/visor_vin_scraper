@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio, glob, json, os
 
-from analysis.cache import load_cache
+from utils.cache import load_cache
 from analysis.kbb import get_pricing_data
 from analysis.normalization import (
     filter_valid_listings,

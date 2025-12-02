@@ -1,3 +1,5 @@
+import hashlib, json
+
 from bs4 import BeautifulSoup, Tag
 from pathlib import Path
 
