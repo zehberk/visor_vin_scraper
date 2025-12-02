@@ -602,6 +602,15 @@ def download_report_pdfs(listings: Iterable[dict]) -> None:
                 pass
 
 
+def unresolved(listings: list[dict]) -> list[dict]:
+    return [
+        l
+        for l in listings
+        if l.get("additional_docs", {}).get("carfax_url") == "Unavailable"
+        and l.get("additional_docs", {}).get("autocheck_url") == "Unavailable"
+    ]
+
+
 async def download_files(
     listings: list[dict], filename: str, include_reports: bool = True
 ) -> None:
@@ -621,41 +630,22 @@ async def download_files(
 
     async with async_playwright() as p:
         if include_reports:
-            missing = [
-                l
-                for l in listings
-                if l.get("additional_docs", {}).get("carfax_url") == "Unavailable"
-                and l.get("additional_docs", {}).get("autocheck_url") == "Unavailable"
-            ]
+            missing = unresolved(listings)
 
             if missing:
                 print(f"Searching for missing report links ({len(missing)} listings)")
                 await get_missing_urls(missing, p)
 
             # Retry misses on a new batch (covers timeouts)
-            missing = [
-                l
-                for l in listings
-                if l.get("additional_docs", {}).get("carfax_url") == "Unavailable"
-                and l.get("additional_docs", {}).get("autocheck_url") == "Unavailable"
-            ]
-            if missing:
-                print(f"Retrying for ({len(missing)} listings)")
-                await get_missing_urls(missing, p)
+            missing_after_retry = unresolved(listings)
+            if missing_after_retry:
+                print(f"Retrying for ({len(missing_after_retry)} listings)")
+                await get_missing_urls(missing_after_retry, p)
 
-            leftover = [
-                l
-                for l in listings
-                if l.get("additional_docs", {}).get("carfax_url") == "Unavailable"
-                and l.get("additional_docs", {}).get("autocheck_url") == "Unavailable"
-            ]
+            leftover = unresolved(listings)
             recovered = len(missing) - len(leftover)
 
-            print(
-                f"Recovered {recovered} urls"
-                if recovered != 1
-                else f"Recovered {recovered} url"
-            )
+            print(f'Recovered {recovered} url{"" if recovered == 1 else "s"}')
 
             # Save the updated listings back to the file
             # Must do a read first so we don't overwrite the metadata
