@@ -9,6 +9,7 @@ from urllib.parse import parse_qs, urlencode, urlparse
 
 from analysis.level1 import start_level1_analysis
 from analysis.level2 import start_level2_analysis
+from utils.cache import load_cache, save_cache
 from utils.constants import *
 from utils.download import download_files
 from visor_scraper.helpers import *
@@ -602,7 +603,23 @@ async def safe_vin(card, index, metadata):
         return None
 
 
-def save_results(listings, metadata, args, output_path=LISTINGS_PATH):
+def save_results(
+    listings: list[dict], metadata: dict, args, output_path: Path = LISTINGS_PATH
+):
+    analysis_cache = load_cache(ANALYSIS_CACHE)
+    for l in listings:
+        vin = l.get("vin")
+        if vin is None:
+            continue
+
+        docs = l.get("additional_docs")
+        if docs:
+            url = docs.get("carfax_url")
+            if url and url != "Unavailable":
+                analysis_cache[vin]["carfax_url"] = url
+
+    save_cache(analysis_cache, ANALYSIS_CACHE)
+
     ts = current_timestamp()
     if not output_path.exists():
         output_path.mkdir(parents=True, exist_ok=True)
