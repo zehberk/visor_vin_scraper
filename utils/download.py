@@ -2,7 +2,12 @@ import asyncio, base64, glob, hashlib, json, os, platform, re, requests, shutil,
 
 from pathlib import Path
 from playwright._impl._errors import TimeoutError as PlaywrightTimeout
-from playwright.async_api import async_playwright, Browser, Playwright
+from playwright.async_api import (
+    APIRequestContext,
+    async_playwright,
+    Browser,
+    Playwright,
+)
 from tqdm import tqdm
 from typing import Iterable
 from urllib.parse import urljoin, urlparse, unquote
@@ -228,7 +233,33 @@ def save_listing_json(listing: dict, folder: str) -> str:
     return path
 
 
-async def download_sticker(req, listing: dict, folder: str) -> bool:
+async def download_images(req: APIRequestContext, listing: dict, folder: str) -> int:
+    imgs: list[str] = listing.get("images") or []
+    if not imgs:
+        return 0
+
+    img_dir = os.path.join(folder, "images")
+    os.makedirs(img_dir, exist_ok=True)
+
+    count = 0
+    for idx, url in enumerate(imgs, start=1):
+        ext = os.path.splitext(url)[1].split("?")[0] or ".jpg"
+        path = os.path.join(img_dir, f"{idx}{ext}")
+
+        # already saved?
+        if os.path.exists(path) and os.path.getsize(path) > 0:
+            continue
+
+        resp = await req.get(url)
+        if resp.ok:
+            with open(path, "wb") as f:
+                f.write(await resp.body())
+            count += 1
+
+    return count
+
+
+async def download_sticker(req: APIRequestContext, listing: dict, folder: str) -> bool:
     url = listing.get("additional_docs", {}).get("window_sticker_url")
     if not url or url == "Unavailable":
         return False
