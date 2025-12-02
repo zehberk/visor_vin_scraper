@@ -704,29 +704,24 @@ async def download_files(
 
         req = await p.request.new_context()
         try:
-            stickers = [
-                l
-                for l in listings
-                if l.get("additional_docs", {}).get("window_sticker_url")
-                != "Unavailable"
-            ]
             sticker_count = 0
-            for lst in tqdm(
-                stickers,
-                total=len(stickers),
-                desc="Saving window stickers",
+            for l in tqdm(
+                listings,
+                total=len(listings),
+                desc="Saving listing info",
                 unit="listing",
             ):
-                title = lst.get("title")
-                vin = lst.get("vin")
+                title = l.get("title")
+                vin = l.get("vin")
                 if not title or not vin:
                     continue
 
                 folder = os.path.join(DOC_PATH, title, vin)
                 os.makedirs(folder, exist_ok=True)
 
-                save_listing_json(lst, folder)
-                success = await download_sticker(req, lst, folder)
+                save_listing_json(l, folder)
+                _ = await download_images(req, l, folder)
+                success = await download_sticker(req, l, folder)
                 if success:
                     sticker_count += 1
 
