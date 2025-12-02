@@ -40,8 +40,10 @@ body h1 {
 	padding-left: 0;
 	margin-bottom: 1em;
 	margin-right: 4px;
-	page-break-inside: auto; /* allow breaks inside the bin */
-	break-inside: auto;
+}
+.break-before {
+	break-before: page;
+	page-break-before: always;
 }
 
 .filtered-out {

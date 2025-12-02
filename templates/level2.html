@@ -82,9 +82,11 @@
 			</div>
 		{%- endmacro %}
 
-		{% macro render_bin(emoji, title, cls, bin) -%}
+		{% macro render_bin(emoji, title, cls, bin, skip_break) -%}
 			{% if bin|length > 0 %}
-				<h2 class="section-header">{{ emoji }} {{ title }} Deals</h2>
+				<h2 class="section-header {{ 'break-before' if not skip_break }}">
+					{{ emoji }} {{ title }} Deals
+				</h2>
 				<div class="deal-bin">
 					{% for rating in bin %}
 						<div class="listing {{ cls }}">{{ vehicle_row(rating) }}</div>
@@ -101,8 +103,17 @@
 					{"emoji":"🟡","title":"Fair","cls":"fair-listing","bin":fair_bin},
 				]
 			%}
+			{# Calculate the first non-empty bin so we don't add unnecessary page breaks #}
+			{# Must use as namespace in order for it to save value #}
+			{% set state = namespace(first_nonempty_index=None) %}
 			{% for b in bins %}
-				{{ render_bin(b.emoji, b.title, b.cls, b.bin) }}
+				{% if b.bin|length > 0 and state.first_nonempty_index is none %}
+					{% set state.first_nonempty_index = loop.index0 %}
+				{% endif %}
+			{% endfor %}
+			{# Display bins #}
+			{% for b in bins %}
+				{{ render_bin(b.emoji, b.title, b.cls, b.bin, loop.index0 == state.first_nonempty_index) }}
 			{% endfor %}
 			<div class="filtered-out">
 				<div class="no-break">
