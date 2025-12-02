@@ -19,11 +19,10 @@
 			</p>
 		</section>
 
-		{{ valid_count }} listings were eligible for Level 2 analysis,
-		{{ total_count - valid_count }} were excluded due to missing reports. Of
-		those listings, <strong>{{ great_bin|length }}</strong> are considered a
-		great deal, <strong>{{ good_bin|length }}</strong> are considered a good
-		deal, and <strong>{{ fair_bin|length }}</strong> are considered a fair deal.
+		{{ valid_count }} listings were eligible for Level 2 analysis. Of those
+		listings, <strong>{{ great_bin|length }}</strong> are considered a great
+		deal, <strong>{{ good_bin|length }}</strong> are considered a good deal, and
+		<strong>{{ fair_bin|length }}</strong> are considered a fair deal.
 		<strong>Deals are sorted from best to worst.</strong>
 		{% macro miles(n) -%}{{ "{:,}".format(n) }}{%- endmacro %}
 		{% macro money(n) -%}{{ "${:,.0f}".format(n) }}{%- endmacro %}
@@ -38,6 +37,14 @@
 			{% set is_downgraded = "downgraded" in last_line.lower() %}
 			{% set seller_name = listing.seller.name if listing.seller.name else "N/A" %}
 			{% set seller_location = listing.seller.location if listing.seller.location else "N/A" %}
+			{% set vin = listing.vin %}
+			{% set imgs = all_images.get(vin, []) %}
+
+			<div class="image-viewer">
+				{% for img in imgs %}
+					<img src="{{ img }}" />
+				{% endfor %}
+			</div>
 
 			<div class="listing-title">
 				{{ listing.title }}
@@ -51,9 +58,7 @@
 
 			<div class="listing-title-bar"></div>
 			<div class="listing-specs compact-grid">
-				<div class="listing-specs-item">
-					VIN: <strong>{{ listing.vin }}</strong>
-				</div>
+				<div class="listing-specs-item">VIN: <strong>{{ vin }}</strong></div>
 				<div class="listing-specs-item">
 					Mileage: <strong>{{ miles(listing.mileage) }}</strong>
 				</div>

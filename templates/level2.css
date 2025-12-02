@@ -232,3 +232,20 @@ body h1 {
 	margin-left: 0;
 	list-style-type: disc;
 }
+
+/* ========== TESTING ========== */
+.image-viewer {
+	display: flex;
+	flex-direction: row;
+	gap: 6px; /* optional spacing */
+	width: 100%;
+	padding-bottom: 4px;
+}
+
+.image-viewer img {
+	flex: 1; /* each image takes equal width */
+	max-width: 33%; /* safety cap */
+	height: auto;
+	border-radius: 4px;
+	object-fit: cover;
+}
