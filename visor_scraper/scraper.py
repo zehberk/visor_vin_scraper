@@ -10,6 +10,7 @@ from urllib.parse import parse_qs, urlencode, urlparse
 from analysis.level1 import start_level1_analysis
 from analysis.level2 import start_level2_analysis
 from utils.cache import load_cache, save_cache
+from utils.common import current_timestamp
 from utils.constants import *
 from utils.download import download_files
 from visor_scraper.helpers import *
@@ -417,6 +418,18 @@ async def extract_core_details(
     if not core_details_element:
         msg = f"Unable to extract core details for {index}"
         metadata["warnings"].append(msg)
+        listing["_remove"] = True
+        return
+
+    # there is an edge case where a vehicle may be off-market. In this case, we log the
+    # correct message and remove the listing entirely
+    core_details_text = await safe_inner_text(
+        core_details_element, "core details", index, metadata
+    )
+    if "off-market" in core_details_text.lower():
+        msg = f"Vehicle is off-market: #{index}"
+        metadata["warnings"].append(msg)
+        listing["_remove"] = True
         return
 
     title = await safe_text(
@@ -609,6 +622,8 @@ async def extract_listings(
             metadata["warnings"].append(msg)
             logging.error(msg)
 
+    # Removes all listings that have been flagged for removal
+    listings[:] = [l for l in listings if not l.get("_remove")]
     return sorted(listings, key=lambda l: l["id"])
 
 

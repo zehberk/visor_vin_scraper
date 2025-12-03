@@ -1,11 +1,11 @@
 # utils.py
-import argparse, json, logging, math, os, re
+import argparse, logging, re
 
 from argparse import Namespace
-from datetime import date, datetime
-from playwright.async_api import Page
+from datetime import date
 
 from utils.cache import load_cache, save_cache
+from utils.common import current_timestamp
 from utils.constants import (
     LISTINGS_CACHE,
     MAX_LISTINGS,
@@ -103,10 +103,6 @@ def parse_range_arg(name: str, raw: str):
     except Exception as e:
         logging.error(f"[Error] Invalid format for --{name}: '{raw}' → {e}")
         exit(1)
-
-
-def current_timestamp():
-    return datetime.now().strftime("%Y%m%d_%H%M%S")
 
 
 def get_today_key() -> str:

@@ -1,6 +1,8 @@
-import asyncio, base64, glob, hashlib, json, os, platform, re, requests, shutil, subprocess, time, urllib.parse
+import asyncio, base64, glob, hashlib, io, json, os, platform, re, requests, shutil, subprocess, time, urllib.parse
 
+from datetime import timedelta
 from pathlib import Path
+from PIL import Image
 from playwright._impl._errors import TimeoutError as PlaywrightTimeout
 from playwright.async_api import (
     APIRequestContext,
@@ -14,6 +16,7 @@ from urllib.parse import urljoin, urlparse, unquote
 from websocket import create_connection
 
 from utils.cache import load_cache, save_cache
+from utils.common import current_timestamp, get_time_delta
 from utils.constants import ANALYSIS_CACHE, DOC_PATH
 
 CHROME_EXE = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
@@ -44,6 +47,8 @@ PROVIDERS = {
         "ready": lambda t, href, ready, marker=None: (ready == "complete" and marker),
     },
 }
+
+MIN_POLL_DAYS = 1
 
 
 async def get_stable_html(page, retries=5, delay=0.8):
@@ -243,18 +248,43 @@ async def download_images(req: APIRequestContext, listing: dict, folder: str) ->
 
     count = 0
     for idx, url in enumerate(imgs, start=1):
-        ext = os.path.splitext(url)[1].split("?")[0] or ".jpg"
-        path = os.path.join(img_dir, f"{idx}{ext}")
-
-        # already saved?
-        if os.path.exists(path) and os.path.getsize(path) > 0:
-            continue
+        # temporary name before detecting extension
+        tmp_path = os.path.join(img_dir, f"{idx}")
 
         resp = await req.get(url)
-        if resp.ok:
-            with open(path, "wb") as f:
-                f.write(await resp.body())
-            count += 1
+        if not resp.ok:
+            continue
+
+        # read raw bytes
+        data = await resp.body()
+
+        # Detect real format from bytes
+        try:
+            img = Image.open(io.BytesIO(data))
+            fmt = (img.format or "").lower()
+        except Exception:
+            # fallback if Pillow fails
+            fmt = "jpg"
+
+        ext = {
+            "jpeg": ".jpg",
+            "jpg": ".jpg",
+            "png": ".png",
+            "webp": ".webp",
+            "gif": ".gif",
+        }.get(fmt, ".jpg")
+
+        final_path = tmp_path + ext
+
+        # avoid re-download if exists
+        if os.path.exists(final_path) and os.path.getsize(final_path) > 0:
+            continue
+
+        # write bytes exactly as received
+        with open(final_path, "wb") as f:
+            f.write(data)
+
+        count += 1
 
     return count
 
@@ -633,13 +663,41 @@ def download_report_pdfs(listings: Iterable[dict]) -> None:
                 pass
 
 
-def unresolved(listings: list[dict]) -> list[dict]:
-    return [
-        l
-        for l in listings
-        if l.get("additional_docs", {}).get("carfax_url") == "Unavailable"
-        and l.get("additional_docs", {}).get("autocheck_url") == "Unavailable"
-    ]
+def needs_poll(l: dict, cache: dict) -> bool:
+    vin = l.get("vin")
+    if not vin:
+        return False
+
+    docs = l.get("additional_docs", {})
+    current = docs.get("carfax_url")
+
+    cached_entry = cache.get(vin, {})
+    cached_url = cached_entry.get("carfax_url")
+    last_poll = cached_entry.get("last_poll")
+
+    # 1: Rate limiting — skip if recently polled
+    if last_poll:
+        delta = get_time_delta(current_timestamp(), last_poll)
+        if delta < timedelta(MIN_POLL_DAYS):
+            return False
+
+    # 2: If URL is missing/unavailable → poll
+    if current == "Unavailable":
+        return True
+
+    # 3: If URL exists but changed → poll again
+    if cached_url and current != cached_url:
+        return True
+
+    # 4: No cached record → poll to establish baseline
+    if not cached_entry:
+        return True
+
+    return False
+
+
+def unresolved(listings: list[dict], cache: dict) -> list[dict]:
+    return [l for l in listings if needs_poll(l, cache)]
 
 
 async def download_files(
@@ -661,19 +719,19 @@ async def download_files(
 
     async with async_playwright() as p:
         if include_reports:
-            missing = unresolved(listings)
+            missing = unresolved(listings, analysis_cache)
 
             if missing:
                 print(f"Searching for missing report links ({len(missing)} listings)")
                 await get_missing_urls(missing, p)
 
             # Retry misses on a new batch (covers timeouts)
-            missing_after_retry = unresolved(listings)
-            if missing_after_retry:
-                print(f"Retrying for ({len(missing_after_retry)} listings)")
-                await get_missing_urls(missing_after_retry, p)
+            retry = unresolved(listings, analysis_cache)
+            if retry:
+                print(f"Retrying for ({len(retry)} listings)")
+                await get_missing_urls(retry, p)
 
-            leftover = unresolved(listings)
+            leftover = unresolved(listings, analysis_cache)
             recovered = len(missing) - len(leftover)
 
             print(f'Recovered {recovered} url{"" if recovered == 1 else "s"}')
@@ -688,11 +746,14 @@ async def download_files(
             with open(filename, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
 
+            timestamp = current_timestamp()
             # Save analysis cache
             for l in listings:
                 vin = l.get("vin")
                 if vin is None:
                     continue
+
+                analysis_cache.setdefault(vin, {})["last_poll"] = timestamp
 
                 docs = l.get("additional_docs")
                 if docs:
