@@ -209,6 +209,10 @@ def build_level2_bins(ratings: list) -> tuple[list, list, list, int, int, int]:
 
 def shrink_image(path: str, max_width=500):
     img = Image.open(path)
+
+    if img.mode not in ("RGB", "L"):
+        img = img.convert("RGB")
+
     w, h = img.size
     if w > max_width:
         ratio = max_width / w

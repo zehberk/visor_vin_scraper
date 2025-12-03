@@ -1,7 +1,8 @@
-import asyncio, base64, glob, hashlib, json, os, platform, re, requests, shutil, subprocess, time, urllib.parse
+import asyncio, base64, glob, hashlib, io, json, os, platform, re, requests, shutil, subprocess, time, urllib.parse
 
 from datetime import timedelta
 from pathlib import Path
+from PIL import Image
 from playwright._impl._errors import TimeoutError as PlaywrightTimeout
 from playwright.async_api import (
     APIRequestContext,
@@ -247,18 +248,43 @@ async def download_images(req: APIRequestContext, listing: dict, folder: str) ->
 
     count = 0
     for idx, url in enumerate(imgs, start=1):
-        ext = os.path.splitext(url)[1].split("?")[0] or ".jpg"
-        path = os.path.join(img_dir, f"{idx}{ext}")
-
-        # already saved?
-        if os.path.exists(path) and os.path.getsize(path) > 0:
-            continue
+        # temporary name before detecting extension
+        tmp_path = os.path.join(img_dir, f"{idx}")
 
         resp = await req.get(url)
-        if resp.ok:
-            with open(path, "wb") as f:
-                f.write(await resp.body())
-            count += 1
+        if not resp.ok:
+            continue
+
+        # read raw bytes
+        data = await resp.body()
+
+        # Detect real format from bytes
+        try:
+            img = Image.open(io.BytesIO(data))
+            fmt = (img.format or "").lower()
+        except Exception:
+            # fallback if Pillow fails
+            fmt = "jpg"
+
+        ext = {
+            "jpeg": ".jpg",
+            "jpg": ".jpg",
+            "png": ".png",
+            "webp": ".webp",
+            "gif": ".gif",
+        }.get(fmt, ".jpg")
+
+        final_path = tmp_path + ext
+
+        # avoid re-download if exists
+        if os.path.exists(final_path) and os.path.getsize(final_path) > 0:
+            continue
+
+        # write bytes exactly as received
+        with open(final_path, "wb") as f:
+            f.write(data)
+
+        count += 1
 
     return count
 
