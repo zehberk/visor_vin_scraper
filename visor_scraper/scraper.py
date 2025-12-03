@@ -418,6 +418,18 @@ async def extract_core_details(
     if not core_details_element:
         msg = f"Unable to extract core details for {index}"
         metadata["warnings"].append(msg)
+        listing["_remove"] = True
+        return
+
+    # there is an edge case where a vehicle may be off-market. In this case, we log the
+    # correct message and remove the listing entirely
+    core_details_text = await safe_inner_text(
+        core_details_element, "core details", index, metadata
+    )
+    if "off-market" in core_details_text.lower():
+        msg = f"Vehicle is off-market: #{index}"
+        metadata["warnings"].append(msg)
+        listing["_remove"] = True
         return
 
     title = await safe_text(
@@ -610,6 +622,8 @@ async def extract_listings(
             metadata["warnings"].append(msg)
             logging.error(msg)
 
+    # Removes all listings that have been flagged for removal
+    listings[:] = [l for l in listings if not l.get("_remove")]
     return sorted(listings, key=lambda l: l["id"])
 
 
