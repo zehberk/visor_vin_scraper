@@ -682,7 +682,7 @@ def needs_poll(l: dict, cache: dict) -> bool:
             return False
 
     # 2: If URL is missing/unavailable → poll
-    if current == "Unavailable":
+    if not cached_url and current == "Unavailable":
         return True
 
     # 3: If URL exists but changed → poll again
