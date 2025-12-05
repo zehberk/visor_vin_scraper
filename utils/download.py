@@ -769,7 +769,7 @@ async def download_files(
             for l in tqdm(
                 listings,
                 total=len(listings),
-                desc="Saving listing info",
+                desc="Downloading supplementary info",
                 unit="listing",
             ):
                 title = l.get("title")
