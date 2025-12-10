@@ -763,7 +763,7 @@ async def download_files(
 
             save_cache(analysis_cache, ANALYSIS_CACHE)
 
-        req = await p.request.new_context()
+        req = await p.request.new_context(ignore_https_errors=True)
         try:
             sticker_count = 0
             for l in tqdm(
