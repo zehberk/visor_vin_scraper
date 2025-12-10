@@ -116,10 +116,10 @@ async def start_level2_analysis(metadata: dict, listings: list[dict], filename: 
         narrative: list[str] = []
 
         price = int(listing.get("price", 0))
-        fpp_natl = int(cache_entries[cache_key].get("fpp_natl", 0))
-        fpp_local = int(cache_entries[cache_key].get("fpp_local", 0))
-        fmr_high = int(cache_entries[cache_key].get("fmr_high", 0))
-        fmv = int(cache_entries[cache_key].get("fmv", 0))
+        fpp_natl = int(cache_entries[cache_key].get("fpp_natl") or 0)
+        fpp_local = int(cache_entries[cache_key].get("fpp_local") or 0)
+        fmr_high = int(cache_entries[cache_key].get("fmr_high") or 0)
+        fmv = int(cache_entries[cache_key].get("fmv") or 0)
 
         if not (fpp_natl and fpp_local and fmv):
             narrative.append(
