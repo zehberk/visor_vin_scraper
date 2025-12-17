@@ -16,7 +16,7 @@ from urllib.parse import urljoin, urlparse, unquote
 from websocket import create_connection
 
 from utils.cache import load_cache, save_cache
-from utils.common import current_timestamp, get_time_delta
+from utils.common import current_timestamp, get_time_delta, to_https
 from utils.constants import ANALYSIS_CACHE, DOC_PATH
 
 CHROME_EXE = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
@@ -304,14 +304,6 @@ async def download_sticker(req: APIRequestContext, listing: dict, folder: str) -
     return True
 
 
-def _to_https(url: str) -> str:
-    return (
-        url.replace("http://", "https://", 1)
-        if url.lower().startswith("http://")
-        else url
-    )
-
-
 def _bootstrap_profile(user_data_dir: str):
     p = Path(user_data_dir)
     p.mkdir(parents=True, exist_ok=True)
@@ -466,42 +458,6 @@ def _wait_until_carfax_ready(ws, sid: str, timeout=90):
     raise TimeoutError("report not ready")
 
 
-def _wait_until_selector_ready(ws, sid: str, provider: str, timeout=90):
-    _cdp(ws, 10, "Page.enable", sid=sid)
-    _cdp(ws, 11, "Runtime.enable", sid=sid)
-    end = time.time() + timeout
-    meta = PROVIDERS[provider]
-    selector = meta.get("selector")
-    while time.time() < end:
-        # Evaluate both DOM readyState and provider-specific marker
-        script = """
-			(selector) => {
-				return {
-					ready: document.readyState,
-					href: location.href,
-					title: document.title,
-					marker: selector ? document.querySelector(selector) !== null : true
-				};
-			}
-		"""
-        info = _eval(ws, sid, script, args=[selector])
-        t = (info.get("title") or "").lower()
-        href = (info.get("href") or "").lower()
-        ready = (info.get("ready") or "").lower()
-        has_marker = info.get("marker")
-
-        # Detect blocks / paywalls
-        if "access blocked" in t or "buy full report" in t or "/record-check" in href:
-            raise RuntimeError("access blocked or paywall")
-
-        # Ready when DOM is loaded and marker is present
-        if ready == "complete" and has_marker:
-            return
-        time.sleep(0.5)
-
-    raise TimeoutError(f"{provider} report not ready after {timeout}s")
-
-
 def _print_to_pdf(ws, sid: str, out_path: Path):
     params = {
         "printBackground": True,
@@ -605,7 +561,7 @@ def download_report_pdfs(listings: Iterable[dict]) -> None:
         ):
             if out_path.exists() and out_path.stat().st_size > 0:
                 continue
-            url = _to_https(raw_url)
+            url = to_https(raw_url)
             target_id = ""
             try:
                 target_id = _create_target(ws, url)
@@ -614,8 +570,6 @@ def download_report_pdfs(listings: Iterable[dict]) -> None:
                     if provider == "carfax":
                         _wait_until_carfax_ready(ws, sid, timeout=60)
                         _set_media(ws, sid, "screen")  # guard against print CSS hiding
-                    # else:
-                    #     _wait_until_selector_ready(ws, sid, provider, timeout=60)
                 except RuntimeError as e:
                     if "access blocked" in str(e).lower():
                         _cdp(ws, 12, "Page.reload", sid=sid)
@@ -624,8 +578,6 @@ def download_report_pdfs(listings: Iterable[dict]) -> None:
                         if provider == "carfax":
                             _wait_until_carfax_ready(ws, sid, timeout=60)
                             _set_media(ws, sid, "screen")
-                        # else:
-                        #     _wait_until_selector_ready(ws, sid, provider, timeout=60)
                     else:
                         raise
                 _print_to_pdf(ws, sid, out_path)
