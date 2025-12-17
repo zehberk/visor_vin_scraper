@@ -50,3 +50,7 @@ evalutation_instructions.md
 test.bat
 test.py
 *_output.txt
+*input*.txt
+*expected*.txt
+*output*.txt
+*sample*.txt
