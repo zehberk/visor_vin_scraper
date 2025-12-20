@@ -2,6 +2,7 @@ import re, time
 
 from contextlib import contextmanager
 from datetime import datetime, timedelta
+from urllib.parse import urlparse
 
 
 @contextmanager
@@ -36,3 +37,14 @@ def to_https(url: str) -> str:
         if url.lower().startswith("http://")
         else url
     )
+
+
+def normalize_url(url: str) -> str:
+    """
+    Strips http and www for comparison purposes
+    """
+    p = urlparse(url)
+    host = p.netloc.lower()
+    if host.startswith("www."):
+        host = host[4:]
+    return f"{host}{p.path.rstrip('/')}"
