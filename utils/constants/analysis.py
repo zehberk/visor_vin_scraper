@@ -61,6 +61,8 @@ FEE_KEYWORDS = [
     r"dealer document fee",
     r"dealer documentation fee",
     r"dealer transfer services fees",
+    r"dealer and handling fees",
+    r"dealer and handling fee",
 ]
 FEE_PATTERN = re.compile("|".join(rf"{kw}" for kw in FEE_KEYWORDS), re.I)
 
@@ -85,7 +87,7 @@ AMOUNT_RE = re.compile(
         ]
         + [
             # amount first, phrase after
-            rf"\$\s*([0-9][0-9,]*(?:\.\d{{2}})?)\s*[^a-zA-Z]{{0,50}}{kw}"
+            rf"\$\s*([0-9][0-9,]*(?:\.\d{{2}})?)\s*.{{0,50}}{kw}"
             for kw in FEE_KEYWORDS
         ]
     ),
