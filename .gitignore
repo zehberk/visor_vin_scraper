@@ -54,3 +54,6 @@ test.py
 *expected*.txt
 *output*.txt
 *sample*.txt
+
+# Future code
+*.toml
