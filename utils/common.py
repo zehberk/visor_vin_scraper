@@ -64,4 +64,4 @@ def strip_domain(url: str) -> str:
         for values in parse_qs(p.query).values():
             parts.extend(values)
 
-    return " ".join(parts)
+    return " ".join(parts).lower()
