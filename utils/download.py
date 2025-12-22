@@ -1,6 +1,8 @@
 import asyncio, base64, glob, hashlib, io, json, os, platform, re, requests, shutil, subprocess, time, urllib.parse
 
+from bs4 import BeautifulSoup
 from datetime import timedelta
+from enum import Enum
 from pathlib import Path
 from PIL import Image
 from playwright._impl._errors import TimeoutError as PlaywrightTimeout
@@ -16,42 +18,18 @@ from urllib.parse import urljoin, urlparse, unquote
 from websocket import create_connection
 
 from utils.cache import load_cache, save_cache
-from utils.common import current_timestamp, get_time_delta, to_https
-from utils.constants import ANALYSIS_CACHE, DOC_PATH
-
-CHROME_EXE = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
-USER_DATA_DIR = str(
-    f"{os.path.abspath(os.getcwd())}/.chrome_profile"
-)  # dedicated profile for Carfax auth, must use absolute path
-DEVTOOLS_PORT = 9223
-
-CARFAX_PAT = re.compile(r"(carfax\.com/vehiclehistory)", re.I)
-AUTOCHECK_PAT = re.compile(r"(autocheck\.web\.dealer\.com|autocheck\.aspx)", re.I)
-UNAVAIL_PAT = re.compile(r"unavailable", re.I)
-
-PROVIDERS = {
-    "carfax": {
-        "key": "carfax_url",
-        "file": "carfax.pdf",
-        "unavailable": "carfax_unavailable.txt",
-        "selector": None,
-        "ready": lambda t, href, ready: (
-            "vehicle history report" in t and "carfax" in t and ready == "complete"
-        ),
-    },
-    "autocheck": {
-        "key": "autocheck_url",
-        "file": "autocheck.pdf",
-        "unavailable": "autocheck_unavailable.txt",
-        "selector": "#full-report",
-        "ready": lambda t, href, ready, marker=None: (ready == "complete" and marker),
-    },
-}
-
-MIN_POLL_DAYS = 1
+from utils.common import current_timestamp, get_time_delta, normalize_url, to_https
+from utils.constants import *
 
 
-async def get_stable_html(page, retries=5, delay=0.8):
+class FetchStatus(Enum):
+    OK = "ok"
+    NAV_TIMEOUT = "nav_timeout"
+    REMOVED_OR_SOLD = "removed_or_sold"
+    ERROR = "error"
+
+
+async def get_stable_html(page, retries=5, delay=0.5) -> str | None:
     last_hash = None
     for _ in range(retries):
         try:
@@ -63,84 +41,141 @@ async def get_stable_html(page, retries=5, delay=0.8):
             await asyncio.sleep(delay)
         except Exception:
             await asyncio.sleep(delay)
-    return await page.content()  # return last known snapshot
-
-
-async def get_report_link(
-    browser: Browser, url: str, wait_time: int = 5
-) -> tuple[str, str]:
-    context = await browser.new_context(
-        user_agent=(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/125.0.0.0 Safari/537.36"
-        ),
-        viewport={"width": 1280, "height": 800},
-        java_script_enabled=True,
-        ignore_https_errors=True,
-    )
-    page = await context.new_page()
-
     try:
-        await page.goto(url, wait_until="commit", timeout=8000)
+        return await page.content()  # return last known snapshot
+    except Exception:
+        return None
 
-        try:
-            await page.wait_for_selector(
-                "a[href*='carfax'], iframe[src*='carfax'], img.carfax-snapshot-hover, "
-                "a[href*='autocheck'], iframe[src*='autocheck'], img[alt*='autocheck']",
-                timeout=3000,
-            )
-        except Exception:
-            pass  # If not found yet, continue into the normal polling loop
 
-    except PlaywrightTimeout:
-        await context.close()
-        return "NAV_TIMEOUT", "Unavailable"
+def get_report_link(html: str | None) -> str | None:
+    if not html:
+        return None
 
-    # Wait for dynamic content (poll for carfax appearances)
-    start_url = url
-    start = time.time()
-    while time.time() - start < wait_time:
-        # quickly detect navigations/soft-redirects
-        current = page.url
-        if current.rstrip("/") != start_url.rstrip("/"):
-            await context.close()
-            return "REMOVED_OR_SOLD", "Unavailable"
+    hrefs = re.findall(r'href=["\']([^"\']+)["\']', html)
+    for href in hrefs:
+        if CARFAX_PAT.search(href):
+            return href
+        # if AUTOCHECK_PAT.search(href):
+        # 	return extract_autocheck_url(url, href), "autocheck_url"
 
-        # Some sites have a badge that requires a hover event to populate the carfax snapshot
-        try:
-            badge = await page.query_selector(
-                "img.carfax-snapshot-hover, img[alt*='carfax i'], img[alt*='Show me carfax']"
-            )
-            if badge:
-                await badge.hover()
-                await asyncio.sleep(1)  # allow iframe/link to load
-        except Exception as e:
+    return None
+
+
+def get_dealer_fee(html: str | None) -> float | None:
+    if not html:
+        return None
+
+    soup = BeautifulSoup(html, "html.parser")
+
+    matches = []
+    seen = set()
+    for node in soup.find_all(string=FEE_PATTERN):
+        parent = node.parent
+        if not parent:
             continue
 
+        text = " ".join(parent.get_text(separator=" ", strip=True).split())
+        if text not in seen:
+            seen.add(text)
+            matches.append(text)
+
+    for text in matches:
+        text_lower = text.lower()
+
+        # 1. No-fee detection → return 0 immediately
+        if NO_FEE_RE.search(text_lower):
+            return 0
+
+        # 2. Numeric fee detection → return number
+        m = AMOUNT_RE.search(text_lower)
+        if m:
+            groups = [g for g in m.groups() if g]
+            if groups:
+                fee_str = groups[0]
+                fee = float(fee_str.replace(",", ""))
+                # Set limit of 1000 for dealer fee
+                return fee if fee <= 1000 else None
+
+    return None
+
+
+async def get_listing_details(
+    browser: Browser, url: str
+) -> tuple[str | None, float | None]:
+    html, status = await fetch_listing_html(browser, url)
+
+    if status == FetchStatus.REMOVED_OR_SOLD:
+        # Do something here for the carfax link
+        x = 1
+
+    carfax_link = get_report_link(html)
+    dealer_fee = get_dealer_fee(html)
+    return carfax_link, dealer_fee
+
+
+async def fetch_listing_html(
+    browser: Browser, url: str
+) -> tuple[str | None, FetchStatus]:
+
+    retries = 1
+    # Only allow one attempt to get the page. If it fails twice, we assume it's a dead link
+    for attempt in range(retries + 1):
+        context = await browser.new_context(
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/125.0.0.0 Safari/537.36"
+            ),
+            viewport={"width": 1280, "height": 800},
+            java_script_enabled=True,
+            ignore_https_errors=True,
+        )
+        page = await context.new_page()
+
         try:
-            html = await get_stable_html(page)
-        except Exception:
-            # Last ditch effort
-            await asyncio.sleep(0.5)
             try:
-                html = await page.content()  # fallback
+                await page.goto(url, wait_until="commit", timeout=8000)
+
+                # detect redirects, but only major ones (not http -> https, etc)
+                if normalize_url(page.url) != normalize_url(url):
+                    return None, FetchStatus.REMOVED_OR_SOLD
+
+                await page.wait_for_selector("body", timeout=3000)
+            except PlaywrightTimeout:
+                if attempt < retries:
+                    continue
+                return None, FetchStatus.NAV_TIMEOUT
+
+            try:
+                await page.wait_for_selector(
+                    "a[href*='carfax'], iframe[src*='carfax'], img.carfax-snapshot-hover, "
+                    "a[href*='autocheck'], iframe[src*='autocheck'], img[alt*='autocheck']",
+                    timeout=3000,
+                )
             except Exception:
-                continue
+                # We can allow this to continue in case the carfax link
+                # is only available through dynamic loading
+                pass
 
-        hrefs = re.findall(r'href=["\']([^"\']+)["\']', html)
-        for href in hrefs:
-            if CARFAX_PAT.search(href):
-                await context.close()
-                return href, "carfax_url"
-            if AUTOCHECK_PAT.search(href):
-                await context.close()
-                return extract_autocheck_url(url, href), "autocheck_url"
-        await asyncio.sleep(0.5)
+            # Some sites have a badge that requires a hover event to populate the carfax snapshot
+            try:
+                badge = await page.query_selector(
+                    "img.carfax-snapshot-hover, img[alt*='carfax i'], img[alt*='Show me carfax']"
+                )
+                if badge:
+                    await badge.hover()
+                    await asyncio.sleep(1)  # allow iframe/link to load
+            except Exception:
+                # No need to error out, we can just continue
+                pass
 
-    # assume there is no report
-    await context.close()
-    return "NO_REPORT", "Unavailable"
+            html = await get_stable_html(page)
+            return html, FetchStatus.OK
+        finally:
+            if not page.is_closed():
+                await context.close()
+
+    return None, FetchStatus.ERROR
 
 
 def normalize_history_url(listing_url: str, href: str) -> str:
@@ -187,27 +222,31 @@ async def worker(semaphore: asyncio.Semaphore, browser: Browser, listing: dict):
     async with semaphore:
         url = listing["listing_url"]
 
-        carfax_url = listing["additional_docs"]["carfax_url"]
-        autocheck_url = listing["additional_docs"]["autocheck_url"]
+        carfax_url = listing.get("additional_docs", {}).get("carfax_url")
+        dealer_fee = listing.get("seller", {}).get("dealer_fee")
 
-        # Skip cars already processed or new
-        if (
-            listing["condition"] == "New"
-            or carfax_url != "Unavailable"
-            or autocheck_url != "Unavailable"
-        ):
+        if carfax_url != "Unavailable" and dealer_fee >= 0:
             return
 
-        link, source = await get_report_link(browser, url)
-        if link in ["NAV_TIMEOUT"]:  # , "NO_REPORT"
-            # Try one last time, just in case there was a timeout or something unexpected happened
-            link, source = await get_report_link(browser, url)
+        link, fee = await get_listing_details(browser, url)
 
-        if source != "Unavailable":
-            listing["additional_docs"][source] = link
+        updated = False
+        if link:
+            listing["additional_docs"]["carfax_url"] = link
+            updated = True
+
+        if not fee and not dealer_fee:
+            listing["seller"]["dealer_fee"] = -1
+            updated = True
+        if fee and fee != dealer_fee:
+            listing["seller"]["dealer_fee"] = fee
+            updated = True
+
+        if updated:
+            listing["updated"] = True
 
 
-async def get_missing_urls(listings: list[dict], p: Playwright) -> None:
+async def get_missing_info(listings: list[dict], p: Playwright) -> None:
     semaphore = asyncio.Semaphore(5)  # <-- Max 5 listings in parallel
 
     browser = await p.chromium.launch(
@@ -223,7 +262,7 @@ async def get_missing_urls(listings: list[dict], p: Playwright) -> None:
     for f in tqdm(
         asyncio.as_completed(tasks),
         total=len(tasks),
-        desc="Searching for report links",
+        desc="Searching for dealer data",
         unit="link",
     ):
         await f
@@ -624,25 +663,30 @@ def needs_poll(l: dict, cache: dict) -> bool:
     current = docs.get("carfax_url")
 
     cached_entry = cache.get(vin, {})
-    cached_url = cached_entry.get("carfax_url")
-    last_poll = cached_entry.get("last_poll")
+    # 1: No cached record → poll to establish baseline
+    if not cached_entry:
+        return True
 
-    # 1: Rate limiting — skip if recently polled
+    last_poll = cached_entry.get("last_poll")
+    # 2: Rate limiting — skip if recently polled
     if last_poll:
         delta = get_time_delta(current_timestamp(), last_poll)
         if delta < timedelta(MIN_POLL_DAYS):
             return False
 
-    # 2: If URL is missing/unavailable → poll
+    cached_url = cached_entry.get("carfax_url")
+    # 3: If URL is missing/unavailable → poll
     if not cached_url and current == "Unavailable":
         return True
 
-    # 3: If URL exists but changed → poll again
+    # 4: If URL exists but changed → poll again
     if cached_url and current != cached_url:
         return True
 
-    # 4: No cached record → poll to establish baseline
-    if not cached_entry:
+    cached_fee = cached_entry.get("dealer_fee")
+    # 5: If no cached fee exists → poll
+    # The listing will not have the dealer fee included
+    if not cached_fee:
         return True
 
     return False
@@ -650,6 +694,49 @@ def needs_poll(l: dict, cache: dict) -> bool:
 
 def unresolved(listings: list[dict], cache: dict) -> list[dict]:
     return [l for l in listings if needs_poll(l, cache)]
+
+
+def update_cache(listings: list[dict], analysis_cache: dict):
+    timestamp = current_timestamp()
+    # Save analysis cache
+    for l in listings:
+        updated = l.pop("updated", None)
+        if not updated:
+            continue
+
+        vin = l.get("vin")
+        if vin is None:
+            continue
+
+        analysis_cache.setdefault(vin, {})["last_poll"] = timestamp
+
+        docs = l.get("additional_docs")
+        if docs:
+            url = docs.get("carfax_url")
+            if url and url != "Unavailable":
+                analysis_cache.setdefault(vin, {})["carfax_url"] = url
+
+        seller = l.get("seller")
+        if seller:
+            fee = seller.get("dealer_fee")
+            if fee:
+                analysis_cache.setdefault(vin, {})["dealer_fee"] = fee
+
+            included = seller.get("dealer_fee_included")
+            if included:
+                analysis_cache.setdefault(vin, {})["dealer_fee_included"] = included
+
+
+def update_listings(listings: list[dict], filename: str):
+    # Save the updated listings back to the file
+    # Must do a read first so we don't overwrite the metadata
+    with open(filename, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    data["listings"] = listings  # update only this section
+
+    with open(filename, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
 
 
 async def download_files(
@@ -664,55 +751,31 @@ async def download_files(
     for l in listings:
         vin = l.get("vin")
         url = l.get("additional_docs", {}).get("carfax_url")
-        if vin and url == "Unavailable":
-            cached = analysis_cache.get(vin, {}).get("carfax_url")
-            if cached:
-                l.setdefault("additional_docs", {})["carfax_url"] = cached
+
+        if vin:
+            cached_url = analysis_cache.get(vin, {}).get("carfax_url")
+            cached_fee = analysis_cache.get(vin, {}).get("dealer_fee")
+            cached_included = analysis_cache.get(vin, {}).get("dealer_fee_included")
+            if cached_url and url == "Unavailable":
+                l.setdefault("additional_docs", {})["carfax_url"] = cached_url
+            if cached_fee:
+                l.setdefault("seller", {})["dealer_fee"] = cached_fee
+            if cached_included:
+                l.setdefault("seller", {})["dealer_fee_included"] = cached_included
 
     async with async_playwright() as p:
         if include_reports:
             missing = unresolved(listings, analysis_cache)
 
             if missing:
-                print(f"Searching for missing report links ({len(missing)} listings)")
-                await get_missing_urls(missing, p)
-
-            # Retry misses on a new batch (covers timeouts)
-            retry = unresolved(listings, analysis_cache)
-            if retry:
-                print(f"Retrying for ({len(retry)} listings)")
-                await get_missing_urls(retry, p)
+                await get_missing_info(missing, p)
+                update_cache(listings, analysis_cache)
 
             leftover = unresolved(listings, analysis_cache)
             recovered = len(missing) - len(leftover)
 
-            print(f'Recovered {recovered} url{"" if recovered == 1 else "s"}')
-
-            # Save the updated listings back to the file
-            # Must do a read first so we don't overwrite the metadata
-            with open(filename, "r", encoding="utf-8") as f:
-                data = json.load(f)
-
-            data["listings"] = listings  # update only this section
-
-            with open(filename, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2)
-
-            timestamp = current_timestamp()
-            # Save analysis cache
-            for l in listings:
-                vin = l.get("vin")
-                if vin is None:
-                    continue
-
-                analysis_cache.setdefault(vin, {})["last_poll"] = timestamp
-
-                docs = l.get("additional_docs")
-                if docs:
-                    url = docs.get("carfax_url")
-                    if url and url != "Unavailable":
-                        analysis_cache.setdefault(vin, {})["carfax_url"] = url
-
+            print(f'Updated {recovered} listing{"" if recovered == 1 else "s"}')
+            update_listings(listings, filename)
             save_cache(analysis_cache, ANALYSIS_CACHE)
 
         req = await p.request.new_context(ignore_https_errors=True)
