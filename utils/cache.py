@@ -13,7 +13,7 @@ def load_cache(cache_file: Path = PRICING_CACHE) -> dict[str, Any]:
         with cache_file.open("r", encoding="utf-8") as f:
             try:
                 return json.load(f)
-            finally:
+            except Exception:
                 return {}
     return {}
 
