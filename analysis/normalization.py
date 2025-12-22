@@ -1,6 +1,7 @@
 from collections import defaultdict
 from difflib import SequenceMatcher
 
+from analysis.kbb_collector import get_missing_models
 from analysis.utils import (
     bool_from_url,
     find_variant_key,
@@ -8,6 +9,8 @@ from analysis.utils import (
     is_trim_version_valid,
     to_int,
 )
+
+from utils.cache import load_cache
 from utils.constants import *
 from utils.models import TrimProfile
 
@@ -122,6 +125,9 @@ def best_kbb_model_match(
                         best_score = score
                         best_match = kbb_m
 
+    if best_match is None and len(kbb_models) > 0:
+        best_match = kbb_models[0]  # We need to match with something
+
     return best_match
 
 
@@ -191,9 +197,6 @@ def best_kbb_trim_match(visor_trim: str, kbb_trims: list[str]) -> str | None:
 async def get_variant_map(
     make: str, model: str, listings: list[dict]
 ) -> dict[str, list[dict]]:
-
-    from utils.cache import load_cache
-    from analysis.kbb_collector import get_missing_models
 
     # Year, Make, list[Models/Variants]
     variant_cache: dict[str, dict[str, list[str]]] = load_cache(KBB_VARIANT_CACHE)
