@@ -48,3 +48,14 @@ def normalize_url(url: str) -> str:
     if host.startswith("www."):
         host = host[4:]
     return f"{host}{p.path.rstrip('/')}"
+
+
+def strip_url(url: str) -> str:
+    """
+    Strips the url's parameters and domain for normalization
+    """
+    if not url:
+        return ""
+
+    p = urlparse(url)
+    return p.path.strip("/")
