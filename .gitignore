@@ -47,8 +47,7 @@ presets/presets.json
 playwright-profile/*
 samples/*
 evalutation_instructions.md
-test.bat
-test.py
+test.*
 *_output.txt
 *input*.txt
 *expected*.txt
