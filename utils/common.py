@@ -2,6 +2,7 @@ import re, time
 
 from contextlib import contextmanager
 from datetime import datetime, timedelta
+from urllib.parse import urlparse
 
 
 @contextmanager
@@ -28,3 +29,22 @@ def get_time_delta(time1: str, time2: str) -> timedelta:
     dt1 = datetime.strptime(time1, "%Y%m%d_%H%M%S")
     dt2 = datetime.strptime(time2, "%Y%m%d_%H%M%S")
     return dt1 - dt2
+
+
+def to_https(url: str) -> str:
+    return (
+        url.replace("http://", "https://", 1)
+        if url.lower().startswith("http://")
+        else url
+    )
+
+
+def normalize_url(url: str) -> str:
+    """
+    Strips http and www for comparison purposes
+    """
+    p = urlparse(url)
+    host = p.netloc.lower()
+    if host.startswith("www."):
+        host = host[4:]
+    return f"{host}{p.path.rstrip('/')}"

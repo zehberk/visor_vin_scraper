@@ -11,7 +11,10 @@ from utils.constants import *
 def load_cache(cache_file: Path = PRICING_CACHE) -> dict[str, Any]:
     if cache_file.exists():
         with cache_file.open("r", encoding="utf-8") as f:
-            return json.load(f)
+            try:
+                return json.load(f)
+            except Exception:
+                return {}
     return {}
 
 

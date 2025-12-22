@@ -46,3 +46,50 @@ BODY_STYLE_ALIASES = {"SUV 4D": "Sport Utility Vehicle 4D"}
 
 DEAL_ORDER = ["Great", "Good", "Fair", "Poor", "Bad"]
 COND_ORDER = ["New", "Certified", "Used"]
+
+# Level 3 regex for dealer fees
+FEE_KEYWORDS = [
+    r"dealer fee",
+    r"dealer fees",
+    r"doc fee",
+    r"doc fees",
+    r"document fee",
+    r"document fees",
+    r"documentation fee",
+    r"documentation fees",
+    r"dealer doc fee",
+    r"dealer document fee",
+    r"dealer documentation fee",
+    r"dealer transfer services fees",
+    r"dealer and handling fees",
+    r"dealer and handling fee",
+]
+FEE_PATTERN = re.compile("|".join(rf"{kw}" for kw in FEE_KEYWORDS), re.I)
+
+
+NO_FEE_RE = re.compile(
+    r"\bno\s+(?:dealer|doc(?:ument(?:ation)?)?)\s*fees?\b"
+    r"|\bzero\s+dealer\s*fees?\b",
+    re.I,
+)
+
+FEE_PHRASE_RE = re.compile(
+    r"|".join(rf"\b{kw}\b" for kw in FEE_KEYWORDS),
+    re.I,
+)
+
+AMOUNT_RE = re.compile(
+    r"|".join(
+        [
+            # phrase first, amount after
+            rf"{kw}[^$]{{0,50}}\$\s*([0-9][0-9,]*(?:\.\d{{2}})?)"
+            for kw in FEE_KEYWORDS
+        ]
+        + [
+            # amount first, phrase after
+            rf"\$\s*([0-9][0-9,]*(?:\.\d{{2}})?)\s*.{{0,50}}{kw}"
+            for kw in FEE_KEYWORDS
+        ]
+    ),
+    re.I,
+)
