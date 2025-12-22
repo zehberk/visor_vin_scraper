@@ -94,7 +94,8 @@ async def start_level2_analysis(metadata: dict, listings: list[dict], filename: 
         if report and report.exists():
             filtered_listings.append(normalize_listing(vl))
 
-    await get_pricing_data(make, model, listings, cache)
+    # We do not need the trim valuations, we just need to make sure the pricing data has been populated
+    _ = await get_pricing_data(make, model, listings, variant_map, cache)
 
     valid_listings, _, _ = filter_valid_listings(
         make, model, filtered_listings, cache_entries, variant_map

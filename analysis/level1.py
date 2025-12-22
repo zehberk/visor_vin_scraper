@@ -35,7 +35,7 @@ async def create_level1_file(listings: list[dict], metadata: dict):
     variant_map = await get_variant_map(make, model, listings)
 
     trim_valuations: list[TrimValuation] = await get_pricing_data(
-        make, model, listings, cache
+        make, model, listings, variant_map, cache
     )
 
     no_price_bin = DealBin(category="No Price", listings=[], count=0)

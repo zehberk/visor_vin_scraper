@@ -2,7 +2,7 @@ import re, time
 
 from contextlib import contextmanager
 from datetime import datetime, timedelta
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 
 @contextmanager
@@ -48,3 +48,20 @@ def normalize_url(url: str) -> str:
     if host.startswith("www."):
         host = host[4:]
     return f"{host}{p.path.rstrip('/')}"
+
+
+def strip_domain(url: str) -> str:
+    """
+    Strips the url's domain for normalization
+    """
+    if not url:
+        return ""
+
+    p = urlparse(url)
+    parts = [p.path]
+
+    if p.query:
+        for values in parse_qs(p.query).values():
+            parts.extend(values)
+
+    return " ".join(parts).lower()

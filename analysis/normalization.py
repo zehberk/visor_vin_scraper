@@ -11,6 +11,7 @@ from analysis.utils import (
 )
 
 from utils.cache import load_cache
+from utils.common import strip_domain
 from utils.constants import *
 from utils.models import TrimProfile
 
@@ -74,61 +75,97 @@ def get_sequence_score(
     return SequenceMatcher(None, visor_string, kbb_string).ratio()
 
 
+def tokens_from_url(url: str) -> set[str]:
+    path = strip_domain(url)
+    if not path:
+        return set()
+
+    s = re.sub(r"[-_/]", " ", path)
+    return set(s.split())
+
+
 def best_kbb_model_match(
     make: str, model: str, listing: dict, kbb_models: list[str]
 ) -> str | None:
-    best_match = None
 
-    # Handle hybrids first
-    if listing.get("is_hybrid", False):
-        if listing.get("is_plugin", False):
-            for kbb_m in kbb_models:
-                if "plug" in kbb_m.lower() or "phev" in kbb_m.lower():
-                    best_match = kbb_m
-                    break
+    def match_hybrids() -> str | None:
+        if listing.get("is_hybrid", False):
+            if listing.get("is_plugin", False):
+                for kbb_m in kbb_models:
+                    if "plug" in kbb_m.lower() or "phev" in kbb_m.lower():
+                        return kbb_m
 
-        if best_match is None:
             for kbb_m in kbb_models:
                 if "hybrid" in kbb_m.lower():
-                    best_match = kbb_m
-                    break
+                    return kbb_m
 
-    if best_match is None:
+        return None
+
+    def match_exact() -> str | None:
         # KBB/Visor sometimes drops the '-' for models, so we want to make sure we are removing that string as well
         stripped_model = model.replace("-", "")
 
         # Look for exact matches
         for kbb_m in kbb_models:
             if model == kbb_m or stripped_model == kbb_m:
-                best_match = kbb_m
-                break
+                return kbb_m
 
-        # If there are not any exact matches, do a token match with the trim version
-        if best_match is None:
-            trim_version: str = listing.get("trim_version", "")
-            if trim_version:
-                stripped_make = make.replace("-", "")
-                stripped_tv = (
-                    trim_version.replace(make, "")
-                    .replace(model, "")
-                    .replace(stripped_make, "")
-                    .replace(stripped_model, "")
-                )
-                listing_tokens = [t.lower() for t in stripped_tv.split()]
+        return None
 
-                best_score = 0
-                for kbb_m in kbb_models:
-                    stripped_m = kbb_m.replace(model, "").replace(stripped_model, "")
-                    kbb_tokens = [t.lower() for t in stripped_m.split()]
-                    score = len(set(listing_tokens) & set(kbb_tokens))
-                    if score > best_score:
-                        best_score = score
-                        best_match = kbb_m
+    def match_trim_tokens() -> str | None:
+        # KBB/Visor sometimes drops the '-' for models, so we want to make sure we are removing that string as well
+        stripped_model = model.replace("-", "")
 
-    if best_match is None and len(kbb_models) > 0:
-        best_match = kbb_models[0]  # We need to match with something
+        best_match = None
+        trim_version: str = listing.get("trim_version", "")
+        if trim_version:
+            stripped_make = make.replace("-", "")
+            stripped_tv = (
+                trim_version.replace(make, "")
+                .replace(model, "")
+                .replace(stripped_make, "")
+                .replace(stripped_model, "")
+            )
+            listing_tokens = [t.lower() for t in stripped_tv.split()]
 
-    return best_match
+            best_score = 0
+            for kbb_m in kbb_models:
+                stripped_m = kbb_m.replace(model, "").replace(stripped_model, "")
+                kbb_tokens = [t.lower() for t in stripped_m.split()]
+                score = len(set(listing_tokens) & set(kbb_tokens))
+                if score > best_score:
+                    best_score = score
+                    best_match = kbb_m
+
+        return best_match
+
+    def match_url_tokens() -> str | None:
+        # Sometimes the model from visor is not one of the variants listed in KBB. Use the
+        # listing's dealer url as a final check to determine the best match
+        url = listing.get("listing_url", "")
+        url_tokens = tokens_from_url(url)
+
+        best_match = None
+        if url_tokens:
+            best_score = 0
+            for kbb_m in kbb_models:
+                kbb_tokens = set(kbb_m.lower().replace("-", " ").split())
+                score = len(url_tokens & kbb_tokens)
+
+                if score > best_score:
+                    best_score = score
+                    best_match = kbb_m
+
+        return best_match
+
+    # Test in this order: hybrids, exact match, token match, url match
+    for fn in (match_hybrids, match_exact, match_trim_tokens, match_url_tokens):
+        match = fn()
+        if match:
+            return match
+
+    # Fallback to the first of the models
+    return kbb_models[0] if kbb_models else None
 
 
 def best_kbb_trim_match(visor_trim: str, kbb_trims: list[str]) -> str | None:
