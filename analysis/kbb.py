@@ -538,14 +538,17 @@ def find_styles_data(apollo: dict) -> dict | None:
 
 
 async def get_pricing_data(
-    make: str, model: str, listings: list[dict], cache: dict
+    make: str,
+    model: str,
+    listings: list[dict],
+    variant_map: dict[str, list[dict]],
+    cache: dict,
 ) -> list[TrimValuation]:
     cache_entries = cache.setdefault("entries", {})
     slugs = cache.setdefault("model_slugs", {})
     trim_options = cache.setdefault("trim_options", {})
 
     years = extract_years(listings)
-    variant_map = await get_variant_map(make, model, listings)
 
     if cache_covers_all(make, list(variant_map.keys()), years, cache):
         return get_trim_valuations_from_cache(make, model, years, cache_entries)
