@@ -578,12 +578,12 @@ def _is_chrome_installed():
 
 def download_report_pdfs(listings: Iterable[dict]) -> None:
     if not _is_chrome_installed():
-        print("Chrome not installed, cannot save documents")
+        print("Chrome not installed, cannot save reports")
         return
 
     jobs = _collect_report_jobs(listings)
     if not jobs:
-        print("No documents to save")
+        print("No reports to save")
         return
     Path(DOC_PATH).mkdir(parents=True, exist_ok=True)
     _bootstrap_profile(USER_DATA_DIR)
@@ -781,34 +781,96 @@ async def download_files(
         req = await p.request.new_context(ignore_https_errors=True)
         try:
             sticker_count = 0
-            for l in tqdm(
-                listings,
-                total=len(listings),
-                desc="Downloading supplementary info",
-                unit="listing",
-            ):
-                title = l.get("title")
-                vin = l.get("vin")
-                if not title or not vin:
-                    continue
+            work = [l for l in listings if needs_supplementary_info(l)]
+            if len(work) == 0:
+                print("All supplementary info current")
+            else:
+                for l in tqdm(
+                    work,
+                    total=len(work),
+                    desc="Downloading supplementary info",
+                    unit="listing",
+                ):
+                    title = l.get("title")
+                    vin = l.get("vin")
+                    if not title or not vin:
+                        continue
 
-                folder = os.path.join(DOC_PATH, title, vin)
-                os.makedirs(folder, exist_ok=True)
+                    folder = os.path.join(DOC_PATH, title, vin)
+                    os.makedirs(folder, exist_ok=True)
 
-                save_listing_json(l, folder)
-                _ = await download_images(req, l, folder)
-                success = await download_sticker(req, l, folder)
-                if success:
-                    sticker_count += 1
+                    save_listing_json(l, folder)
+                    _ = await download_images(req, l, folder)
+                    success = await download_sticker(req, l, folder)
+                    if success:
+                        sticker_count += 1
 
-            if sticker_count:
-                print(f"{sticker_count} stickers saved")
+                if sticker_count:
+                    print(f"{sticker_count} stickers saved")
         finally:
             await req.dispose()
 
         # Carfax pass (single Chrome via CDP, no Playwright)
         if include_reports:
             download_report_pdfs(listings)
+
+
+def needs_supplementary_info(
+    listing: dict,
+) -> bool:
+    """
+    Returns True if this listing requires any supplementary downloads:
+    - no images saved
+    - missing window sticker file
+    """
+    title = listing.get("title")
+    vin = listing.get("vin")
+    if not title or not vin:
+        return False
+
+    folder = os.path.join(DOC_PATH, title, vin)
+    listing_path = os.path.join(folder, "listing.json")
+
+    # 1. listing.json missing or changed (price, carfax_url, dealer_fee)
+    if not os.path.exists(listing_path):
+        return True
+
+    try:
+        with open(listing_path, "r", encoding="utf-8") as f:
+            old = json.load(f)
+    except Exception:
+        return True
+
+    def _key_fields(d: dict) -> tuple:
+        return (
+            d.get("price"),
+            d.get("additional_docs", {}).get("carfax_url"),
+            d.get("seller", {}).get("dealer_fee"),
+        )
+
+    if _key_fields(old) != _key_fields(listing):
+        return True
+
+    # 2. Images missing
+    img_dir = os.path.join(folder, "images")
+    if not os.path.isdir(img_dir):
+        return True
+
+    has_images = any(
+        f.lower().endswith((".jpg", ".jpeg", ".png", ".webp", ".gif"))
+        for f in os.listdir(img_dir)
+    )
+    if not has_images:
+        return True
+
+    # 3. Window sticker missing
+    sticker_url = listing.get("additional_docs", {}).get("window_sticker_url")
+    if sticker_url and sticker_url != "Unavailable":
+        sticker_path = os.path.join(folder, "sticker.pdf")
+        if not os.path.exists(sticker_path) or os.path.getsize(sticker_path) == 0:
+            return True
+
+    return False
 
 
 def main():
