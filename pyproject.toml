@@ -1,0 +1,17 @@
+[project]
+name = "visor-scraper"
+version = "0.3.0"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project.scripts]
+visor_scraper = "visor_scraper.scraper:main"
+kbb_collect = "analysis.kbb_collector:main"
+level1 = "analysis.level1:main"
+level2 = "analysis.level2:main"
+download = "utils.download:main"
+
+[tool.setuptools.packages.find]
+where = ["."]

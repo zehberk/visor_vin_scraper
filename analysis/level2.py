@@ -153,7 +153,7 @@ async def start_level2_analysis(metadata: dict, listings: list[dict], filename: 
     )
 
 
-if __name__ == "__main__":
+def main():
     json_files = glob.glob(os.path.join("output/raw", "*.json"))
     latest_json_file = max(json_files, key=os.path.getmtime)
     data: dict = {}
@@ -164,3 +164,7 @@ if __name__ == "__main__":
     if metadata and listings:
         print(f"Loading {latest_json_file} - {len(listings)} found")
         asyncio.run(start_level2_analysis(metadata, listings, latest_json_file))
+
+
+if __name__ == "__main__":
+    main()
