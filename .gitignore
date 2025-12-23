@@ -21,10 +21,6 @@ htmlcov/
 # Custom chrome profile
 .chrome_profile/*
 
-# User presets
-presets/presets.json
-!presets/presets.example.json
-
 # Output listing files
 output/*
 !output/*/*prompt.txt
@@ -43,7 +39,6 @@ Thumbs.db
 
 # Test code
 visor_scraper/test_script.py
-presets/presets.json
 playwright-profile/*
 samples/*
 evalutation_instructions.md

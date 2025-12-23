@@ -57,12 +57,12 @@ def create_report_filter_summary(metadata: dict) -> str:
     price_summary = ""
     miles_summary = ""
     filters = metadata["filters"]
-    sort_method = filters["sort"]  # this will always exist
-    condition: list[str] = filters.get("condition")
-    min_price: int = filters.get("min_price")
-    max_price: int = filters.get("max_price")
-    min_miles: int = filters.get("min_miles")
-    max_miles: int = filters.get("max_miles")
+    sort_method = filters.get("sort")  # this will always exist
+    condition: list[str] = filters.get("car_type")
+    min_price: int = filters.get("price_min")
+    max_price: int = filters.get("price_max")
+    min_miles: int = filters.get("miles_min")
+    max_miles: int = filters.get("miles_max")
 
     if condition:
         if len(condition) == 1:

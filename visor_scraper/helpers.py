@@ -1,137 +1,50 @@
 # utils.py
-import argparse, logging, re
+import logging
 
 from argparse import Namespace
 from datetime import date
+from playwright.async_api import ElementHandle, Page
+from urllib.parse import parse_qsl, urlencode, urlparse
 
 from utils.cache import load_cache, save_cache
 from utils.common import current_timestamp
-from utils.constants import (
-    LISTINGS_CACHE,
-    MAX_LISTINGS,
-    PARAM_NAME_OVERRIDES,
-    SORT_OPTIONS,
-)
+from utils.constants import *
 
 
-def format_years(metadata_years: list[str]) -> str:
-    """Turn ['2017','2020','2023','2024','2025'] into '2017, 2020, 2023–2025'."""
-    years = sorted(set(int(y) for y in metadata_years))
+def metadata_years(years: list[str]) -> str:
+    vals = sorted({int(y) for y in years})
+    if not vals:
+        return ""
+
     ranges = []
-    start = prev = years[0]
+    start = prev = vals[0]
 
-    for y in years[1:]:
+    for y in vals[1:]:
         if y == prev + 1:
             prev = y
         else:
-            if start == prev:
-                ranges.append(f"{start}")
-            else:
-                ranges.append(f"{start}–{prev}")
+            ranges.append(str(start) if start == prev else f"{start}-{prev}")
             start = prev = y
-    # flush last
-    if start == prev:
-        ranges.append(f"{start}")
-    else:
-        ranges.append(f"{start}–{prev}")
 
+    ranges.append(str(start) if start == prev else f"{start}-{prev}")
     return ", ".join(ranges)
-
-
-def normalize_years(raw_years):
-    result = set()
-
-    def convert_year(year_str: str) -> int:
-        y = int(year_str.strip())
-        if len(year_str) == 4:
-            return y
-        elif y >= 50:
-            return 1900 + y
-        else:
-            return 2000 + y
-
-    for entry in raw_years:
-        try:
-            if "-" in entry:
-                start_str, end_str = entry.split("-")
-                start = convert_year(start_str)
-                end = convert_year(end_str)
-                if start > end:
-                    raise ValueError(f"Start year '{start}' is after end year '{end}'")
-                result.update(range(start, end + 1))
-            else:
-                result.add(convert_year(entry))
-        except ValueError as e:
-            logging.error(f"[Year Error] Skipping '{entry}': {e}")
-        except Exception as e:
-            logging.error(f"[Year Error] Could not parse '{entry}': {e}")
-
-    if not result or len(result) == 0:
-        logging.error("No valid years provided. Please check your --year format.")
-        exit(1)
-
-    return ",".join(str(y) for y in sorted(result))
-
-
-def remove_null_entries(d: dict) -> dict:
-    return {k: v for k, v in d.items() if v is not None}
-
-
-def sanitize_numeric_range(raw: str) -> str:
-    return re.sub(r"[^\d\-]", "", raw)
-
-
-def parse_range_arg(name: str, raw: str):
-    try:
-        raw = sanitize_numeric_range(raw)
-        parts = raw.split("-")
-        if len(parts) == 2:
-            min_val = int(parts[0]) if parts[0] else None
-            max_val = int(parts[1]) if parts[1] else None
-        elif len(parts) == 1:
-            min_val = int(parts[0])
-            max_val = None
-        else:
-            raise ValueError("Too many hyphens in range input.")
-
-        if min_val is None and max_val is None:
-            raise ValueError(f"{name} range cannot be completely empty.")
-        if min_val and max_val and min_val > max_val:
-            raise ValueError(f"{name} range start cannot exceed end.")
-
-        return min_val, max_val
-    except Exception as e:
-        logging.error(f"[Error] Invalid format for --{name}: '{raw}' → {e}")
-        exit(1)
 
 
 def get_today_key() -> str:
     return date.today().isoformat()
 
 
-def get_fingerprint(args) -> str:
-    sort_key = SORT_OPTIONS.get(args.sort, args.sort)  # normalize
-    parts = [
-        (args.make or "").lower().strip(),
-        (args.model or "").lower().strip(),
-        ",".join(sorted(args.trim)) if getattr(args, "trim", None) else "",
-        ",".join(args.year) if getattr(args, "year", None) else "",
-        sort_key,
-        str(args.max_listings),
-        ",".join(args.condition) if getattr(args, "condition", None) else "",
-        getattr(args, "price", "")
-        or f"{getattr(args,'min_price','')}-{getattr(args,'max_price','')}",
-        getattr(args, "miles", "")
-        or f"{getattr(args,'min_miles','')}-{getattr(args,'max_miles','')}",
-    ]
-    return "|".join(parts)
+def get_fingerprint(args: Namespace) -> str:
+    params = parse_qsl(urlparse(args.url).query, keep_blank_values=True)
+    query = urlencode(sorted(params))
+    return f"{query}|max={int(args.max_listings)}"
 
 
-def get_cache_key(args) -> str:
+def get_cache_key(args: Namespace) -> str:
     return f"{get_today_key()}|{get_fingerprint(args)}"
 
 
-def try_get_cached_filename(args) -> str | None:
+def try_get_cached_filename(args: Namespace) -> str | None:
     cache = load_cache(LISTINGS_CACHE)
     key = get_cache_key(args)
     return cache.get(key)
@@ -143,10 +56,16 @@ def put_cached_filename(args, filename: str) -> None:
     save_cache(cache, LISTINGS_CACHE)
 
 
-async def safe_text(element, selector, label, metadata, default="") -> str:
+async def safe_text(
+    element: Page | ElementHandle,
+    selector: str,
+    label: str,
+    metadata: dict,
+    default: str = "",
+) -> str:
     try:
-        element = await element.query_selector(selector)
-        return await element.inner_text() if element else default
+        el = await element.query_selector(selector)
+        return await el.inner_text() if el else default
     except Exception as e:
         msg = f"Failed to read {label}: {e}"
         logging.warning(msg)
@@ -154,7 +73,15 @@ async def safe_text(element, selector, label, metadata, default="") -> str:
         return default
 
 
-async def safe_inner_text(element, label, index, metadata, default="") -> str:
+async def safe_inner_text(
+    element: ElementHandle | None,
+    label: str,
+    index: int,
+    metadata: dict,
+    default: str = "",
+) -> str:
+    if element is None:
+        return default
     try:
         return (await element.inner_text()).strip()
     except Exception as e:
@@ -164,166 +91,57 @@ async def safe_inner_text(element, label, index, metadata, default="") -> str:
         return default
 
 
-def capped_max_listings(value):
-    ivalue = int(value)
-    if ivalue > MAX_LISTINGS:
-        raise argparse.ArgumentTypeError(f"Maximum allowed listings is {MAX_LISTINGS}.")
-    return ivalue
+def filters_from_url(url: str) -> dict:
+    params = parse_qsl(urlparse(url).query)
+    out = {}
+    sort_value = "newest"
+
+    # group params by base name
+    for k, v in params:
+        if k == "sort":
+            sort_value = v
+            continue
+
+        if "," in v:
+            out[k] = sorted([item for item in v.split(",") if item])
+        elif v.isdigit():
+            out[k] = int(v)
+        else:
+            out[k] = v
+
+    out["sort"] = SORT_VALUES_TO_LABELS.get(sort_value, sort_value)
+
+    return out
 
 
-def build_metadata(args):
-    if not args.make or not args.make.strip():
-        logging.error("--make is required and cannot be empty.")
-        exit(1)
-    if not args.model or not args.model.strip():
-        logging.error("--model is required and cannot be empty.")
-        exit(1)
-
-    filters = vars(args).copy()
-
-    # Move the core vehicle fields or standalones out of filters
-    vehicle_fields = ("make", "model", "trim", "year")
-    preset_fields = ("preset", "save_preset")
-    standalone_args = ("force", "save_docs", "level1", "level2", "level3")
-    url_fields = ("url", "extra_filters")
-    for k in (*vehicle_fields, *preset_fields, *standalone_args, *url_fields):
-        filters.pop(k, None)
-
-    if getattr(args, "extra_filters", None):
-        filters["other"] = args.extra_filters
-
-    # Remove empty/null entries
-    filters = remove_null_entries(filters)
-
-    metadata = {
+def build_metadata(args: Namespace) -> dict:
+    return {
         "vehicle": {
             "make": args.make,
             "model": args.model,
             "trim": args.trim if args.trim else "",
-            "year": normalize_years(args.year) if args.year else [],
+            "year": metadata_years(args.year) if args.year else "",
         },
-        "filters": filters,
+        "filters": filters_from_url(args.url),
         "site_info": {},  # filled later
         "runtime": {
             "timestamp": current_timestamp(),
-            "search_source": "url" if args.url else "flags",
+            "url": args.url,
         },
         "warnings": [],
     }
 
-    return metadata
 
-
-def build_query_params(args: Namespace, metadata: dict) -> dict:
-    if args.miles:
-        if args.min_miles or args.max_miles:
-            logging.warning("--miles overrides --min_miles and --max_miles.")
-        args.min_miles, args.max_miles = parse_range_arg("miles", args.miles)
-        del metadata["filters"]["miles"]
-        metadata["filters"]["min_miles"] = args.min_miles
-        metadata["filters"]["max_miles"] = args.max_miles
-    if args.price:
-        if args.min_price or args.max_price:
-            logging.warning("--price overrides --min_price and --max_price.")
-        args.min_price, args.max_price = parse_range_arg("price", args.price)
-        del metadata["filters"]["price"]
-        metadata["filters"]["min_price"] = args.min_price
-        metadata["filters"]["max_price"] = args.max_price
-
-    # Default fallback for condition to suppress unnecessary warnings
-    if not args.condition:
-        args.condition = []
-    # Normalize sort key if applicable (mainly for presets)
-    if args.sort in SORT_OPTIONS:
-        args.sort = SORT_OPTIONS[args.sort]
-
-    # Remapping constants for query parameters
-    # This allows for more user-friendly input while maintaining the correct URL parameters
-    REMAPPING_RULES = {
-        "sort": SORT_OPTIONS,
-        "condition": lambda values: ",".join(v.lower() for v in values),
-        "year": normalize_years if args.year else [],
-    }
-
-    # If we are passing along the url, we already have the 'correct' sort
-    if args.sort in SORT_OPTIONS.values():
-        REMAPPING_RULES.pop("sort", None)
-
-    IGNORE_ARGS = {
-        "url",
-        "extra_filters",
-        "max_listings",
-        "price",
-        "miles",
-        "preset",
-        "save_preset",
-        "save_docs",
-        "force",
-        "level1",
-        "level2",
-        "level3",
-    }
-    VALID_ARGS = {"make", "model", "trim", "year", "sort"}
-    VALID_KEYS = set(VALID_ARGS) | set(PARAM_NAME_OVERRIDES.keys())
-
-    args_dict = {k: v for k, v in vars(args).items() if k not in IGNORE_ARGS}
-    query_params = {}
-
-    for key, value in args_dict.items():
-        try:
-            remapper = REMAPPING_RULES.get(key)
-            param_name = PARAM_NAME_OVERRIDES.get(key, key)
-
-            if key not in VALID_KEYS:
-                msg = f"Failed to process argument '{param_name}' is not a valid argument."
-                logging.warning(msg)
-                metadata["warnings"].append(msg)
-                continue
-
-            if isinstance(remapper, dict):
-                query_params[param_name] = remapper.get(value, value)
-            elif callable(remapper):
-                query_params[param_name] = remapper(value)
-            elif isinstance(value, list):
-                query_params[param_name] = ",".join(map(str, value)) if value else None
-            else:
-                query_params[param_name] = (
-                    str(value).lower() if isinstance(value, bool) else value
-                )
-        except Exception as e:
-            msg = f"Failed to process argument '{key}': {e}"
-            logging.warning(msg)
-            metadata["warnings"].append(msg)
-
-    # Clean and validate
-    cleaned = {}
-    for k, v in query_params.items():
-        if v in (None, "") or (isinstance(v, list) and not any(v)):
-            continue  # value was empty and optional; no need to warn
-        cleaned[k] = v
-
-    # Clean and validate other filters if a url was provided already
-    other = metadata["filters"].get("other")
-    if other:
-        for k, v in other.items():
-            cleaned[k] = ",".join(v) if isinstance(v, list) else v
-
-    return cleaned
-
-
-async def get_url(page, selector, index, metadata):
-    url = "Unavailable"
-
+async def get_url(page: Page, selector: str, index: int, metadata: dict) -> str:
     try:
         link = await page.query_selector(selector)
-        url = await link.get_attribute("href") if link else "Unavailable"
-    except TimeoutError as e:
-        # We are logging in warnings, but marking as unimportant because a user may not have cookies saved or plus privileges
-        metadata["warnings"].append(
-            f"[Info] Additional document timed out for listing #{index}. Cookies out of date/not set or subscription inactive"
+        return (
+            await link.get_attribute("href") or "Unavailable" if link else "Unavailable"
         )
-    except Exception as err:
-        # This is a serious error, output to the console
-        logging.error(f"{err}")
+    except Exception as e:
+        # We are logging in warnings, but marking as unimportant because this is a feature that requires cookies
+        metadata["warnings"].append(
+            f"[Info] Additional document timed out for listing #{index}."
+        )
 
-    return url
+    return "Unavailable"
