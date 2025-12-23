@@ -2,7 +2,6 @@ from pathlib import Path
 import re
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-PRESET_PATH = PROJECT_ROOT / "presets" / "presets.json"
 LISTINGS_PATH = PROJECT_ROOT / "output" / "raw"
 DOC_PATH = PROJECT_ROOT / "output" / "vehicles"
 
@@ -10,7 +9,6 @@ DOC_PATH = PROJECT_ROOT / "output" / "vehicles"
 BASE_URL = "https://visor.vin/search/listings"
 VIN_DETAILS_URL = BASE_URL + "/{vin}"
 
-CONDITIONS = {"New", "Used", "Certified"}  # Vehicle conditions
 SORT_OPTIONS = {
     "Lowest Price": "cheapest",
     "Highest Price": "expensive",
@@ -19,14 +17,7 @@ SORT_OPTIONS = {
     "Lowest Mileage": "lowest_miles",
     "Highest Mileage": "highest_miles",
 }
-PARAM_NAME_OVERRIDES = {  # For user-friendly parameter names
-    "condition": "car_type",
-    "min_miles": "miles_min",
-    "max_miles": "miles_max",
-    "min_price": "price_min",
-    "max_price": "price_max",
-}
-MAX_LISTINGS = 500  # Maximum listings to retrieve
+SORT_VALUES_TO_LABELS = {v: k for k, v in SORT_OPTIONS.items()}
 
 # HTML element selectors for main listing page
 NO_LISTINGS_FOUND_TEXT = "No listings to see"

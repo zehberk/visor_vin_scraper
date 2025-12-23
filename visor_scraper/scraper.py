@@ -1,11 +1,16 @@
-import argparse, asyncio, json, logging, os, sys, time
+import argparse, asyncio, json, logging, os
 
 from argparse import Namespace
-from datetime import date
 from pathlib import Path
-from playwright.async_api import async_playwright, Browser, Page, TimeoutError
+from playwright.async_api import (
+    async_playwright,
+    Browser,
+    ElementHandle,
+    Page,
+    TimeoutError,
+)
 from tqdm import tqdm
-from urllib.parse import parse_qs, urlencode, urlparse
+from urllib.parse import parse_qs, urlparse
 
 from analysis.level1 import start_level1_analysis
 from analysis.level2 import start_level2_analysis
@@ -18,7 +23,7 @@ from visor_scraper.helpers import *
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 
 
-async def fetch_page(page, url):
+async def fetch_page(page: Page, url: str) -> bool:
     try:
         await page.goto(url, timeout=30000)
         await page.wait_for_function(
@@ -74,7 +79,9 @@ async def extract_sidebar_data(page: Page, metadata: dict):
     # print(f"Elapsed: {elapsed:.4f} seconds")
 
 
-async def parse_warranty_coverage(coverage, index, metadata):
+async def parse_warranty_coverage(
+    coverage: ElementHandle, index: int, metadata: dict
+) -> dict:
     entry = {}
 
     entry["type"] = await safe_text(
@@ -130,7 +137,9 @@ async def parse_warranty_coverage(coverage, index, metadata):
     return entry
 
 
-async def extract_warranty_info(page, listing, index, metadata):
+async def extract_warranty_info(
+    page: Page, listing: dict, index: int, metadata: dict
+) -> None:
     listing.setdefault("warranty", {}).setdefault("coverages", [])
     listing["warranty"]["overall_status"] = await safe_text(
         page,
@@ -148,7 +157,9 @@ async def extract_warranty_info(page, listing, index, metadata):
         listing["warranty"]["coverages"].append(entry)
 
 
-async def extract_additional_documents(page, listing, index, metadata):
+async def extract_additional_documents(
+    page: Page, listing: dict, index: int, metadata: dict
+) -> None:
     listing.setdefault("additional_docs", {})
     listing["additional_docs"]["autocheck_url"] = await get_url(
         page, AUTOCHECK_URL_ELEMENT, index, metadata
@@ -161,7 +172,9 @@ async def extract_additional_documents(page, listing, index, metadata):
     )
 
 
-async def extract_seller_info(page, listing, index, metadata):
+async def extract_seller_info(
+    page: Page, listing: dict, index: int, metadata: dict
+) -> None:
     listing.setdefault("seller", {})
 
     seller_div = await page.query_selector(SELLER_BLOCK_ELEMENT)
@@ -209,7 +222,9 @@ async def extract_seller_info(page, listing, index, metadata):
     listing["seller"]["phone"] = phone_num
 
 
-async def extract_market_velocity(page, listing, index, metadata):
+async def extract_market_velocity(
+    page: Page, listing: dict, index: int, metadata: dict
+) -> None:
     try:
         await page.wait_for_selector(VELOCITY_ELEMENTS, timeout=5000)
         sections = await page.query_selector_all(VELOCITY_SECTION_ELEMENTS)
@@ -259,7 +274,9 @@ async def extract_market_velocity(page, listing, index, metadata):
         metadata["warnings"].append(msg)
 
 
-async def extract_install_options(page, listing, index, metadata):
+async def extract_install_options(
+    page: Page, listing: dict, index: int, metadata: dict
+):
     listing["installed_addons"] = {"items": [], "total": 0}
 
     try:
@@ -356,7 +373,7 @@ async def extract_spec_details(
     return True
 
 
-async def extract_price_history(page, listing, index, metadata):
+async def extract_price_history(page: Page, listing: dict) -> None:
     listing.setdefault("price_history", {})
     price_history = []
     await page.wait_for_selector(PRICE_HISTORY_ELEMENT, timeout=2000)
@@ -520,14 +537,16 @@ async def extract_full_listing_details(
         await extract_spec_details(detail_page, listing, index, metadata)
         await extract_warranty_info(detail_page, listing, index, metadata)
         await extract_market_velocity(detail_page, listing, index, metadata)
-        await extract_price_history(detail_page, listing, index, metadata)
+        await extract_price_history(detail_page, listing)
     except Exception as e:
         listing["error"] = f"Failed to fetch full details: {e}"
     finally:
         await detail_page.close()
 
 
-async def auto_scroll_to_load_all(page, metadata, max_listings, delay_ms=250):
+async def auto_scroll_to_load_all(
+    page: Page, metadata: dict, max_listings: int, delay_ms: int = 250
+) -> None:
     previous_count = 0
     i = 0
     print(f"Starting auto-scroll to load up to {max_listings} listings...")
@@ -627,7 +646,13 @@ async def extract_listings(
     return sorted(listings, key=lambda l: l["id"])
 
 
-async def detail_worker(semaphore, browser, listing, index, metadata):
+async def detail_worker(
+    semaphore: asyncio.Semaphore,
+    browser: Browser,
+    listing: dict,
+    index: int,
+    metadata: dict,
+) -> tuple[int, Exception | None]:
     async with semaphore:
         try:
             await extract_full_listing_details(browser, listing, index, metadata)
@@ -636,7 +661,7 @@ async def detail_worker(semaphore, browser, listing, index, metadata):
             return index, e
 
 
-async def safe_vin(card, index, metadata):
+async def safe_vin(card: ElementHandle, index: int, metadata: dict) -> str | None:
     try:
         href = await card.get_attribute("href")
         return href.split("/")[-1].split("?")[0] if href else None
@@ -649,7 +674,7 @@ async def safe_vin(card, index, metadata):
 
 def save_results(
     listings: list[dict], metadata: dict, args, output_path: Path = LISTINGS_PATH
-):
+) -> str:
     analysis_cache = load_cache(ANALYSIS_CACHE)
     for l in listings:
         vin = l.get("vin")
@@ -660,7 +685,7 @@ def save_results(
         if docs:
             url = docs.get("carfax_url")
             if url and url != "Unavailable":
-                analysis_cache[vin]["carfax_url"] = url
+                analysis_cache.setdefault(vin, {})["carfax_url"] = url
 
     save_cache(analysis_cache, ANALYSIS_CACHE)
 
@@ -682,7 +707,7 @@ def save_results(
 
 async def run_analysis(
     listings: list, metadata: dict, args, timestamp: str, filename: str
-):
+) -> None:
     if listings:
         if args.level1:
             await start_level1_analysis(listings, metadata, args, timestamp)
@@ -692,7 +717,7 @@ async def run_analysis(
             print("Level 3")
 
 
-async def scrape(args: Namespace):
+async def scrape(args: Namespace) -> None:
     # Try cache before touching the browser
     filename = try_get_cached_filename(args)
     if not args.force and filename and Path(filename).exists():
@@ -708,8 +733,8 @@ async def scrape(args: Namespace):
         return
 
     metadata = build_metadata(args)
-    query_params = build_query_params(args, metadata)
-    url = f"{BASE_URL}?{urlencode(query_params)}"
+    # If the user passes the flter url, just replace with the listings
+    url = str(args.url).replace("filters", "listings")
     metadata["runtime"]["url"] = url
     listings = []
 
@@ -764,155 +789,20 @@ async def scrape(args: Namespace):
     if args.save_docs:
         await download_files(listings, filename)
 
-    # print(
-    #     f"Listings with carfax reports: {sum(1 for listing in listings if listing.get("additional_docs", {}).get("carfax_url") != "Unavailable")}"
-    # )
-
     await run_analysis(listings, metadata, args, timestamp, filename)
 
 
-def save_preset_if_requested(args):
-    if not args.save_preset:
-        return
-
-    while True:
-        preset_name = input("Enter a name for this preset: ").strip()
-        if not preset_name:
-            logging.error("Preset name cannot be empty.")
-            exit(1)
-
-        # Exclude non-search-related flags
-        exclude = {"preset", "save_preset", "save_docs"}
-        preset_data = {
-            k: v for k, v in vars(args).items() if k not in exclude and v is not None
-        }
-
-        # Load existing presets
-        if PRESET_PATH.exists():
-            with open(PRESET_PATH) as f:
-                presets = json.load(f)
-        else:
-            presets = {}
-
-        if preset_name in presets:
-            print(preset_name)
-            accept = input(
-                f"{preset_name} already exists. Would you like to overwrite it (y/n)?"
-            ).strip()
-            print(accept)
-            if accept.lower() in {"y", "yes"}:
-                presets[preset_name] = preset_data
-                break
-            else:
-                continue  # pragma: no cover
-        else:
-            presets[preset_name] = preset_data
-            break
-
-    with open(PRESET_PATH, "w") as f:
-        json.dump(presets, f, indent=2)
-    logging.info(f"Preset '{preset_name}' saved.")
-
-
-def apply_url_to_args(args: Namespace):
+def apply_url_to_args(args: Namespace) -> Namespace:
     if not args.url:
-        return args
-
-    if args.preset:
-        logging.error("You cannot use --url together with --preset.")
+        logging.error("You must provide a URL")
         exit(1)
-
-    if args.make or args.model:
-        logging.info("Make and model already provided in URL, overwriting.")
-
     qs = parse_qs(urlparse(args.url).query)
 
-    # Required core fields
     args.make = qs.get("make", [""])[0].strip()
     args.model = qs.get("model", [""])[0].strip()
+    args.trim = qs.get("trim", [""])[0].split(",") if "trim" in qs else []
+    args.year = qs.get("year", [""])[0].split(",") if "year" in qs else []
 
-    # Standardized filters: only apply if user didn’t override via CLI
-    if "trim" in qs:
-        args.trim = qs["trim"][0].split(",")
-
-    if "year" in qs:
-        args.year = qs["year"][0].split(",")
-
-    if "car_type" in qs:
-        args.condition = qs["car_type"][0].split(",")
-
-    if "price_min" in qs:
-        val = qs["price_min"][0].strip('"')
-        args.min_price = int(val)
-        args.price = None
-
-    if "price_max" in qs:
-        val = qs["price_max"][0].strip('"')
-        args.max_price = int(val)
-        args.price = None
-
-    if "miles_min" in qs:
-        val = qs["miles_min"][0].strip('"')
-        args.min_miles = int(val)
-        args.miles = None
-
-    if "miles_max" in qs:
-        val = qs["miles_max"][0].strip('"')
-        args.max_miles = int(val)
-        args.miles = None
-
-    if "sort" in qs:
-        args.sort = qs.get("sort", [""])[0].strip()
-
-    # Anything not mapped explicitly becomes an "extra_filter"
-    known = {
-        "make",
-        "model",
-        "trim",
-        "year",
-        "price_min",
-        "price_max",
-        "miles_min",
-        "miles_max",
-        "car_type",  # Condition
-        "sort",
-    }
-
-    args.extra_filters = {k: v for k, v in qs.items() if k not in known}
-
-    return args
-
-
-def resolve_args(args: Namespace):
-    if args.preset and args.save_preset:
-        logging.error("You cannot use --preset and --save-preset together.")
-        exit(1)
-
-    if args.preset:
-        if not PRESET_PATH.exists():
-            logging.error(f"Preset file not found: {PRESET_PATH}")
-            exit(1)
-
-        with open(PRESET_PATH) as f:
-            presets = json.load(f)
-
-        preset_data = presets.get(args.preset)
-        if not preset_data:
-            logging.error(f"Profile '{args.preset}' not found.")
-            exit(1)
-
-        explicit_flags = {
-            arg.lstrip("-") for arg in sys.argv[1:] if arg.startswith("-")
-        }
-        for k, v in preset_data.items():
-            if k not in explicit_flags:
-                setattr(args, k, v)
-    elif args.save_preset:
-        save_preset_if_requested(args)
-
-    if not args.make or not args.model:
-        logging.error("You must provide either a --preset OR both --make and --model.")
-        exit(1)
     return args
 
 
@@ -925,67 +815,26 @@ def main():  # pragma: no cover
     )
 
     url = parser.add_argument_group("Direct URL")
-    presets = parser.add_argument_group("Preset profiles")
     docs = parser.add_argument_group("Documents")
-    required = parser.add_argument_group("Required arguments")
     behavior = parser.add_argument_group("Scraper behavior")
-    filters = parser.add_argument_group("Search filters")
-    sorting = parser.add_argument_group("Sorting options")
     analysis = parser.add_mutually_exclusive_group()
 
     url.add_argument("--url", type=str, help="The direct URL to use for filtering")
 
-    required.add_argument("--make", type=str, help="Vehicle make (e.g., Jeep)")
-    required.add_argument("--model", type=str, help="Vehicle model (e.g., Wrangler)")
-
-    filters.add_argument(
-        "--trim",
-        nargs="+",
-        type=str,
-        help="One or more trim names (quoted if multi-word)",
-    )
-    filters.add_argument(
-        "--year", nargs="+", help="Model years or ranges (e.g., 2021 2022-2024 20-22)"
-    )
-    filters.add_argument("--min_miles", type=int, help="Minimum mileage")
-    filters.add_argument("--max_miles", type=int, help="Maximum mileage")
-    filters.add_argument(
-        "--miles", type=str, help="Mileage range (e.g., 10000-60000). Overrides min/max"
-    )
-    filters.add_argument("--min_price", type=int, help="Minimum price")
-    filters.add_argument("--max_price", type=int, help="Maximum price")
-    filters.add_argument(
-        "--price", type=str, help="Price range (e.g., 10000-60000). Overrides min/max"
-    )
-    filters.add_argument(
-        "--condition",
-        choices=CONDITIONS,
-        nargs="+",
-        help="Condition(s) to filter (New, Used, Certified)",
-    )
-
-    sorting.add_argument(
-        "--sort",
-        choices=SORT_OPTIONS.keys(),
-        default="Newest",
-        help="Sort order for results",
-    )
+    def max_listings_type(value: str) -> int:
+        v = int(value)
+        if v > 500:
+            raise argparse.ArgumentTypeError("max_listings cannot exceed 500")
+        return v
 
     behavior.add_argument(
         "--max_listings",
-        type=capped_max_listings,
         default=50,
-        help="Maximum number of listings to retrieve (default: 50, max: 500)",
+        type=max_listings_type,
+        help="Maximum number of listings to retrieve, up to 500",
     )
     behavior.add_argument(
         "--force", action="store_true", help="Overrides the cache for this search"
-    )
-
-    presets.add_argument(
-        "--preset", type=str, help="Optional preset name from presets.json"
-    )
-    presets.add_argument(
-        "--save-preset", action="store_true", help="Save this search as a preset"
     )
 
     docs.add_argument(
@@ -1006,7 +855,6 @@ def main():  # pragma: no cover
 
     args = parser.parse_args()
     args = apply_url_to_args(args)
-    args = resolve_args(args)
     asyncio.run(scrape(args))
 
 
