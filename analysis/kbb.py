@@ -9,6 +9,7 @@ from playwright.async_api import (
     Page,
     TimeoutError,
 )
+from tqdm import tqdm
 
 from utils.cache import (
     cache_covers_all,
@@ -166,7 +167,7 @@ async def get_or_fetch_national_pricing(
     year: str,
     cache_entries: dict,
     expected_trims: list[str],
-) -> list[tuple[str, str, str, str, str]]:
+) -> tuple[list[tuple[str, str, str, str, str]], str | None]:
     pricing_data = []
     relevant_entries = get_relevant_entries(cache_entries, make, model, year)
 
@@ -194,6 +195,9 @@ async def get_or_fetch_national_pricing(
         url = KBB_LOOKUP_BASE_URL.format(make=safe_make, model=model_slug, year=year)
         await page.goto(url, timeout=30000, wait_until="domcontentloaded")
         try:
+            body = await page.inner_text("body")
+            if "We're sorry, our experts haven't reviewed this car yet" in body:
+                return pricing_data, f"Unable to find table for pricing: {url}"
             await page.wait_for_selector(
                 "table.css-lb65co tbody tr >> nth=0", timeout=5000
             )
@@ -203,8 +207,7 @@ async def get_or_fetch_national_pricing(
                 await page.wait_for_selector("div.css-127mtog table", timeout=5000)
                 rows = await page.query_selector_all("div.css-127mtog table tbody tr")
             except TimeoutError as t2:
-                print(f"Unable to find table for pricing: {url}")
-                return pricing_data
+                return pricing_data, f"Unable to find table for pricing: {url}"
 
         # Collect the pricing data before attempting to get FMV, otherwise page context gets
         # overwritten and Playwright will throw an error
@@ -231,7 +234,7 @@ async def get_or_fetch_national_pricing(
                     (table_trim, msrp, natl_fpp, url, datetime.now().isoformat())
                 )
 
-    return pricing_data
+    return pricing_data, None
 
 
 async def populate_pricing_for_year(
@@ -242,15 +245,18 @@ async def populate_pricing_for_year(
     year: str,
     cache_entries: dict,
     expected_trims: list[str],
-) -> None:
+) -> str | None:
 
     # Get MSRP/National FPP first, will return only entries that need an FMV
-    natl_data = await get_or_fetch_national_pricing(
+    natl_data, error = await get_or_fetch_national_pricing(
         page, make, model, model_slug, year, cache_entries, expected_trims
     )
 
+    # Error message first, then default message
+    if error:
+        return error
     if not natl_data:
-        return
+        return "No KBB data found"
 
     for table_trim, msrp, natl_fpp, natl_source, natl_ts in natl_data:
         prefix = f"{year} {make} {model}"
@@ -323,6 +329,8 @@ async def populate_pricing_for_year(
 
         entry["natl_timestamp"] = natl_ts
         entry["local_timestamp"] = local_ts
+
+        return error
 
 
 async def get_or_fetch_local_pricing(
@@ -478,7 +486,10 @@ async def get_trim_valuations_from_scrape(
             page, request, slugs, listings, make, model
         )
 
-        for ymm, slug in relevant_slugs.items():
+        messages = []
+        for ymm, slug in tqdm(
+            relevant_slugs.items(), desc="Fetching KBB pricing", unit="year/make/model"
+        ):
             if slug:
                 year = ymm[:4]
                 make_model = ymm.replace(year, "").strip()
@@ -486,7 +497,7 @@ async def get_trim_valuations_from_scrape(
                 options = await get_trim_options_for_year(
                     page, make, slug, year, trim_options, make_model
                 )
-                await populate_pricing_for_year(
+                message = await populate_pricing_for_year(
                     page,
                     make,
                     model_name,
@@ -495,6 +506,11 @@ async def get_trim_valuations_from_scrape(
                     cache_entries,
                     options,
                 )
+                if message:
+                    messages.append(message)
+
+        for m in messages:
+            print(m)
 
     finally:
         try:
