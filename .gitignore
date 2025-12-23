@@ -18,6 +18,9 @@ __pycache__/
 .coverage
 htmlcov/
 
+# Pip install files
+*.egg-info/
+
 # Custom chrome profile
 .chrome_profile/*
 
@@ -48,6 +51,3 @@ test.*
 *expected*.txt
 *output*.txt
 *sample*.txt
-
-# Future code
-*.toml

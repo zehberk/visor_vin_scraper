@@ -811,7 +811,7 @@ async def download_files(
             download_report_pdfs(listings)
 
 
-if __name__ == "__main__":
+def main():
     json_files = glob.glob(os.path.join("output/raw", "*.json"))
     latest_json_file = max(json_files, key=os.path.getmtime)
     data: dict = {}
@@ -820,3 +820,7 @@ if __name__ == "__main__":
     metadata = data.get("metadata", {})
     listings = data.get("listings", {})
     asyncio.run(download_files(listings, latest_json_file))
+
+
+if __name__ == "__main__":
+    main()

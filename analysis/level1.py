@@ -176,7 +176,7 @@ async def start_level1_analysis(
     await create_level1_file(normalized, metadata)
 
 
-if __name__ == "__main__":
+def main():
     json_files = glob.glob(os.path.join("output/raw", "*.json"))
     latest_json_file = max(json_files, key=os.path.getmtime)
     data: dict = {}
@@ -186,3 +186,7 @@ if __name__ == "__main__":
     listings = data.get("listings", {})
     if metadata and listings:
         asyncio.run(start_level1_analysis(listings, metadata, None, ""))
+
+
+if __name__ == "__main__":
+    main()
