@@ -22,7 +22,7 @@ htmlcov/
 *.egg-info/
 
 # Custom chrome profile
-.chrome_profile/*
+.chrome_profile*/
 
 # Output listing files
 output/*

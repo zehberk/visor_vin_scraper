@@ -15,10 +15,16 @@ from playwright.async_api import (
 from tqdm import tqdm
 from typing import Iterable
 from urllib.parse import urljoin, urlparse, unquote
-from websocket import create_connection
+from websocket import create_connection, WebSocket
 
 from utils.cache import load_cache, save_cache
-from utils.common import current_timestamp, get_time_delta, normalize_url, to_https
+from utils.common import (
+    current_timestamp,
+    get_time_delta,
+    normalize_url,
+    to_https,
+    stopwatch,
+)
 from utils.constants import *
 
 
@@ -343,7 +349,7 @@ async def download_sticker(req: APIRequestContext, listing: dict, folder: str) -
     return True
 
 
-def _bootstrap_profile(user_data_dir: str):
+def bootstrap_profile(user_data_dir: str):
     p = Path(user_data_dir)
     p.mkdir(parents=True, exist_ok=True)
     # mark "First Run" and welcome as completed (quiet startup)
@@ -365,7 +371,7 @@ def _bootstrap_profile(user_data_dir: str):
         pass
 
 
-def _launch_chrome(port: int, user_data_dir: str):
+def launch_chrome(port: int, user_data_dir: str):
     args = [
         CHROME_EXE,
         f"--remote-debugging-port={port}",
@@ -381,30 +387,32 @@ def _launch_chrome(port: int, user_data_dir: str):
     return subprocess.Popen(args)
 
 
-def _browser_ws_url(port: int) -> str:
+def get_cdp_websocket_url(port: int) -> str:
     info = requests.get(f"http://127.0.0.1:{port}/json/version", timeout=5).json()
     return info["webSocketDebuggerUrl"]
 
 
-def _browser_connect(ws_url: str):
+def connect_to_cdp(ws_url: str):
     u = urlparse(ws_url)
     origin = f"http://{u.hostname}:{u.port or 80}"
     return create_connection(ws_url, timeout=20, origin=origin)
 
 
-def _cdp(ws, _id: int, method: str, params=None, sid: str | None = None):
-    msg = {"id": _id, "method": method, "params": params or {}}
+def send_cdp_command(
+    ws: WebSocket, id: int, method: str, params: dict = {}, sid: str | None = None
+):
+    msg = {"id": id, "method": method, "params": params or {}}
     if sid:
         msg["sessionId"] = sid
     ws.send(json.dumps(msg))
     while True:
         m = json.loads(ws.recv())
-        if m.get("id") == _id:
+        if m.get("id") == id:
             return m
 
 
-def _create_target(ws, url: str) -> str:
-    r = _cdp(
+def open_cdp_target(ws: WebSocket, url: str) -> str:
+    r = send_cdp_command(
         ws,
         1,
         "Target.createTarget",
@@ -413,22 +421,24 @@ def _create_target(ws, url: str) -> str:
     return r["result"]["targetId"]
 
 
-def _attach(ws, target_id: str) -> str:
-    r = _cdp(ws, 2, "Target.attachToTarget", {"targetId": target_id, "flatten": True})
+def attach_cdp_session(ws: WebSocket, target_id: str) -> str:
+    r = send_cdp_command(
+        ws, 2, "Target.attachToTarget", {"targetId": target_id, "flatten": True}
+    )
     return r["result"]["sessionId"]
 
 
-def _close_target(ws, target_id: str):
+def close_cdp_target(ws: WebSocket, target_id: str):
     try:
-        _cdp(ws, 3, "Target.closeTarget", {"targetId": target_id})
+        send_cdp_command(ws, 3, "Target.closeTarget", {"targetId": target_id})
     except Exception:
         pass
 
 
-def _eval(ws, sid: str, expr: str, args: list | None = None):
+def evaluate_js(ws: WebSocket, sid: str, expr: str, args: list | None = None):
     # If no args, keep the simple evaluate path
     if not args:
-        r = _cdp(
+        r = send_cdp_command(
             ws,
             100,
             "Runtime.evaluate",
@@ -439,7 +449,7 @@ def _eval(ws, sid: str, expr: str, args: list | None = None):
 
     # With args: call a function in the page context
     # 1) Get a handle to the global object
-    root = _cdp(
+    root = send_cdp_command(
         ws,
         101,
         "Runtime.evaluate",
@@ -456,7 +466,7 @@ def _eval(ws, sid: str, expr: str, args: list | None = None):
         fn_src = f"(function(){{ return ({fn_src}); }})"
 
     # 3) Call it with arguments
-    call = _cdp(
+    call = send_cdp_command(
         ws,
         102,
         "Runtime.callFunctionOn",
@@ -472,16 +482,16 @@ def _eval(ws, sid: str, expr: str, args: list | None = None):
     return call["result"]["result"].get("value")
 
 
-def _set_media(ws, sid: str, media: str = "screen"):
-    _cdp(ws, 150, "Emulation.setEmulatedMedia", {"media": media}, sid)
+def set_emulated_media(ws: WebSocket, sid: str, media: str = "screen"):
+    send_cdp_command(ws, 150, "Emulation.setEmulatedMedia", {"media": media}, sid)
 
 
-def _wait_until_carfax_ready(ws, sid: str, timeout=90):
-    _cdp(ws, 10, "Page.enable", sid=sid)
-    _cdp(ws, 11, "Runtime.enable", sid=sid)
+def wait_for_carfax_report(ws: WebSocket, sid: str, timeout=90):
+    send_cdp_command(ws, 10, "Page.enable", sid=sid)
+    send_cdp_command(ws, 11, "Runtime.enable", sid=sid)
     end = time.time() + timeout
     while time.time() < end:
-        info = _eval(
+        info = evaluate_js(
             ws,
             sid,
             "({t: document.title, href: location.href, ready: document.readyState})",
@@ -497,7 +507,7 @@ def _wait_until_carfax_ready(ws, sid: str, timeout=90):
     raise TimeoutError("report not ready")
 
 
-def _print_to_pdf(ws, sid: str, out_path: Path):
+def print_to_pdf(ws: WebSocket, sid: str, out_path: Path):
     params = {
         "printBackground": True,
         "landscape": False,
@@ -511,13 +521,13 @@ def _print_to_pdf(ws, sid: str, out_path: Path):
         "preferCSSPageSize": False,
         "displayHeaderFooter": False,
     }
-    r = _cdp(ws, 200, "Page.printToPDF", params, sid)
+    r = send_cdp_command(ws, 200, "Page.printToPDF", params, sid)
     data_b64 = r["result"]["data"]
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_bytes(base64.b64decode(data_b64))
 
 
-def _collect_report_jobs(listings: Iterable[dict]) -> list[tuple[str, str, Path]]:
+def collect_report_jobs(listings: Iterable[dict]) -> list[tuple[str, str, Path]]:
     jobs = []
     for lst in listings:
         title, vin = lst.get("title"), lst.get("vin")
@@ -538,7 +548,7 @@ def _collect_report_jobs(listings: Iterable[dict]) -> list[tuple[str, str, Path]
     return jobs
 
 
-def _is_chrome_installed():
+def is_chrome_installed():
     # First check PATH names
     candidates = [
         "google-chrome",
@@ -576,73 +586,82 @@ def _is_chrome_installed():
     return None
 
 
-def download_report_pdfs(listings: Iterable[dict]) -> None:
-    if not _is_chrome_installed():
+def download_report_pdfs(listings: list[dict]) -> None:
+    if not is_chrome_installed():
         print("Chrome not installed, cannot save reports")
         return
 
-    jobs = _collect_report_jobs(listings)
+    jobs = collect_report_jobs(listings)
     if not jobs:
         print("No reports to save")
         return
+
     Path(DOC_PATH).mkdir(parents=True, exist_ok=True)
-    _bootstrap_profile(USER_DATA_DIR)
-    proc = _launch_chrome(DEVTOOLS_PORT, USER_DATA_DIR)
+    bootstrap_profile(USER_DATA_DIR)
+
+    proc = launch_chrome(DEVTOOLS_PORT, USER_DATA_DIR)
     time.sleep(2.0)
+
     ws = None
     try:
-        ws = _browser_connect(_browser_ws_url(DEVTOOLS_PORT))
+        ws = connect_to_cdp(get_cdp_websocket_url(DEVTOOLS_PORT))
+        current = 1
         for provider, raw_url, out_path in tqdm(
             jobs,
             total=len(jobs),
             desc="Downloading reports",
             unit="listing",
         ):
-            if out_path.exists() and out_path.stat().st_size > 0:
-                continue
             url = to_https(raw_url)
             target_id = ""
+
             try:
-                target_id = _create_target(ws, url)
-                sid = _attach(ws, target_id)
-                try:
-                    if provider == "carfax":
-                        _wait_until_carfax_ready(ws, sid, timeout=60)
-                        _set_media(ws, sid, "screen")  # guard against print CSS hiding
-                except RuntimeError as e:
-                    if "access blocked" in str(e).lower():
-                        _cdp(ws, 12, "Page.reload", sid=sid)
+                target_id = open_cdp_target(ws, url)
+                sid = attach_cdp_session(ws, target_id)
+
+                if provider == "carfax":
+                    try:
+                        wait_for_carfax_report(ws, sid, timeout=60)
+                    except RuntimeError as e:
+                        if "access blocked" not in str(e).lower():
+                            raise
+                        send_cdp_command(ws, 12, "Page.reload", sid=sid)
                         # tiny pause so the reload actually kicks in
                         time.sleep(0.5)
-                        if provider == "carfax":
-                            _wait_until_carfax_ready(ws, sid, timeout=60)
-                            _set_media(ws, sid, "screen")
-                    else:
-                        raise
-                _print_to_pdf(ws, sid, out_path)
+                        wait_for_carfax_report(ws, sid, timeout=60)
+
+                    set_emulated_media(
+                        ws, sid, "screen"
+                    )  # guard against print CSS hiding
+
+                # with stopwatch(f"{current} - PDF print"):
+                print_to_pdf(ws, sid, out_path)
+                # current += 1
 
                 # Only save HTML if the PDF actually exists and isn't empty
                 if out_path.exists() and out_path.stat().st_size > 0:
                     html_path = out_path.with_suffix(".html")
-                    html_source = _eval(ws, sid, "document.documentElement.outerHTML")
-                    html_path.write_text(html_source, encoding="utf-8")
+                    html = evaluate_js(ws, sid, "document.documentElement.outerHTML")
+                    html_path.write_text(html, encoding="utf-8")
 
                     # Clean up old files
                     for f in out_path.parent.glob("*"):
                         if f.is_file() and UNAVAIL_PAT.search(f.name):
                             f.unlink()
+
             except Exception:
                 try:
-                    out_path.parent.mkdir(parents=True, exist_ok=True)
                     unavail = PROVIDERS[provider]["unavailable"]
                     (out_path.parent / unavail).write_text(
                         "Payment wall or access blocked", encoding="utf-8"
                     )
                 except Exception:
                     pass
+
             finally:
                 if target_id:
-                    _close_target(ws, target_id)
+                    close_cdp_target(ws, target_id)
+
     finally:
         try:
             if ws:
