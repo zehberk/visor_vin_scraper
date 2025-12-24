@@ -18,7 +18,13 @@ from urllib.parse import urljoin, urlparse, unquote
 from websocket import create_connection, WebSocket
 
 from utils.cache import load_cache, save_cache
-from utils.common import current_timestamp, get_time_delta, normalize_url, to_https
+from utils.common import (
+    current_timestamp,
+    get_time_delta,
+    normalize_url,
+    to_https,
+    stopwatch,
+)
 from utils.constants import *
 
 
@@ -580,7 +586,7 @@ def is_chrome_installed():
     return None
 
 
-def download_report_pdfs(listings: Iterable[dict]) -> None:
+def download_report_pdfs(listings: list[dict]) -> None:
     if not is_chrome_installed():
         print("Chrome not installed, cannot save reports")
         return
@@ -599,7 +605,7 @@ def download_report_pdfs(listings: Iterable[dict]) -> None:
     ws = None
     try:
         ws = connect_to_cdp(get_cdp_websocket_url(DEVTOOLS_PORT))
-
+        current = 1
         for provider, raw_url, out_path in tqdm(
             jobs,
             total=len(jobs),
@@ -628,7 +634,9 @@ def download_report_pdfs(listings: Iterable[dict]) -> None:
                         ws, sid, "screen"
                     )  # guard against print CSS hiding
 
+                # with stopwatch(f"{current} - PDF print"):
                 print_to_pdf(ws, sid, out_path)
+                # current += 1
 
                 # Only save HTML if the PDF actually exists and isn't empty
                 if out_path.exists() and out_path.stat().st_size > 0:
