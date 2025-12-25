@@ -6,7 +6,6 @@ from enum import Enum
 from pathlib import Path
 from PIL import Image
 from playwright._impl._errors import TimeoutError as PlaywrightTimeout
-from playwright._impl._errors import Error as PlaywrightError
 from playwright.async_api import (
     APIRequestContext,
     async_playwright,
@@ -34,7 +33,6 @@ class FetchStatus(Enum):
     NAV_TIMEOUT = "nav_timeout"
     REMOVED_OR_SOLD = "removed_or_sold"
     ERROR = "error"
-    NETWORK_CHANGED = "network_changed"
 
 
 async def get_stable_html(page, retries=5, delay=0.5) -> str | None:
@@ -152,15 +150,7 @@ async def fetch_listing_html(
             except PlaywrightTimeout:
                 if attempt < retries:
                     continue
-
                 return None, FetchStatus.NAV_TIMEOUT
-            except PlaywrightError as e:
-                if attempt < retries:
-                    continue
-
-                if "ERR_NETWORK_CHANGED" in str(e):
-                    return None, FetchStatus.NETWORK_CHANGED
-                return None, FetchStatus.ERROR
 
             try:
                 await page.wait_for_selector(
@@ -236,9 +226,7 @@ def extract_autocheck_url(url: str, href: str) -> str:
 
 async def worker(semaphore: asyncio.Semaphore, browser: Browser, listing: dict):
     async with semaphore:
-        url = listing.get("listing_url")
-        if url is None:
-            return
+        url = listing["listing_url"]
 
         carfax_url = listing.get("additional_docs", {}).get("carfax_url")
         dealer_fee = listing.get("seller", {}).get("dealer_fee")
