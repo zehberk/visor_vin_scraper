@@ -99,8 +99,8 @@ def get_dealer_fee(html: str | None) -> float | None:
             if groups:
                 fee_str = groups[0]
                 fee = float(fee_str.replace(",", ""))
-                # Set limit of 1000 for dealer fee
-                return fee if fee <= 1000 else None
+                # Set limit of 2000 for dealer fee
+                return fee if fee <= 2000 else None
 
     return None
 
@@ -110,9 +110,8 @@ async def get_listing_details(
 ) -> tuple[str | None, float | None]:
     html, status = await fetch_listing_html(browser, url)
 
-    if status == FetchStatus.REMOVED_OR_SOLD:
-        # Do something here for the carfax link
-        x = 1
+    # if status == FetchStatus.REMOVED_OR_SOLD:
+    # Do something here for the carfax link
 
     carfax_link = get_report_link(html)
     dealer_fee = get_dealer_fee(html)
