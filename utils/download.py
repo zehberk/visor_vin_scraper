@@ -26,6 +26,7 @@ from utils.common import (
     stopwatch,
 )
 from utils.constants import *
+from utils.fees import parse_fee_snippets
 
 
 class FetchStatus(Enum):
@@ -67,14 +68,14 @@ def get_report_link(html: str | None) -> str | None:
     return None
 
 
-def get_dealer_fee(html: str | None) -> float | None:
+def get_fee_snippets(html: str | None) -> list[tuple[str, float, bool | None]]:
     if not html:
-        return None
+        return []
 
     soup = BeautifulSoup(html, "html.parser")
-
-    matches = []
+    snippets = []
     seen = set()
+
     for node in soup.find_all(string=FEE_PATTERN):
         parent = node.parent
         if not parent:
@@ -83,39 +84,22 @@ def get_dealer_fee(html: str | None) -> float | None:
         text = " ".join(parent.get_text(separator=" ", strip=True).split())
         if text not in seen:
             seen.add(text)
-            matches.append(text)
+            snippets.append(text)
 
-    for text in matches:
-        text_lower = text.lower()
-
-        # 1. No-fee detection → return 0 immediately
-        if NO_FEE_RE.search(text_lower):
-            return 0
-
-        # 2. Numeric fee detection → return number
-        m = AMOUNT_RE.search(text_lower)
-        if m:
-            groups = [g for g in m.groups() if g]
-            if groups:
-                fee_str = groups[0]
-                fee = float(fee_str.replace(",", ""))
-                # Set limit of 2000 for dealer fee
-                return fee if fee <= 2000 else None
-
-    return None
+    return parse_fee_snippets(snippets)
 
 
 async def get_listing_details(
     browser: Browser, url: str
-) -> tuple[str | None, float | None]:
+) -> tuple[str | None, list[tuple[str, float, bool | None]]]:
     html, status = await fetch_listing_html(browser, url)
 
     # if status == FetchStatus.REMOVED_OR_SOLD:
     # Do something here for the carfax link
 
     carfax_link = get_report_link(html)
-    dealer_fee = get_dealer_fee(html)
-    return carfax_link, dealer_fee
+    fees = get_fee_snippets(html)
+    return carfax_link, fees
 
 
 async def fetch_listing_html(
@@ -228,23 +212,23 @@ async def worker(semaphore: asyncio.Semaphore, browser: Browser, listing: dict):
         url = listing["listing_url"]
 
         carfax_url = listing.get("additional_docs", {}).get("carfax_url")
-        dealer_fee = listing.get("seller", {}).get("dealer_fee")
+        dealer_fees = listing.get("seller", {}).get("dealer_fees")
 
-        if carfax_url != "Unavailable" and dealer_fee >= 0:
+        if carfax_url and carfax_url != "Unavailable" and dealer_fees:
             return
 
-        link, fee = await get_listing_details(browser, url)
+        link, fees = await get_listing_details(browser, url)
 
         updated = False
         if link:
             listing["additional_docs"]["carfax_url"] = link
             updated = True
 
-        if not fee and not dealer_fee:
-            listing["seller"]["dealer_fee"] = -1
+        if not fees and not dealer_fees:
+            listing["seller"]["dealer_fees"] = [("Unknown", -1, None)]
             updated = True
-        if fee and fee != dealer_fee:
-            listing["seller"]["dealer_fee"] = fee
+        if fees and fees != dealer_fees:
+            listing["seller"]["dealer_fee"] = fees
             updated = True
 
         if updated:
@@ -736,13 +720,9 @@ def update_cache(listings: list[dict], analysis_cache: dict):
 
         seller = l.get("seller")
         if seller:
-            fee = seller.get("dealer_fee")
-            if fee:
-                analysis_cache.setdefault(vin, {})["dealer_fee"] = fee
-
-            included = seller.get("dealer_fee_included")
-            if included:
-                analysis_cache.setdefault(vin, {})["dealer_fee_included"] = included
+            fees = seller.get("dealer_fees")
+            if fees:
+                analysis_cache.setdefault(vin, {})["dealer_fees"] = fees
 
 
 def update_listings(listings: list[dict], filename: str):
