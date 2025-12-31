@@ -228,7 +228,7 @@ async def worker(semaphore: asyncio.Semaphore, browser: Browser, listing: dict):
             listing["seller"]["dealer_fees"] = [("Unknown", -1, None)]
             updated = True
         if fees and fees != dealer_fees:
-            listing["seller"]["dealer_fee"] = fees
+            listing["seller"]["dealer_fees"] = fees
             updated = True
 
         if updated:
