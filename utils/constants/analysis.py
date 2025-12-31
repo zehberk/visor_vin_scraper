@@ -260,3 +260,7 @@ LEADING_NON_LETTER_RE = re.compile(r"^[^a-zA-Z]+")
 TRAILING_NON_LETTER_RE = re.compile(r"[^a-zA-Z]+$")
 
 FEE_WORDS = {"fee", "fees", "charge", "charges", "expense"}
+FEE_SIGNAL_RE = re.compile(
+    r"\b(?:fee|fees|charge|charges|expense)\b",
+    re.I,
+)
