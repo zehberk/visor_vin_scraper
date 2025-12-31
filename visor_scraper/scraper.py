@@ -693,6 +693,8 @@ def save_results(
     if not output_path.exists():
         output_path.mkdir(parents=True, exist_ok=True)
     filename = f"{args.make}_{args.model}_listings_{ts}.json".replace(" ", "_")
+    # Visor sometimes uses quotes for models, so remove characters that can't be in a filename
+    filename = re.sub(r'[<>:"/\\|?*]', "", filename)
     path = os.path.join(output_path, filename)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(

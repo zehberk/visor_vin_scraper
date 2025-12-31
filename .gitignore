@@ -41,13 +41,18 @@ cache/*.cache
 Thumbs.db
 
 # Test code
-visor_scraper/test_script.py
 playwright-profile/*
-samples/*
 evalutation_instructions.md
+
 test.*
 *_output.txt
 *input*.txt
 *expected*.txt
 *output*.txt
 *sample*.txt
+
+*_output.json
+*input*.json
+*expected*.json
+*output*.json
+*sample*.json
