@@ -357,7 +357,7 @@ def normalize_listing(listing: dict) -> dict:
 
     addl = listing.get("additional_docs", {}) or {}
     carfax_present: bool = bool_from_url(addl.get("carfax_url"))
-    autocheck_present: bool = bool_from_url(addl.get("autocheck_url"))
+    # autocheck_present: bool = bool_from_url(addl.get("autocheck_url"))
     sticker_present: bool = bool_from_url(addl.get("window_sticker_url"))
 
     specs: dict = listing.get("specs", {})
@@ -398,7 +398,7 @@ def normalize_listing(listing: dict) -> dict:
         "mileage": to_int(listing.get("mileage")),
         "is_hybrid": is_hybrid,
         "is_plugin": is_plugin,
-        "report_present": carfax_present or autocheck_present,
+        "report_present": carfax_present,  # or autocheck_present,
         "window_sticker_present": sticker_present,
         "warranty_info_present": warranty_present,
         # Level 2
@@ -409,4 +409,5 @@ def normalize_listing(listing: dict) -> dict:
         # Level 3
         "market_velocity": listing.get("market_velocity", {}),
         "price_history": listing.get("price_history", []),
+        "dealer_fees": listing.get("seller", {}).get("dealer_fees", []),
     }
