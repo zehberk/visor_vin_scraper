@@ -44,7 +44,7 @@ Thumbs.db
 playwright-profile/*
 evalutation_instructions.md
 
-test.*
+test*.*
 *_output.txt
 *input*.txt
 *expected*.txt
