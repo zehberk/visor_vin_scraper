@@ -30,13 +30,13 @@ def log_refresh(year: str, make: str, models: list[str]) -> None:
 
 
 async def get_div_values(page: Page, div: str, error_msg: str) -> list[str]:
-    select = await page.query_selector(f"{div} select")
-    if select:
-        options = await select.query_selector_all("option:not([disabled])")
+    select = page.locator(f"{div} select")
+    if await select.count() > 0:
+        options = await select.locator("option:not([disabled])").all()
         attempt = 0
         while len(options) == 0 and attempt < 100:
             await asyncio.sleep(0.1)
-            options = await select.query_selector_all("option:not([disabled])")
+            options = await select.locator("option:not([disabled])").all()
             attempt += 1
         if attempt < 100:
             raw_inner_text = [await o.inner_text() for o in options]
