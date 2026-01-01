@@ -47,7 +47,7 @@ async def get_div_values(page: Page, div: str, error_msg: str) -> list[str]:
 
 
 async def get_years(page: Page) -> list[str]:
-    await page.wait_for_selector(YEAR_SEL, state="attached", timeout=10000)
+    await page.locator(YEAR_SEL).wait_for(state="attached", timeout=10000)
     await page.wait_for_function(
         """() => {
 			const el = document.querySelector('div.year select');
