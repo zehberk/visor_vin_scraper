@@ -19,7 +19,11 @@ from utils.cache import (
     save_cache,
 )
 from analysis.normalization import best_kbb_trim_match, get_variant_map
-from analysis.utils import extract_years, get_trim_valuations_from_cache, to_int
+from analysis.analysis_utils import (
+    extract_years,
+    get_trim_valuations_from_cache,
+    to_int,
+)
 from utils.common import make_string_url_safe
 from utils.constants import *
 from utils.models import TrimValuation
@@ -141,7 +145,7 @@ async def get_trim_options_for_year(
     apollo = data.get("props", {}).get("apolloState", {})
 
     styles = find_styles_data(apollo)
-    if not styles:
+    if not styles or styles["result"]["ymm"]["year"] is None:
         trim_options.setdefault(make_model_key, {})[year] = []
         return []
 
@@ -193,26 +197,26 @@ async def get_or_fetch_national_pricing(
     else:
         safe_make = make_string_url_safe(make)
         url = KBB_LOOKUP_BASE_URL.format(make=safe_make, model=model_slug, year=year)
-        await page.goto(url, timeout=30000, wait_until="domcontentloaded")
+        await page.goto(url, timeout=10000, wait_until="commit")
         try:
             body = await page.inner_text("body")
             if "We're sorry, our experts haven't reviewed this car yet" in body:
                 return pricing_data, f"Unable to find table for pricing: {url}"
-            await page.wait_for_selector(
-                "table.css-lb65co tbody tr >> nth=0", timeout=5000
-            )
-            rows = await page.query_selector_all("table.css-lb65co tbody tr")
+            rows_locator = page.locator("table.css-lb65co tbody tr")
+            await rows_locator.first.wait_for(timeout=5000)
+            rows = await rows_locator.all()
         except TimeoutError as t1:
             try:
-                await page.wait_for_selector("div.css-127mtog table", timeout=5000)
-                rows = await page.query_selector_all("div.css-127mtog table tbody tr")
+                table = page.locator("div.css-127mtog table tbody tr")
+                await table.first.wait_for(timeout=5000)
+                rows = await table.all()
             except TimeoutError as t2:
                 return pricing_data, f"Unable to find table for pricing: {url}"
 
         # Collect the pricing data before attempting to get FMV, otherwise page context gets
         # overwritten and Playwright will throw an error
         for row in rows:
-            divs = await row.query_selector_all("div")
+            divs = await row.locator("div").all()
             if divs:
                 if len(divs) < 3:
                     continue
@@ -224,7 +228,7 @@ async def get_or_fetch_national_pricing(
                     (table_trim, msrp, natl_fpp, url, datetime.now().isoformat())
                 )
             else:
-                tds = await row.query_selector_all("td")
+                tds = await row.locator("td").all()
                 if len(tds) < 2:
                     continue
                 table_trim = (await tds[0].inner_text()).strip()
@@ -370,9 +374,9 @@ async def get_or_fetch_local_pricing(
 
         fmr_low, fmr_high, fpp_local = await get_price_advisor_values(page)
 
-        nav_tabs = await page.query_selector_all(
+        nav_tabs = await page.locator(
             "div.styled-nav-tabs.css-16wc4jq.empazup2 button"
-        )
+        ).all()
 
         depreciation_exists = False
         for button in nav_tabs:
@@ -406,22 +410,14 @@ async def get_price_advisor_values(
     price_values: list[str] = []
 
     try:
-        await page.wait_for_selector("object#priceAdvisor")
-        data_url = await page.get_attribute("object#priceAdvisor", "data")
+        data_url = await page.locator("object#priceAdvisor").get_attribute("data")
 
         if data_url:
             # Now navigate directly to that URL to parse it
             svg_page = await page.context.new_page()
             await svg_page.goto(data_url)
-            await svg_page.wait_for_selector("text")
-            price_values = await svg_page.eval_on_selector_all(
-                "g#RangeBox > text",
-                """
-				nodes => nodes
-					.map(n => n.textContent.trim())
-					.filter(t => t.includes('$'))
-				""",
-            )
+            texts = await svg_page.locator("g#RangeBox > text").all_text_contents()
+            price_values = [t.strip() for t in texts if "$" in t]
 
             await svg_page.close()
     except TimeoutError as t:
