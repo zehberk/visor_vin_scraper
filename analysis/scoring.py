@@ -3,7 +3,7 @@ import re
 from datetime import datetime
 from typing import Optional
 
-from analysis.utils import to_int
+from analysis.analysis_utils import to_int
 from itertools import groupby
 from utils.constants import *
 from utils.models import (

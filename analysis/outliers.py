@@ -1,6 +1,6 @@
 from typing import Callable
 
-from analysis.utils import percentile
+from analysis.analysis_utils import percentile
 from utils.models import CarListing
 
 

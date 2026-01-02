@@ -2,7 +2,7 @@ from collections import defaultdict
 from difflib import SequenceMatcher
 
 from analysis.kbb_collector import get_missing_models
-from analysis.utils import (
+from analysis.analysis_utils import (
     bool_from_url,
     find_variant_key,
     get_relevant_entries,

@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from analysis.utils import get_relevant_entries
+from analysis.analysis_utils import get_relevant_entries
 from utils.constants import *
 
 
