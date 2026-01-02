@@ -129,16 +129,17 @@ async def fetch_listing_html(
                 if normalize_url(page.url) != normalize_url(url):
                     return None, FetchStatus.REMOVED_OR_SOLD
 
-                await page.wait_for_selector("body", timeout=3000)
+                await page.locator("body").wait_for(timeout=3000)
             except PlaywrightTimeout:
                 if attempt < retries:
                     continue
                 return None, FetchStatus.NAV_TIMEOUT
 
             try:
-                await page.wait_for_selector(
+                await page.locator(
                     "a[href*='carfax'], iframe[src*='carfax'], img.carfax-snapshot-hover, "
-                    "a[href*='autocheck'], iframe[src*='autocheck'], img[alt*='autocheck']",
+                    "a[href*='autocheck'], iframe[src*='autocheck'], img[alt*='autocheck']"
+                ).wait_for(
                     timeout=3000,
                 )
             except Exception:
@@ -148,10 +149,10 @@ async def fetch_listing_html(
 
             # Some sites have a badge that requires a hover event to populate the carfax snapshot
             try:
-                badge = await page.query_selector(
+                badge = page.locator(
                     "img.carfax-snapshot-hover, img[alt*='carfax i'], img[alt*='Show me carfax']"
                 )
-                if badge:
+                if await badge.count() > 0:
                     await badge.hover()
                     await asyncio.sleep(1)  # allow iframe/link to load
             except Exception:

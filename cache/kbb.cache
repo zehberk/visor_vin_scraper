@@ -1,5 +1,12 @@
 {
   "2027": {
+    "Chevrolet": [
+      "Bolt"
+    ],
+    "Kia": [
+      "Seltos",
+      "Telluride"
+    ],
     "Rivian": [
       "R3"
     ],
@@ -15,6 +22,7 @@
     "Acura": [
       "Integra",
       "MDX",
+      "RDX",
       "RSX"
     ],
     "AFEELA": [
@@ -24,12 +32,19 @@
     "Audi": [
       "A3",
       "A6",
+      "A8",
       "Q3",
       "Q4 e-tron",
       "Q4 Sportback e-tron",
       "Q5",
       "Q7",
       "Q8",
+      "RS 3",
+      "RS 6",
+      "RS 7",
+      "RS Q8",
+      "S3",
+      "S8",
       "SQ7",
       "SQ8"
     ],
@@ -55,6 +70,7 @@
       "X6",
       "X6 M",
       "X7",
+      "XM",
       "Z4"
     ],
     "Buick": [
@@ -84,6 +100,7 @@
       "Colorado Crew Cab",
       "Corvette",
       "Equinox",
+      "Equinox EV",
       "Silverado 1500 Crew Cab",
       "Silverado 1500 Double Cab",
       "Silverado 1500 Regular Cab",
@@ -91,6 +108,8 @@
       "Silverado 2500 HD Double Cab",
       "Silverado 2500 HD Regular Cab",
       "Silverado 3500 HD Crew Cab",
+      "Silverado 3500 HD Double Cab",
+      "Silverado 3500 HD Regular Cab",
       "Silverado EV",
       "Suburban",
       "Tahoe",
@@ -109,12 +128,18 @@
       "Durango"
     ],
     "Ford": [
+      "Bronco",
+      "Bronco Sport",
       "E-Transit 350 Cargo Van",
       "Escape",
       "Escape Plug-in Hybrid",
       "Expedition",
       "Expedition MAX",
       "Explorer",
+      "F150 Lightning",
+      "F150 Regular Cab",
+      "F150 Super Cab",
+      "F150 SuperCrew Cab",
       "F250 Super Duty Crew Cab",
       "F250 Super Duty Regular Cab",
       "F250 Super Duty Super Cab",
@@ -123,6 +148,10 @@
       "F350 Super Duty Super Cab",
       "F450 Super Duty Crew Cab",
       "F450 Super Duty Regular Cab",
+      "Maverick",
+      "Mustang",
+      "Mustang MACH-E",
+      "Ranger SuperCrew",
       "Transit 150 Cargo Van",
       "Transit 250 Cargo Van",
       "Transit 350 Cargo Van",
@@ -146,12 +175,20 @@
       "Sierra 1500 Crew Cab",
       "Sierra 1500 Double Cab",
       "Sierra 1500 Regular Cab",
+      "Sierra 2500 HD Crew Cab",
+      "Sierra 2500 HD Double Cab",
+      "Sierra 2500 HD Regular Cab",
+      "Sierra 3500 HD Crew Cab",
+      "Sierra 3500 HD Double Cab",
+      "Sierra 3500 HD Regular Cab",
       "Sierra EV",
       "Terrain",
       "Yukon",
       "Yukon XL"
     ],
     "Honda": [
+      "Accord",
+      "Accord Hybrid",
       "Civic",
       "Civic Hybrid",
       "CR-V",
@@ -159,9 +196,16 @@
       "HR-V",
       "Odyssey",
       "Passport",
-      "Prelude"
+      "Pilot",
+      "Prelude",
+      "Prologue",
+      "Ridgeline"
     ],
     "Hyundai": [
+      "Elantra",
+      "Elantra Hybrid",
+      "Elantra N",
+      "IONIQ 5",
       "IONIQ 6",
       "IONIQ 6 N",
       "IONIQ 9",
@@ -175,7 +219,8 @@
       "Sonata Hybrid",
       "Tucson",
       "Tucson Hybrid",
-      "Tucson Plug-in Hybrid"
+      "Tucson Plug-in Hybrid",
+      "Venue"
     ],
     "INFINITI": [
       "QX60",
@@ -188,16 +233,22 @@
     "Jeep": [
       "Cherokee",
       "Compass",
+      "Gladiator",
       "Grand Cherokee",
-      "Recon"
+      "Grand Cherokee L",
+      "Recon",
+      "Wrangler 2 Door",
+      "Wrangler 4 Door"
     ],
     "Kia": [
       "Carnival",
       "Carnival Hybrid",
       "EV4",
       "EV9",
+      "K4",
       "K4 Hatchback",
       "K5",
+      "Niro",
       "Seltos",
       "Sorento",
       "Sorento Hybrid",
@@ -212,16 +263,21 @@
       "Defender 90",
       "Discovery",
       "Discovery Sport",
+      "Range Rover",
       "Range Rover Evoque",
       "Range Rover Velar"
     ],
     "Lexus": [
       "ES",
+      "GX",
       "LC",
+      "LS",
+      "LX",
       "NX",
       "RX",
       "RZ",
-      "TX"
+      "TX",
+      "UX"
     ],
     "Lincoln": [
       "Aviator",
@@ -234,10 +290,19 @@
       "Air",
       "Gravity"
     ],
+    "Maserati": [
+      "GranCabrio",
+      "GranTurismo"
+    ],
     "MAZDA": [
       "CX-30",
       "CX-5",
+      "CX-50",
+      "CX-50 Hybrid",
+      "CX-70",
+      "CX-70 PHEV",
       "CX-90",
+      "CX-90 PHEV",
       "MAZDA3"
     ],
     "McLaren": [
@@ -252,18 +317,25 @@
       "EQE",
       "EQE SUV",
       "EQS",
+      "EQS SUV",
+      "G-Class",
       "GLA",
       "GLB",
       "GLC",
+      "GLC Coupe",
       "GLE",
       "GLE Coupe",
       "GLS",
+      "Mercedes-AMG CLA",
       "Mercedes-AMG EQE",
       "Mercedes-AMG EQE SUV",
+      "Mercedes-AMG GLA",
+      "Mercedes-AMG GLB",
       "Mercedes-AMG GLC",
       "Mercedes-AMG GLE",
       "Mercedes-AMG GLE Coupe",
       "Mercedes-AMG GLS",
+      "Mercedes-AMG GT",
       "Mercedes-AMG S-Class",
       "Mercedes-AMG SL",
       "Mercedes-Maybach GLS",
@@ -288,12 +360,17 @@
       "Outlander"
     ],
     "Nissan": [
+      "Altima",
       "Armada",
+      "Frontier Crew Cab",
+      "Frontier King Cab",
       "Kicks",
       "LEAF",
       "Murano",
+      "Pathfinder",
       "Rogue",
-      "Sentra"
+      "Sentra",
+      "Z"
     ],
     "Polestar": [
       "4",
@@ -316,6 +393,7 @@
       "2500 Crew Cab",
       "2500 Mega Cab",
       "2500 Regular Cab",
+      "3500 Crew Cab",
       "3500 Mega Cab",
       "3500 Regular Cab",
       "ProMaster Cargo Van",
@@ -330,18 +408,25 @@
       "Ascent",
       "Crosstrek",
       "Crosstrek Hybrid",
+      "Forester",
       "Impreza",
       "Outback",
       "Solterra",
+      "Trailseeker",
       "Uncharted"
     ],
     "Tesla": [
+      "Cybertruck",
+      "Model 3",
       "Model S",
       "Model X",
       "Model Y"
     ],
     "Toyota": [
+      "4Runner",
+      "4Runner i-FORCE MAX",
       "bZ",
+      "bZ Woodland",
       "C-HR",
       "Camry",
       "Corolla",
@@ -350,16 +435,25 @@
       "Corolla Hatchback",
       "Corolla Hybrid",
       "Crown",
+      "Crown Signia",
+      "GR Corolla",
       "GR Supra",
+      "GR86",
       "Grand Highlander",
       "Grand Highlander Hybrid",
       "Highlander",
       "Highlander Hybrid",
+      "Land Cruiser",
       "Prius",
       "Prius Plug-in Hybrid",
       "RAV4",
+      "RAV4 Hybrid",
       "RAV4 Plug-in Hybrid",
       "Sequoia",
+      "Sienna",
+      "Tacoma Double Cab",
+      "Tacoma i-FORCE MAX Double Cab",
+      "Tacoma XtraCab",
       "Tundra CrewMax",
       "Tundra Double Cab",
       "Tundra i-FORCE MAX CrewMax"
@@ -367,8 +461,12 @@
     "Volkswagen": [
       "Atlas",
       "Atlas Cross Sport",
+      "Golf GTI",
+      "Golf R",
       "Jetta",
-      "Taos"
+      "Jetta GLI",
+      "Taos",
+      "Tiguan"
     ],
     "Volvo": [
       "ES90",

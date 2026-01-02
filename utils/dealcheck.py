@@ -80,8 +80,8 @@ def _to_int(s: str | None) -> int | None:
 
 
 async def _extract_delta(cell):
-    delta_el = await cell.query_selector("div.text-sm")
-    if not delta_el:
+    delta_el = await cell.locator("div.text-sm")
+    if await delta_el.count() == 0:
         return None
 
     text = (await delta_el.inner_text()).strip()
@@ -91,8 +91,8 @@ async def _extract_delta(cell):
 
     value = _to_int(num_match.group(0))
 
-    svg = await delta_el.query_selector("svg")
-    classes = await svg.get_attribute("class") if svg else ""
+    svg = await delta_el.locator("svg")
+    classes = await svg.get_attribute("class") if await svg.count() > 0 else ""
 
     if classes and "rotate-180" in classes:
         direction = "below"
@@ -123,18 +123,18 @@ async def _parse_value_cell(cell, kind: str):
 
 
 async def parse_ranking_table(page: Page) -> list[dict]:
-    table = await page.query_selector("table")
-    if not table:
+    table = page.locator("table")
+    if await table.count() == 0:
         return []
 
     # headers
     headers = []
-    for th in await table.query_selector_all("thead th"):
+    for th in await table.locator("thead th").all():
         headers.append((await th.inner_text()).strip().lower())
 
     rows = []
-    for tr in await table.query_selector_all("tbody tr"):
-        tds = await tr.query_selector_all(":scope > td")
+    for tr in await table.locator("tbody tr").all():
+        tds = await tr.locator(":scope > td").all()
         if not tds:
             continue
 
@@ -152,8 +152,8 @@ async def parse_ranking_table(page: Page) -> list[dict]:
                 row[header] = (await td.inner_text()).strip() or None
 
             if not href:
-                a = await td.query_selector("a[href]")
-                if a:
+                a = td.locator("a[href]")
+                if await a.count() > 0:
                     href = await a.get_attribute("href")
 
         row["href"] = href
