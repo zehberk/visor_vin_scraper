@@ -189,13 +189,14 @@ async def get_or_fetch_national_pricing(
     pricing_data = []
     relevant_entries = get_relevant_entries(cache_entries, make, model, year)
 
+    prefix = f"{year} {make} {model} "
+
+    expected_set = set(expected_trims)
+
     all_fresh = bool(relevant_entries) and all(
-        is_natl_fresh(e) for e in relevant_entries.values()
+        is_natl_fresh(e) and key.replace(prefix, "") in expected_set
+        for key, e in relevant_entries.items()
     )
-    if expected_trims:
-        all_fresh = all_fresh and all(
-            f"{year} {make} {model} {t}" in relevant_entries for t in expected_trims
-        )
 
     if all_fresh:
         for e in relevant_entries.values():
