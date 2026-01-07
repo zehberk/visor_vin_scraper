@@ -9,6 +9,7 @@ from playwright.async_api import (
     Page,
     TimeoutError,
 )
+from playwright.async_api import Error as PlaywrightError
 from tqdm import tqdm
 
 from utils.cache import (
@@ -163,6 +164,19 @@ async def get_trim_options_for_year(
     return year_trims
 
 
+async def goto_with_retry(
+    page, url, attempts: int = 3, timeout: int = 10000, delay_ms: int = 750
+):
+    for attempt in range(1, attempts + 1):
+        try:
+            await page.goto(url, timeout=timeout, wait_until="commit")
+            return
+        except PlaywrightError as e:
+            if attempt == attempts:
+                raise
+            await page.wait_for_timeout(delay_ms)
+
+
 async def get_or_fetch_national_pricing(
     page: Page,
     make: str,
@@ -197,7 +211,9 @@ async def get_or_fetch_national_pricing(
     else:
         safe_make = make_string_url_safe(make)
         url = KBB_LOOKUP_BASE_URL.format(make=safe_make, model=model_slug, year=year)
-        await page.goto(url, timeout=10000, wait_until="commit")
+
+        await goto_with_retry(page, url)
+
         try:
             body = await page.inner_text("body")
             if "We're sorry, our experts haven't reviewed this car yet" in body:
