@@ -185,7 +185,7 @@ async def get_or_fetch_national_pricing(
     year: str,
     cache_entries: dict,
     expected_trims: list[str],
-) -> tuple[list[tuple[str, str, str, str, str]], str | None]:
+) -> tuple[list[tuple[str, str, str, str, str, str]], str | None]:
     pricing_data = []
     relevant_entries = get_relevant_entries(cache_entries, make, model, year)
 
@@ -206,19 +206,22 @@ async def get_or_fetch_national_pricing(
                     e["msrp"],
                     e["fpp_natl"],
                     e["natl_source"],
+                    e["local_source"],
                     e["natl_timestamp"],
                 )
             )
     else:
         safe_make = make_string_url_safe(make)
-        url = KBB_LOOKUP_BASE_URL.format(make=safe_make, model=model_slug, year=year)
+        natl_url = KBB_LOOKUP_BASE_URL.format(
+            make=safe_make, model=model_slug, year=year
+        )
 
-        await goto_with_retry(page, url)
+        await goto_with_retry(page, natl_url)
 
         try:
             body = await page.inner_text("body")
             if "We're sorry, our experts haven't reviewed this car yet" in body:
-                return pricing_data, f"Unable to find table for pricing: {url}"
+                return pricing_data, f"Unable to find table for pricing: {natl_url}"
             rows_locator = page.locator("table.css-lb65co tbody tr")
             await rows_locator.first.wait_for(timeout=5000)
             rows = await rows_locator.all()
@@ -228,11 +231,17 @@ async def get_or_fetch_national_pricing(
                 await table.first.wait_for(timeout=5000)
                 rows = await table.all()
             except TimeoutError as t2:
-                return pricing_data, f"Unable to find table for pricing: {url}"
+                return pricing_data, f"Unable to find table for pricing: {natl_url}"
 
         # Collect the pricing data before attempting to get FMV, otherwise page context gets
         # overwritten and Playwright will throw an error
         for row in rows:
+            # optional per-row link
+            local_source_url = None
+            a = row.locator("a")
+            if await a.count() > 0:
+                local_source_url = await a.first.get_attribute("href")
+
             divs = await row.locator("div").all()
             if divs:
                 if len(divs) < 3:
@@ -241,9 +250,6 @@ async def get_or_fetch_national_pricing(
                 table_trim = (await divs[0].inner_text()).strip()
                 msrp = (await divs[1].inner_text()).strip()
                 natl_fpp = (await divs[2].inner_text()).strip()
-                pricing_data.append(
-                    (table_trim, msrp, natl_fpp, url, datetime.now().isoformat())
-                )
             else:
                 tds = await row.locator("td").all()
                 if len(tds) < 2:
@@ -251,9 +257,17 @@ async def get_or_fetch_national_pricing(
                 table_trim = (await tds[0].inner_text()).strip()
                 msrp = (await tds[1].inner_text()).strip()
                 natl_fpp = None
-                pricing_data.append(
-                    (table_trim, msrp, natl_fpp, url, datetime.now().isoformat())
+
+            pricing_data.append(
+                (
+                    table_trim,
+                    msrp,
+                    natl_fpp,
+                    natl_url,
+                    local_source_url,
+                    datetime.now().isoformat(),
                 )
+            )
 
     return pricing_data, None
 
@@ -279,7 +293,7 @@ async def populate_pricing_for_year(
     if not natl_data:
         return "No KBB data found"
 
-    for table_trim, msrp, natl_fpp, natl_source, natl_ts in natl_data:
+    for table_trim, msrp, natl_fpp, natl_source, fpp_source, natl_ts in natl_data:
         prefix = f"{year} {make} {model}"
         # If the pricing data is from the cache, strip the prefix
         if prefix in table_trim:
@@ -291,7 +305,7 @@ async def populate_pricing_for_year(
         fmr_high: int | None = None
         fpp_local: int | None = None
         fmv: int | None = None
-        local_source: str | None = None
+        fpp_source: str | None = None
         local_ts = datetime.now().isoformat()
 
         if expected_trims:
@@ -306,7 +320,7 @@ async def populate_pricing_for_year(
             kbb_trim_option = f"{prefix} {match_trim}"
 
             # only here do we call FMV
-            fmr_low, fmr_high, fpp_local, fmv, local_source = (
+            fmr_low, fmr_high, fpp_local, fmv, fpp_source = (
                 await get_or_fetch_local_pricing(
                     page,
                     year,
@@ -343,7 +357,7 @@ async def populate_pricing_for_year(
         entry["fpp_local"] = fpp_local
         entry["fmv"] = fmv
         entry["natl_source"] = natl_source
-        entry["local_source"] = local_source
+        entry["local_source"] = fpp_source
 
         if natl_val is None:
             entry["skip_reason"] = f"There is currently no pricing data for this trim."
