@@ -51,7 +51,7 @@ async def get_model_slug_map(
     variant_map = await get_variant_map(make, model, slimmed)
 
     for model_key, listings in variant_map.items():
-        if slugs and model_key in slugs:
+        if slugs and model_key in slugs and slugs[model_key]:
             relevant_slugs[model_key] = slugs[model_key]
             continue
         year = model_key[:4]
