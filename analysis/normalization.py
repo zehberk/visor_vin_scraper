@@ -118,7 +118,7 @@ def best_kbb_model_match(
             best_score = score
             best_model = kbb_model
 
-    return best_model
+    return best_model if best_model else None
 
 
 def best_kbb_trim_match(visor_trim: str, kbb_trims: list[str]) -> str | None:

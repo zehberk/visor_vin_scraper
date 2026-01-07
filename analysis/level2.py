@@ -78,7 +78,10 @@ async def start_level2_analysis(metadata: dict, listings: list[dict], filename: 
 
     cache = load_cache(PRICING_CACHE)
     cache_entries: dict = cache.setdefault("entries", {})
-    variant_map = await get_variant_map(make, model, listings)
+
+    # We must normalize listings before getting the variant map
+    norm_listings = [normalize_listing(l) for l in listings]
+    variant_map = await get_variant_map(make, model, norm_listings)
 
     # Ensure all folders exist, and if not, save the documents
     if not all(get_vehicle_dir(l) for l in listings):
