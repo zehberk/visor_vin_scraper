@@ -104,6 +104,10 @@ async def start_level2_analysis(metadata: dict, listings: list[dict], filename: 
         make, model, filtered_listings, cache_entries, variant_map
     )
 
+    if len(valid_listings) == 0:
+        print("No listings met the criteria for level 2 analysis.")
+        return
+
     # listing, deal, risk, narrative
     ratings: list[tuple[dict, str, int, list[str]]] = []
 
