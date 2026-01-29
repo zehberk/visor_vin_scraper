@@ -117,53 +117,6 @@ async def get_model_slug_from_vins(page: Page, model_key: str, vins: list[str]) 
     return ""
 
 
-async def get_trim_options_for_year(
-    page: Page,
-    make: str,
-    model_slug: str,
-    year: str,
-    trim_options: dict[str, dict[str, list[str]]],
-    make_model_key: str,
-) -> list[str]:
-    """
-    Fetch available trims for a given year directly from KBB.
-    Returns a list of raw KBB trim names (no visor mapping).
-    """
-    # If we already have cached trims for this year, we don't need another lookup
-    if make_model_key in trim_options and year in trim_options[make_model_key]:
-        return trim_options[make_model_key][year]
-    safe_make = make_string_url_safe(make)
-
-    url = KBB_LOOKUP_STYLES_URL.format(make=safe_make, model=model_slug, year=year)
-    while True:
-        try:
-            await page.goto(url, wait_until="commit")
-            break
-        except TimeoutError as t:
-            pass
-    raw = await page.inner_text("script#__NEXT_DATA__")
-    data = json.loads(raw)
-    apollo = data.get("props", {}).get("apolloState", {})
-
-    styles = find_styles_data(apollo)
-    if not styles or styles["result"]["ymm"]["year"] is None:
-        trim_options.setdefault(make_model_key, {})[year] = []
-        return []
-
-    body_styles = styles["result"]["ymm"]["bodyStyles"]
-
-    # Collect raw KBB trims (e.g., "Premium Sport Utility 4D")
-    year_trims = []
-    for bs in body_styles:
-        for t in bs["trims"]:
-            kbb_trim = t["name"].strip()
-            if kbb_trim not in year_trims:
-                year_trims.append(kbb_trim)
-
-    trim_options.setdefault(make_model_key, {})[year] = year_trims
-    return year_trims
-
-
 async def goto_with_retry(
     page, url, attempts: int = 3, timeout: int = 10000, delay_ms: int = 750
 ):
@@ -178,24 +131,13 @@ async def goto_with_retry(
 
 
 async def get_or_fetch_national_pricing(
-    page: Page,
-    make: str,
-    model: str,
-    model_slug: str,
-    year: str,
-    cache_entries: dict,
-    expected_trims: list[str],
+    page: Page, make: str, model: str, model_slug: str, year: str, cache_entries: dict
 ) -> tuple[list[tuple[str, str, str, str, str, str]], str | None]:
     pricing_data = []
     relevant_entries = get_relevant_entries(cache_entries, make, model, year)
 
-    prefix = f"{year} {make} {model} "
-
-    expected_set = set(expected_trims)
-
     all_fresh = bool(relevant_entries) and all(
-        is_natl_fresh(e) and key.replace(prefix, "") in expected_set
-        for key, e in relevant_entries.items()
+        is_natl_fresh(e) for e in relevant_entries.values()
     )
 
     if all_fresh:
@@ -273,18 +215,12 @@ async def get_or_fetch_national_pricing(
 
 
 async def populate_pricing_for_year(
-    page: Page,
-    make: str,
-    model: str,
-    model_slug: str,
-    year: str,
-    cache_entries: dict,
-    expected_trims: list[str],
+    page: Page, make: str, model: str, model_slug: str, year: str, cache_entries: dict
 ) -> str | None:
 
     # Get MSRP/National FPP first, will return only entries that need an FMV
     natl_data, error = await get_or_fetch_national_pricing(
-        page, make, model, model_slug, year, cache_entries, expected_trims
+        page, make, model, model_slug, year, cache_entries
     )
 
     # Error message first, then default message
@@ -293,7 +229,7 @@ async def populate_pricing_for_year(
     if not natl_data:
         return "No KBB data found"
 
-    for table_trim, msrp, natl_fpp, natl_source, fpp_source, natl_ts in natl_data:
+    for table_trim, msrp, natl_fpp, natl_source, trim_source, natl_ts in natl_data:
         prefix = f"{year} {make} {model}"
         # If the pricing data is from the cache, strip the prefix
         if prefix in table_trim:
@@ -308,37 +244,26 @@ async def populate_pricing_for_year(
         fpp_source: str | None = None
         local_ts = datetime.now().isoformat()
 
-        if expected_trims:
-            match_trim = best_kbb_trim_match(table_trim, expected_trims)
+        kbb_trim_option = f"{prefix} {table_trim}"
 
-            if not match_trim:
-                print(
-                    f"⚠️ Could not map pricing trim '{table_trim}' to any expected trim"
-                )
-                continue
-
-            kbb_trim_option = f"{prefix} {match_trim}"
-
-            # only here do we call FMV
+        # only here do we call FMV
+        if trim_source:
             fmr_low, fmr_high, fpp_local, fmv, fpp_source = (
                 await get_or_fetch_local_pricing(
                     page,
                     year,
                     make,
                     model_slug,
-                    match_trim,
+                    table_trim,
                     kbb_trim_option,
                     cache_entries,
                 )
             )
-
         else:
-            kbb_trim_option = kbb_trim
             if natl_fpp and natl_fpp != "TBD":
                 print(f"ℹ️  No local data for {kbb_trim}; saving MSRP/National FPP only")
             else:
                 print(f"ℹ️  No national pricing data for {kbb_trim}; saving MSRP only")
-
         entry = cache_entries.setdefault(kbb_trim_option, {})
 
         natl_val = None
@@ -498,7 +423,6 @@ async def get_trim_valuations_from_scrape(
     model: str,
     slugs: dict[str, str],
     listings: list[dict],
-    trim_options: dict[str, dict[str, list[str]]],
     cache_entries: dict[str, dict],
     cache: dict,
 ) -> list[TrimValuation]:
@@ -521,17 +445,8 @@ async def get_trim_valuations_from_scrape(
                 year = ymm[:4]
                 make_model = ymm.replace(year, "").strip()
                 model_name = make_model.replace(make, "").strip()
-                options = await get_trim_options_for_year(
-                    page, make, slug, year, trim_options, make_model
-                )
                 message = await populate_pricing_for_year(
-                    page,
-                    make,
-                    model_name,
-                    slug,
-                    year,
-                    cache_entries,
-                    options,
+                    page, make, model_name, slug, year, cache_entries
                 )
                 if message:
                     messages.append(message)
@@ -592,7 +507,6 @@ async def get_pricing_data(
     """
     cache_entries = cache.setdefault("entries", {})
     slugs = cache.setdefault("model_slugs", {})
-    trim_options = cache.setdefault("trim_options", {})
 
     years = extract_years(norm_listings)
 
@@ -600,5 +514,5 @@ async def get_pricing_data(
         return get_trim_valuations_from_cache(make, model, years, cache_entries)
 
     return await get_trim_valuations_from_scrape(
-        make, model, slugs, norm_listings, trim_options, cache_entries, cache
+        make, model, slugs, norm_listings, cache_entries, cache
     )

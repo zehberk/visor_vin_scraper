@@ -57,7 +57,6 @@ def cache_covers_all(
 ) -> bool:
     cache_entries = cache.get("entries", {})
     slugs = cache.get("model_slugs", {})
-    trim_options = cache.get("trim_options", {})
 
     if len(cache_entries) == 0:
         return False
@@ -69,13 +68,6 @@ def cache_covers_all(
 
         # Check model slug
         if ymm not in slugs:
-            return False
-
-        # Check trims
-        if not (
-            make_model_key in trim_options
-            and all(y in trim_options[make_model_key] for y in years)
-        ):
             return False
 
         relevant_entries = get_relevant_entries(cache_entries, make, model, year)
