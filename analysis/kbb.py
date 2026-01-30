@@ -31,53 +31,24 @@ from utils.models import TrimValuation
 
 
 async def get_model_slug_map(
-    page: Page,
-    request: APIRequestContext,
     slugs: dict[str, str],
-    slimmed: list[dict],
     make: str,
-    model: str,
+    variant_map: dict[str, list[dict]],
 ) -> dict[str, str]:
     relevant_slugs: dict[str, str] = {}
 
-    # Sort listings by mileage first to hopefully get valid VINs first (KBB may not have info for newer vehicles)
-    def _sort_key(listing: dict):
-        condition_rank = 0 if listing["condition"].lower() == "used" else 1
-        return (condition_rank, listing["mileage"])
-
-    def _get_vins(listings: list) -> list[str]:
-        return [listing["vin"] for listing in listings[: min(10, len(listings))]]
-
-    variant_map = await get_variant_map(make, model, slimmed)
-
-    for model_key, listings in variant_map.items():
-        if slugs and model_key in slugs and slugs[model_key]:
+    for model_key in variant_map.keys():
+        if slugs.get(model_key):
             relevant_slugs[model_key] = slugs[model_key]
             continue
+
         year = model_key[:4]
-        safe_make = make_string_url_safe(make)
-        model = model_key.replace(year, "").replace(make, "").strip()
-        model_slug = make_string_url_safe(model)
+        kbb_model = model_key.replace(year, "").replace(make, "").strip()
 
-        url = KBB_LOOKUP_BASE_URL.format(make=safe_make, model=model_slug, year=year)
-        try:
-            resp = await request.get(url, max_redirects=0)
-            if resp.status in [200, 301]:
-                slugs[model_key] = model_slug
-                relevant_slugs[model_key] = model_slug
-            else:
-                vin_slug = await get_model_slug_from_vins(
-                    page, model_key, _get_vins(sorted(listings, key=_sort_key))
-                )
-                if vin_slug:
-                    slugs[model_key] = vin_slug
-                    relevant_slugs[model_key] = vin_slug
-        except TimeoutError as t:
-            print("Timed out: ", t)
-        except Exception as e:
-            print("Error: ", e)
+        model_slug = make_string_url_safe(kbb_model)
 
-    await request.dispose()
+        slugs[model_key] = model_slug
+        relevant_slugs[model_key] = model_slug
 
     return relevant_slugs
 
@@ -433,9 +404,8 @@ async def get_trim_valuations_from_scrape(
     request, browser, context, page = await create_kbb_browser()
 
     try:
-        relevant_slugs = await get_model_slug_map(
-            page, request, slugs, listings, make, model
-        )
+        variant_map = await get_variant_map(make, model, listings)
+        relevant_slugs = await get_model_slug_map(slugs, make, variant_map)
 
         messages = []
         for ymm, slug in tqdm(
