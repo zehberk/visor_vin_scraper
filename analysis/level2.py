@@ -78,7 +78,10 @@ async def start_level2_analysis(metadata: dict, listings: list[dict], filename: 
 
     cache = load_cache(PRICING_CACHE)
     cache_entries: dict = cache.setdefault("entries", {})
-    variant_map = await get_variant_map(make, model, listings)
+
+    # We must normalize listings before getting the variant map
+    norm_listings = [normalize_listing(l) for l in listings]
+    variant_map = await get_variant_map(make, model, norm_listings)
 
     # Ensure all folders exist, and if not, save the documents
     if not all(get_vehicle_dir(l) for l in listings):
@@ -95,11 +98,15 @@ async def start_level2_analysis(metadata: dict, listings: list[dict], filename: 
             filtered_listings.append(normalize_listing(vl))
 
     # We do not need the trim valuations, we just need to make sure the pricing data has been populated
-    _ = await get_pricing_data(make, model, listings, variant_map, cache)
+    _ = await get_pricing_data(make, model, norm_listings, variant_map, cache)
 
     valid_listings, _, _ = filter_valid_listings(
         make, model, filtered_listings, cache_entries, variant_map
     )
+
+    if len(valid_listings) == 0:
+        print("No listings met the criteria for level 2 analysis.")
+        return
 
     # listing, deal, risk, narrative
     ratings: list[tuple[dict, str, int, list[str]]] = []

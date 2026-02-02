@@ -12,7 +12,20 @@ from utils.constants import *
 
 
 def metadata_years(years: list[str]) -> str:
-    vals = sorted({int(y) for y in years})
+    if years is None:
+        return ""
+
+    if not isinstance(years, (list, tuple)):
+        years = [years]
+
+    vals = sorted(
+        {
+            int(str(y).strip().strip('"').strip("'"))
+            for y in years
+            if y is not None and str(y).strip().strip('"').strip("'").isdigit()
+        }
+    )
+
     if not vals:
         return ""
 
