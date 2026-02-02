@@ -23,6 +23,7 @@ from analysis.normalization import best_kbb_trim_match, get_variant_map
 from analysis.analysis_utils import (
     extract_years,
     get_trim_valuations_from_cache,
+    is_trim_version_valid,
     to_int,
 )
 from utils.common import make_string_url_safe
@@ -186,7 +187,13 @@ async def get_or_fetch_national_pricing(
 
 
 async def populate_pricing_for_year(
-    page: Page, make: str, model: str, model_slug: str, year: str, cache_entries: dict
+    page: Page,
+    make: str,
+    model: str,
+    model_slug: str,
+    year: str,
+    cache_entries: dict,
+    trims: set[str],
 ) -> str | None:
 
     # Get MSRP/National FPP first, will return only entries that need an FMV
@@ -200,11 +207,21 @@ async def populate_pricing_for_year(
     if not natl_data:
         return "No KBB data found"
 
+    best_matches: set[str] = set()
+    all_kbb_trims = [kbb_trim[0] for kbb_trim in natl_data]
+    for trim in trims:
+        best_match = best_kbb_trim_match(trim, all_kbb_trims)
+        if best_match:
+            best_matches.add(best_match)
+
     for table_trim, msrp, natl_fpp, natl_source, trim_source, natl_ts in natl_data:
         prefix = f"{year} {make} {model}"
         # If the pricing data is from the cache, strip the prefix
-        if prefix in table_trim:
+        if table_trim.lower().startswith(prefix.lower()):
             table_trim = table_trim.replace(prefix, "").strip()
+
+        # if table_trim not in trims:
+        # Look for a best match
 
         kbb_trim = f"{prefix} {table_trim}"
 
@@ -215,10 +232,8 @@ async def populate_pricing_for_year(
         fpp_source: str | None = None
         local_ts = datetime.now().isoformat()
 
-        kbb_trim_option = f"{prefix} {table_trim}"
-
         # only here do we call FMV
-        if trim_source:
+        if table_trim in best_matches:
             fmr_low, fmr_high, fpp_local, fmv, fpp_source = (
                 await get_or_fetch_local_pricing(
                     page,
@@ -226,16 +241,15 @@ async def populate_pricing_for_year(
                     make,
                     model_slug,
                     table_trim,
-                    kbb_trim_option,
+                    kbb_trim,
                     cache_entries,
                 )
             )
         else:
-            if natl_fpp and natl_fpp != "TBD":
-                print(f"ℹ️  No local data for {kbb_trim}; saving MSRP/National FPP only")
-            else:
+            if not natl_fpp or natl_fpp == "TBD":
                 print(f"ℹ️  No national pricing data for {kbb_trim}; saving MSRP only")
-        entry = cache_entries.setdefault(kbb_trim_option, {})
+
+        entry = cache_entries.setdefault(kbb_trim, {})
 
         natl_val = None
         # FPP is saved as an int, unless the FPP was never saved or doesn't have a value
@@ -261,7 +275,7 @@ async def populate_pricing_for_year(
         entry["natl_timestamp"] = natl_ts
         entry["local_timestamp"] = local_ts
 
-        return error
+    return error
 
 
 async def get_or_fetch_local_pricing(
@@ -407,7 +421,7 @@ async def get_trim_valuations_from_scrape(
         variant_map = await get_variant_map(make, model, listings)
         relevant_slugs = await get_model_slug_map(slugs, make, variant_map)
 
-        messages = []
+        messages: set[str] = set()
         for ymm, slug in tqdm(
             relevant_slugs.items(), desc="Fetching KBB pricing", unit="year/make/model"
         ):
@@ -415,11 +429,26 @@ async def get_trim_valuations_from_scrape(
                 year = ymm[:4]
                 make_model = ymm.replace(year, "").strip()
                 model_name = make_model.replace(make, "").strip()
+
+                trims: set[str] = set()
+                for variant in variant_map.get(ymm, []):
+                    trim_version = variant.get(
+                        "trim_version",
+                        variant.setdefault("specs", {}).get("trim_version", ""),
+                    )
+                    trim = (
+                        trim_version
+                        if is_trim_version_valid(trim_version)
+                        else variant["trim"]
+                    )
+                    trims.add(trim.lower())
+
                 message = await populate_pricing_for_year(
-                    page, make, model_name, slug, year, cache_entries
+                    page, make, model_name, slug, year, cache_entries, trims
                 )
+
                 if message:
-                    messages.append(message)
+                    messages.add(message)
 
         for m in messages:
             print(m)
